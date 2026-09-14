@@ -232,7 +232,7 @@ jobs:
                   "categoryId": "22"
               },
               "status": {
-                  "privacyStatus": "private",
+                  "privacyStatus": "public",
                   "selfDeclaredMadeForKids": False
               }
           }
@@ -253,6 +253,7 @@ jobs:
 
           print("YouTube upload completed!")
           print("Video ID:", response["id"])
+
           PY
 
           python upload_youtube.py
