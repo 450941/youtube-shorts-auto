@@ -1,0 +1,107 @@
+name: Generate YouTube Short
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_url:
+        description: "Pexels video URL"
+        required: true
+        type: string
+      title:
+        description: "YouTube title"
+        required: true
+        type: string
+      script:
+        description: "Narration script"
+        required: true
+        type: string
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-cjk
+
+      - name: Install Edge TTS
+        run: |
+          python -m pip install --upgrade pip
+          pip install edge-tts
+
+      - name: Download Pexels video
+        env:
+          VIDEO_URL: ${{ inputs.video_url }}
+        run: |
+          curl -L "$VIDEO_URL" -o source.mp4
+          ls -lh source.mp4
+
+      - name: Save script
+        env:
+          SCRIPT: ${{ inputs.script }}
+        run: |
+          printf '%s' "$SCRIPT" > script.txt
+          cat script.txt
+
+      - name: Generate Japanese voice
+        run: |
+          edge-tts \
+            --voice ja-JP-NanamiNeural \
+            --file script.txt \
+            --write-media voice.mp3
+
+      - name: Create subtitles
+        env:
+          SCRIPT: ${{ inputs.script }}
+        run: |
+          python - <<'PY'
+          import os
+
+          text = os.environ["SCRIPT"].replace("\r", "").strip()
+
+          # 1行あたり約18文字で字幕を分割
+          chunks = []
+          for i in range(0, len(text), 18):
+              chunks.append(text[i:i+18])
+
+          with open("captions.srt", "w", encoding="utf-8") as f:
+              for i, chunk in enumerate(chunks, 1):
+                  f.write(f"{i}\n")
+                  f.write("00:00:00,000 --> 00:01:00,000\n")
+                  f.write(chunk + "\n\n")
+          PY
+
+      - name: Get voice duration
+        run: |
+          DURATION=$(ffprobe -v error -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 voice.mp3)
+          echo "DURATION=$DURATION" >> "$GITHUB_ENV"
+          echo "Voice duration: $DURATION"
+
+      - name: Render vertical video
+        run: |
+          ffmpeg -y \
+            -stream_loop -1 \
+            -i source.mp4 \
+            -i voice.mp3 \
+            -t "$DURATION" \
+            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=captions.srt:force_style='FontName=Noto Sans CJK JP,FontSize=24,Alignment=2,MarginV=180,Outline=2'" \
+            -map 0:v \
+            -map 1:a \
+            -c:v libx264 \
+            -preset veryfast \
+            -crf 23 \
+            -c:a aac \
+            -b:a 128k \
+            -shortest \
+            short.mp4
+
+      - name: Upload video artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-short
+          path: short.mp4
+          retention-days: 1
