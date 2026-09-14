@@ -1,20 +1,9 @@
 name: Generate YouTube Short
 
 on:
+  schedule:
+    - cron: "0 0 * * *"
   workflow_dispatch:
-    inputs:
-      video_url:
-        description: "Direct MP4 video URL"
-        required: true
-        type: string
-      title:
-        description: "YouTube title"
-        required: true
-        type: string
-      script:
-        description: "Japanese narration script"
-        required: true
-        type: string
 
 jobs:
   render:
@@ -25,27 +14,106 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-noto-cjk
+          sudo apt-get install -y ffmpeg fonts-noto-cjk jq
 
       - name: Install Edge TTS
         run: |
           python -m pip install --upgrade pip
           pip install edge-tts
 
-      - name: Download video
-        env:
-          VIDEO_URL: ${{ inputs.video_url }}
+      - name: Select daily search keyword
         run: |
+          DAY=$(($(date +%s) / 86400))
+          INDEX=$((DAY % 10))
+
+          case $INDEX in
+            0) QUERY="calm nature" ;;
+            1) QUERY="sunset" ;;
+            2) QUERY="city night" ;;
+            3) QUERY="ocean" ;;
+            4) QUERY="walking" ;;
+            5) QUERY="rain" ;;
+            6) QUERY="morning" ;;
+            7) QUERY="mountain" ;;
+            8) QUERY="coffee" ;;
+            9) QUERY="peaceful life" ;;
+          esac
+
+          echo "QUERY=$QUERY" >> "$GITHUB_ENV"
+
+      - name: Search Pexels video
+        env:
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: |
+          curl -L --fail \
+            -H "Authorization: $PEXELS_API_KEY" \
+            "https://api.pexels.com/videos/search?query=$(printf '%s' "$QUERY" | sed 's/ /%20/g')&orientation=portrait&size=medium&per_page=20" \
+            -o pexels.json
+
+          COUNT=$(jq '.videos | length' pexels.json)
+          echo "Found $COUNT videos"
+
+          test "$COUNT" -gt 0
+
+          DAY=$(($(date +%s) / 86400))
+          VIDEO_INDEX=$((DAY % COUNT))
+
+          VIDEO_URL=$(jq -r --argjson index "$VIDEO_INDEX" '
+            .videos[$index].video_files
+            | map(select(.file_type=="video/mp4"))
+            | sort_by(.width)
+            | reverse
+            | .[0].link
+          ' pexels.json)
+
+          test -n "$VIDEO_URL"
+          test "$VIDEO_URL" != "null"
+
+          echo "Downloading Pexels video..."
           curl -L --fail "$VIDEO_URL" -o source.mp4
+
           test -s source.mp4
           ffprobe -v error source.mp4
 
-      - name: Save script
-        env:
-          SCRIPT: ${{ inputs.script }}
+      - name: Create daily script
         run: |
-          printf '%s' "$SCRIPT" > script.txt
-          test -s script.txt
+          DAY=$(($(date +%s) / 86400))
+          INDEX=$((DAY % 10))
+
+          case $INDEX in
+            0)
+              TEXT="頑張っているのに、なぜか疲れてしまう日がある。そんな日は、無理に元気にならなくていい。少し休んでもいい。今日を生きているだけで、それで十分だから。"
+              ;;
+            1)
+              TEXT="何をしてもうまくいかない日がある。でも、今日失敗したことが、あなた自身の価値を決めるわけじゃない。明日はまた別の日。今日はゆっくり休もう。"
+              ;;
+            2)
+              TEXT="誰かと比べて、自分だけ遅れているように感じることがある。でも人生に決められた速度なんてない。ゆっくりでも、自分の歩幅で進めばいい。"
+              ;;
+            3)
+              TEXT="朝起きるだけで精一杯の日がある。それでも起きた。それだけで今日は十分頑張っている。できなかったことより、できたことを一つだけ見つけてみよう。"
+              ;;
+            4)
+              TEXT="疲れたときに休むのは、逃げることじゃない。明日また歩くために必要な時間だ。頑張ることと、休むこと。どちらも大切だから。"
+              ;;
+            5)
+              TEXT="大丈夫じゃないときに、大丈夫なふりをしなくていい。苦しいなら誰かに頼っていい。一人で全部抱えなくてもいい。"
+              ;;
+            6)
+              TEXT="昨日の自分を責め続けなくていい。昨日できなかったことは、昨日の自分にしか分からない。今日は今日の自分を、少しだけ大切にしてあげよう。"
+              ;;
+            7)
+              TEXT="何もしたくない日があってもいい。布団から出られない日があってもいい。人生は一日だけで決まらない。明日また、少しずつでいい。"
+              ;;
+            8)
+              TEXT="自分に厳しすぎる人へ。あなたは思っているより頑張っているかもしれない。今日は自分にかける言葉を、少しだけ優しくしてみよう。"
+              ;;
+            9)
+              TEXT="先が見えなくて不安になることがある。でも、今見えないからといって未来がないわけじゃない。焦らなくていい。一歩ずつ進めばいい。"
+              ;;
+          esac
+
+          printf '%s\n' "$TEXT" > script.txt
 
       - name: Generate Japanese voice
         run: |
@@ -58,4 +126,80 @@ jobs:
         run: |
           DURATION=$(ffprobe -v error \
             -show_entries format=duration \
-            -of 
+            -of default=noprint_wrappers=1:nokey=1 voice.mp3)
+
+          echo "DURATION=$DURATION" >> "$GITHUB_ENV"
+
+      - name: Create subtitles
+        run: |
+          python - <<'PY'
+          import os
+
+          with open("script.txt", encoding="utf-8") as f:
+              text = f.read().strip()
+
+          duration = float(os.environ["DURATION"])
+
+          chunks = []
+          current = ""
+
+          for char in text:
+              current += char
+              if char in "。！？":
+                  chunks.append(current.strip())
+                  current = ""
+
+          if current.strip():
+              chunks.append(current.strip())
+
+          chunk_duration = duration / len(chunks)
+
+          def timestamp(sec):
+              ms = int(sec * 1000)
+              h = ms // 3600000
+              ms %= 3600000
+              m = ms // 60000
+              ms %= 60000
+              s = ms // 1000
+              ms %= 1000
+              return f"{h:02}:{m:02}:{s:02},{ms:03}"
+
+          with open("captions.srt", "w", encoding="utf-8") as f:
+              for i, chunk in enumerate(chunks, 1):
+                  start = (i - 1) * chunk_duration
+                  end = min(i * chunk_duration, duration)
+
+                  f.write(f"{i}\n")
+                  f.write(f"{timestamp(start)} --> {timestamp(end)}\n")
+                  f.write(chunk + "\n\n")
+          PY
+
+      - name: Render vertical video
+        run: |
+          ffmpeg -y \
+            -stream_loop -1 \
+            -i source.mp4 \
+            -i voice.mp3 \
+            -t "$DURATION" \
+            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=captions.srt:force_style='FontName=Noto Sans CJK JP,FontSize=24,Alignment=2,MarginV=180,Outline=2'" \
+            -map 0:v:0 \
+            -map 1:a:0 \
+            -c:v libx264 \
+            -preset veryfast \
+            -crf 23 \
+            -c:a aac \
+            -b:a 128k \
+            -shortest \
+            short.mp4
+
+      - name: Check output
+        run: |
+          ls -lh short.mp4
+          ffprobe -v error short.mp4
+
+      - name: Upload video
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-short
+          path: short.mp4
+          retention-days: 1
