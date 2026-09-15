@@ -1,408 +1,198 @@
 import json
 import random
 
-facts = [
-
+trivia = [
     # 科学
-    {
-        "category": "科学",
-        "topic": "光",
-        "fact": "光は真空中では1秒間に約30万キロメートル進みます。"
-    },
-    {
-        "category": "科学",
-        "topic": "音",
-        "fact": "音は真空中では伝わりません。空気や水などの物質を振動させて伝わります。"
-    },
-    {
-        "category": "科学",
-        "topic": "水",
-        "fact": "水は標準的な気圧では0度で凍り、100度で沸騰します。"
-    },
-    {
-        "category": "科学",
-        "topic": "氷",
-        "fact": "氷は水より密度が低いため、水に浮きます。"
-    },
-    {
-        "category": "科学",
-        "topic": "電気",
-        "fact": "雷は大気中で発生する非常に大きな電気現象です。"
-    },
-    {
-        "category": "科学",
-        "topic": "磁石",
-        "fact": "磁石には必ずN極とS極があり、N極だけ、S極だけの磁石を作ることはできません。"
-    },
-    {
-        "category": "科学",
-        "topic": "温度",
-        "fact": "温度は物質を構成する粒子の運動状態と関係しています。"
-    },
-    {
-        "category": "科学",
-        "topic": "原子",
-        "fact": "原子は非常に小さく、中心には原子核があります。"
-    },
-    {
-        "category": "科学",
-        "topic": "分子",
-        "fact": "水分子は水素原子2個と酸素原子1個からできています。"
-    },
-    {
-        "category": "科学",
-        "topic": "重力",
-        "fact": "地球上では重力によって物体が地球の中心方向へ引かれています。"
-    },
+    {"fact": "光は真空中では1秒間に約30万キロメートル進みます。", "keyword": "light"},
+    {"fact": "音は真空中では伝わりません。空気や水などの物質が必要です。", "keyword": "sound"},
+    {"fact": "水は約4度のとき、液体の状態で最も密度が高くなります。", "keyword": "water"},
+    {"fact": "氷は水より密度が低いため、水に浮きます。", "keyword": "ice"},
+    {"fact": "鉄は磁石にくっつきますが、すべての金属が磁石にくっつくわけではありません。", "keyword": "magnet"},
+    {"fact": "ダイヤモンドと鉛筆の芯は、どちらも炭素からできています。", "keyword": "diamond"},
+    {"fact": "人間の体は電気信号を使って神経から情報を伝えています。", "keyword": "electricity"},
+    {"fact": "原子はさらに小さな粒子から構成されています。", "keyword": "atom"},
+    {"fact": "水は標準的な気圧では100度で沸騰します。", "keyword": "boiling water"},
+    {"fact": "水は標準的な気圧では0度付近で凍ります。", "keyword": "frozen water"},
+    {"fact": "金は非常に反応しにくい金属で、腐食しにくい性質があります。", "keyword": "gold"},
+    {"fact": "銅は電気をよく通すため、電線などに広く使われています。", "keyword": "copper"},
+    {"fact": "アルミニウムは鉄より密度が低く、比較的軽い金属です。", "keyword": "aluminum"},
+    {"fact": "ガラスは光を通しますが、光の一部を反射します。", "keyword": "glass"},
+    {"fact": "虹は太陽光が水滴の中で屈折・反射・分散することで見えます。", "keyword": "rainbow"},
+    {"fact": "雷は非常に高温の放電によって周囲の空気を急激に膨張させます。", "keyword": "lightning"},
+    {"fact": "黒い物体は光を多く吸収するため、日光の下では熱くなりやすいです。", "keyword": "black object"},
+    {"fact": "白い物体は多くの可視光を反射するため、黒い物体より熱を吸収しにくい傾向があります。", "keyword": "white object"},
+    {"fact": "熱は温度の高い物体から低い物体へ移動します。", "keyword": "heat"},
+    {"fact": "重力によって、地球上の物体は地球の中心方向へ引っ張られています。", "keyword": "gravity"},
 
     # 宇宙
-    {
-        "category": "宇宙",
-        "topic": "太陽",
-        "fact": "太陽から地球まで光が届くには約8分20秒かかります。"
-    },
-    {
-        "category": "宇宙",
-        "topic": "月",
-        "fact": "月が地球の周りを一周する周期は約27.3日です。"
-    },
-    {
-        "category": "宇宙",
-        "topic": "地球",
-        "fact": "地球は太陽の周りを約365.25日で一周します。"
-    },
-    {
-        "category": "宇宙",
-        "topic": "火星",
-        "fact": "火星には太陽系最大級の火山であるオリンポス山があります。"
-    },
-    {
-        "category": "宇宙",
-        "topic": "木星",
-        "fact": "木星は太陽系の惑星の中で最も大きい惑星です。"
-    },
-    {
-        "category": "宇宙",
-        "topic": "土星",
-        "fact": "土星には非常に目立つ環があります。"
-    },
-    {
-        "category": "宇宙",
-        "topic": "金星",
-        "fact": "金星は太陽系の惑星の中で最も高い平均表面温度を持ちます。"
-    },
-    {
-        "category": "宇宙",
-        "topic": "水星",
-        "fact": "水星は太陽系の惑星の中で太陽に最も近い惑星です。"
-    },
-    {
-        "category": "宇宙",
-        "topic": "銀河",
-        "fact": "私たちが住む銀河は天の川銀河と呼ばれています。"
-    },
-    {
-        "category": "宇宙",
-        "topic": "ブラックホール",
-        "fact": "ブラックホールは非常に強い重力を持ち、光さえ脱出できない領域を形成します。"
-    },
+    {"fact": "太陽は地球から約1億5000万キロメートル離れています。", "keyword": "sun"},
+    {"fact": "太陽の光が地球に届くまでには約8分20秒かかります。", "keyword": "sunlight earth"},
+    {"fact": "月は地球の周りを公転しています。", "keyword": "moon"},
+    {"fact": "月は自転周期と公転周期がほぼ同じため、地球からはほぼ同じ面が見えます。", "keyword": "moon surface"},
+    {"fact": "地球は太陽の周りを約365日かけて一周します。", "keyword": "earth orbit"},
+    {"fact": "火星には太陽系最大級の火山、オリンポス山があります。", "keyword": "mars volcano"},
+    {"fact": "木星は太陽系最大の惑星です。", "keyword": "jupiter"},
+    {"fact": "土星は美しい環を持つことで知られています。", "keyword": "saturn rings"},
+    {"fact": "金星は太陽系の惑星の中で最も高い平均表面温度を持ちます。", "keyword": "venus"},
+    {"fact": "水星は太陽系で太陽に最も近い惑星です。", "keyword": "mercury"},
+    {"fact": "地球の大気の大部分は窒素で構成されています。", "keyword": "earth atmosphere"},
+    {"fact": "宇宙空間では空気がほとんどないため、地球のような音の伝わり方はしません。", "keyword": "outer space"},
+    {"fact": "ブラックホールは非常に強い重力を持ち、事象の地平面の内側からは光も脱出できません。", "keyword": "black hole"},
+    {"fact": "銀河系には太陽のような恒星が数多く存在します。", "keyword": "milky way"},
+    {"fact": "地球には自然衛星が1つあり、それが月です。", "keyword": "earth moon"},
 
     # 動物
-    {
-        "category": "動物",
-        "topic": "タコ",
-        "fact": "タコには3つの心臓があります。"
-    },
-    {
-        "category": "動物",
-        "topic": "イルカ",
-        "fact": "イルカは睡眠中も呼吸する必要があるため、脳の左右を交互に休ませることがあります。"
-    },
-    {
-        "category": "動物",
-        "topic": "クジラ",
-        "fact": "シロナガスクジラは、現在知られている動物の中で最大級の体重を持ちます。"
-    },
-    {
-        "category": "動物",
-        "topic": "ペンギン",
-        "fact": "ペンギンは鳥類ですが、空を飛ぶことはできません。"
-    },
-    {
-        "category": "動物",
-        "topic": "ゾウ",
-        "fact": "アフリカゾウの耳は大きく、体温調節にも役立っています。"
-    },
-    {
-        "category": "動物",
-        "topic": "キリン",
-        "fact": "キリンの首には人間と同じく7個の頸椎があります。"
-    },
-    {
-        "category": "動物",
-        "topic": "カラス",
-        "fact": "カラスの仲間には高い学習能力を持つ種類が知られています。"
-    },
-    {
-        "category": "動物",
-        "topic": "フクロウ",
-        "fact": "フクロウの目は眼球そのものを大きく動かすことができないため、首を大きく動かします。"
-    },
-    {
-        "category": "動物",
-        "topic": "コウモリ",
-        "fact": "コウモリは哺乳類で、飛行できる哺乳類として知られています。"
-    },
-    {
-        "category": "動物",
-        "topic": "アリ",
-        "fact": "アリは昆虫なので、体は頭部、胸部、腹部に分かれています。"
-    },
+    {"fact": "タコには3つの心臓があります。", "keyword": "octopus"},
+    {"fact": "タコの血液は銅を含むタンパク質の働きによって青く見えます。", "keyword": "octopus underwater"},
+    {"fact": "イルカは仲間同士で特徴的な音を使ってコミュニケーションします。", "keyword": "dolphin"},
+    {"fact": "クジラは肺で呼吸するため、定期的に水面へ上がります。", "keyword": "whale"},
+    {"fact": "ペンギンは鳥ですが、多くの種類は飛ぶことができません。", "keyword": "penguin"},
+    {"fact": "ゾウは非常に大きな耳を持ち、耳を動かすことで体温調節にも役立てています。", "keyword": "elephant"},
+    {"fact": "キリンの首には人間と同じように7個の頸椎があります。", "keyword": "giraffe"},
+    {"fact": "カラスは非常に高い認知能力を持つ鳥として知られています。", "keyword": "crow"},
+    {"fact": "フクロウの目は眼球を動かすより、頭を動かして視線を変えるのが特徴です。", "keyword": "owl"},
+    {"fact": "コウモリは哺乳類であり、持続飛行できる唯一の哺乳類です。", "keyword": "bat"},
+    {"fact": "アリは種類によってさまざまな社会的役割を分担しています。", "keyword": "ants"},
+    {"fact": "ミツバチは花の蜜や花粉を集め、巣で生活しています。", "keyword": "honey bee"},
+    {"fact": "チーターは陸上動物の中でも非常に速く走ることで知られています。", "keyword": "cheetah"},
+    {"fact": "ナマケモノは代謝が低く、ゆっくりした生活を送る動物です。", "keyword": "sloth"},
+    {"fact": "カメレオンには左右それぞれを独立して動かせる目があります。", "keyword": "chameleon"},
+    {"fact": "サメには種類によって、電気を感じ取る器官があります。", "keyword": "shark"},
+    {"fact": "クラゲには脳がありません。", "keyword": "jellyfish"},
+    {"fact": "ヒトデには脳がありません。", "keyword": "starfish"},
+    {"fact": "ペンギンの羽毛は水中での活動に適した構造をしています。", "keyword": "penguin swimming"},
+    {"fact": "ホッキョクグマの皮膚は黒いことで知られています。", "keyword": "polar bear"},
 
     # 人体
-    {
-        "category": "人体",
-        "topic": "脳",
-        "fact": "人間の脳は体重に占める割合が小さい一方で、多くのエネルギーを消費します。"
-    },
-    {
-        "category": "人体",
-        "topic": "心臓",
-        "fact": "人間の心臓は全身に血液を送り出すポンプとして働いています。"
-    },
-    {
-        "category": "人体",
-        "topic": "血液",
-        "fact": "血液には赤血球、白血球、血小板などの細胞成分があります。"
-    },
-    {
-        "category": "人体",
-        "topic": "骨",
-        "fact": "成人の骨格は一般に約206個の骨から構成されています。"
-    },
-    {
-        "category": "人体",
-        "topic": "皮膚",
-        "fact": "皮膚は人体を外部環境から守る重要な器官です。"
-    },
-    {
-        "category": "人体",
-        "topic": "目",
-        "fact": "人間の目では、光を受け取った情報が網膜で神経信号に変換されます。"
-    },
-    {
-        "category": "人体",
-        "topic": "耳",
-        "fact": "耳は音を聞くだけでなく、体のバランスを保つ働きにも関係しています。"
-    },
-    {
-        "category": "人体",
-        "topic": "睡眠",
-        "fact": "睡眠中には、脳や身体のさまざまな機能を整える活動が行われています。"
-    },
-    {
-        "category": "人体",
-        "topic": "体温",
-        "fact": "人間の体温は一定ではなく、時間帯や活動状態などによって変化します。"
-    },
-    {
-        "category": "人体",
-        "topic": "筋肉",
-        "fact": "人間の身体には多くの筋肉があり、身体を動かすために働いています。"
-    },
+    {"fact": "人間の脳は体重に比べて多くのエネルギーを消費します。", "keyword": "human brain"},
+    {"fact": "成人の心臓は安静時でも1日に数万回程度拍動します。", "keyword": "human heart"},
+    {"fact": "血液は酸素や栄養素などを体中へ運びます。", "keyword": "blood"},
+    {"fact": "成人の骨格は一般に約206個の骨で構成されています。", "keyword": "human skeleton"},
+    {"fact": "皮膚は人体で最大の器官です。", "keyword": "human skin"},
+    {"fact": "目は光を受け取り、その情報を脳へ送ります。", "keyword": "human eye"},
+    {"fact": "耳は音を聞くだけでなく、体のバランスを取る役割にも関わっています。", "keyword": "human ear"},
+    {"fact": "睡眠中も脳は活動を続けています。", "keyword": "sleeping person"},
+    {"fact": "人間の体温は一定ではなく、時間帯などによって変化します。", "keyword": "body temperature"},
+    {"fact": "筋肉は縮むことで力を発揮します。", "keyword": "human muscles"},
+    {"fact": "まばたきは目の表面を涙で覆い、乾燥を防ぐ役割があります。", "keyword": "blinking eye"},
+    {"fact": "唾液には食べ物の消化を助ける酵素が含まれています。", "keyword": "saliva"},
+    {"fact": "胃では胃酸などが食べ物の消化を助けています。", "keyword": "human stomach"},
+    {"fact": "小腸は栄養素の吸収に重要な役割を果たします。", "keyword": "human intestine"},
+    {"fact": "肺では酸素と二酸化炭素の交換が行われています。", "keyword": "human lungs"},
+    {"fact": "肝臓は体内で多くの重要な働きをしています。", "keyword": "human liver"},
+    {"fact": "腎臓は血液をろ過し、尿を作る役割があります。", "keyword": "human kidneys"},
+    {"fact": "爪は主にケラチンというタンパク質からできています。", "keyword": "human nails"},
+    {"fact": "髪の毛も主にケラチンというタンパク質からできています。", "keyword": "human hair"},
+    {"fact": "人間の味覚には甘味、塩味、酸味、苦味、うま味があります。", "keyword": "taste buds"},
 
     # 食べ物
-    {
-        "category": "食べ物",
-        "topic": "バナナ",
-        "fact": "バナナは植物学上、ベリーに分類されます。"
-    },
-    {
-        "category": "食べ物",
-        "topic": "りんご",
-        "fact": "りんごの果肉は植物学的には果実の一部ですが、食用部分には花托も関係しています。"
-    },
-    {
-        "category": "食べ物",
-        "topic": "コーヒー",
-        "fact": "コーヒー豆はコーヒーノキの果実の種子です。"
-    },
-    {
-        "category": "食べ物",
-        "topic": "チョコレート",
-        "fact": "チョコレートの原料となるカカオ豆はカカオの果実の中にあります。"
-    },
-    {
-        "category": "食べ物",
-        "topic": "卵",
-        "fact": "鶏卵の殻の主成分は炭酸カルシウムです。"
-    },
-    {
-        "category": "食べ物",
-        "topic": "米",
-        "fact": "米はイネの種子です。"
-    },
-    {
-        "category": "食べ物",
-        "topic": "蜂蜜",
-        "fact": "蜂蜜はミツバチが花の蜜などを集めて作る食品です。"
-    },
-    {
-        "category": "食べ物",
-        "topic": "トマト",
-        "fact": "トマトは植物学上は果実に分類されます。"
-    },
-    {
-        "category": "食べ物",
-        "topic": "じゃがいも",
-        "fact": "じゃがいもは植物の地下茎が肥大したものです。"
-    },
-    {
-        "category": "食べ物",
-        "topic": "牛乳",
-        "fact": "牛乳にはカルシウムやタンパク質などの栄養素が含まれています。"
-    },
+    {"fact": "バナナは植物学的にはベリーの仲間に分類されます。", "keyword": "banana"},
+    {"fact": "イチゴは植物学的には一般的なベリーとは異なる分類です。", "keyword": "strawberry"},
+    {"fact": "コーヒー豆は植物の果実の種です。", "keyword": "coffee beans"},
+    {"fact": "チョコレートの原料はカカオ豆です。", "keyword": "chocolate cacao"},
+    {"fact": "卵の殻は主に炭酸カルシウムからできています。", "keyword": "egg"},
+    {"fact": "米は世界で広く食べられている主要な穀物の一つです。", "keyword": "rice"},
+    {"fact": "蜂蜜は適切に保存されると非常に長期間保存できる食品です。", "keyword": "honey"},
+    {"fact": "トマトは植物学的には果実です。", "keyword": "tomato"},
+    {"fact": "ジャガイモは植物の地下茎が変化した部分です。", "keyword": "potato"},
+    {"fact": "牛乳にはカルシウムなどの栄養素が含まれています。", "keyword": "milk"},
+    {"fact": "レモンにはビタミンCが含まれています。", "keyword": "lemon"},
+    {"fact": "唐辛子の辛さを生む主な成分はカプサイシンです。", "keyword": "chili pepper"},
+    {"fact": "ワサビの辛味成分は、唐辛子のカプサイシンとは異なります。", "keyword": "wasabi"},
+    {"fact": "ポップコーンはトウモロコシの一部の品種から作られます。", "keyword": "popcorn"},
+    {"fact": "パンが膨らむのは、発酵などによって生じた気体が生地の中に閉じ込められるためです。", "keyword": "bread baking"},
 
     # 日本
-    {
-        "category": "日本",
-        "topic": "富士山",
-        "fact": "富士山の標高は3776メートルで、日本で最も高い山です。"
-    },
-    {
-        "category": "日本",
-        "topic": "新幹線",
-        "fact": "東海道新幹線は1964年に開業しました。"
-    },
-    {
-        "category": "日本",
-        "topic": "東京",
-        "fact": "東京は日本の首都として知られ、日本の政治や経済の中心の一つです。"
-    },
-    {
-        "category": "日本",
-        "topic": "桜",
-        "fact": "日本では春になると多くの地域で桜の開花が見られます。"
-    },
-    {
-        "category": "日本",
-        "topic": "温泉",
-        "fact": "日本は火山活動が活発な地域が多く、各地に温泉があります。"
-    },
-    {
-        "category": "日本",
-        "topic": "神社",
-        "fact": "神社は日本の伝統的な宗教施設の一つです。"
-    },
-    {
-        "category": "日本",
-        "topic": "お寺",
-        "fact": "寺院は日本の仏教文化と深く関係しています。"
-    },
-    {
-        "category": "日本",
-        "topic": "コンビニ",
-        "fact": "日本のコンビニエンスストアでは食品だけでなく、さまざまな生活サービスも提供されています。"
-    },
-    {
-        "category": "日本",
-        "topic": "都道府県",
-        "fact": "日本の都道府県は47あります。"
-    },
-    {
-        "category": "日本",
-        "topic": "和食",
-        "fact": "和食は2013年にユネスコ無形文化遺産に登録されました。"
-    },
+    {"fact": "富士山は日本で最も高い山で、標高は3776メートルです。", "keyword": "Mount Fuji"},
+    {"fact": "新幹線は日本の高速鉄道として1964年に営業運転を開始しました。", "keyword": "shinkansen"},
+    {"fact": "日本には47の都道府県があります。", "keyword": "Japan map"},
+    {"fact": "東京は日本の首都です。", "keyword": "Tokyo"},
+    {"fact": "桜は日本の春を象徴する花として広く親しまれています。", "keyword": "cherry blossoms Japan"},
+    {"fact": "日本には多くの温泉地があります。", "keyword": "Japanese hot spring"},
+    {"fact": "日本の国土は山地が多くを占めています。", "keyword": "Japan mountains"},
+    {"fact": "日本は太平洋の環太平洋火山帯に位置しています。", "keyword": "Japan volcano"},
+    {"fact": "日本ではコンビニエンスストアが全国各地に広がっています。", "keyword": "Japanese convenience store"},
+    {"fact": "寿司は日本を代表する料理の一つとして世界的に知られています。", "keyword": "sushi Japan"},
+    {"fact": "おにぎりは日本で古くから親しまれてきた米料理です。", "keyword": "onigiri"},
+    {"fact": "味噌は大豆などを発酵させて作る日本の伝統的な食品です。", "keyword": "miso"},
+    {"fact": "醤油は大豆や小麦などを原料として発酵させて作られます。", "keyword": "soy sauce"},
+    {"fact": "畳は日本の伝統的な床材です。", "keyword": "tatami"},
+    {"fact": "鳥居は神社の入口などに設置される特徴的な建造物です。", "keyword": "Japanese shrine torii"},
+    {"fact": "富士山は2013年に世界文化遺産に登録されました。", "keyword": "Mount Fuji Japan"},
+    {"fact": "日本には世界自然遺産に登録された地域もあります。", "keyword": "Japan nature"},
+    {"fact": "日本では四季の変化がはっきりしている地域が多くあります。", "keyword": "Japan four seasons"},
+    {"fact": "北海道は日本の都道府県の中で面積が最も大きいです。", "keyword": "Hokkaido Japan"},
+    {"fact": "香川県は日本の都道府県の中で面積が最も小さいです。", "keyword": "Kagawa Japan"},
 
     # 自然
-    {
-        "category": "自然",
-        "topic": "海",
-        "fact": "地球の表面の大部分は海洋に覆われています。"
-    },
-    {
-        "category": "自然",
-        "topic": "山",
-        "fact": "山は地殻変動や火山活動など、さまざまな地質学的過程によって形成されます。"
-    },
-    {
-        "category": "自然",
-        "topic": "雨",
-        "fact": "雨は大気中の水蒸気が凝結してできた水滴が地上へ落ちる現象です。"
-    },
-    {
-        "category": "自然",
-        "topic": "雪",
-        "fact": "雪は大気中で水蒸気が凍ってできた氷の結晶が集まって降ってくるものです。"
-    },
-    {
-        "category": "自然",
-        "topic": "雷",
-        "fact": "雷は雲と地面、または雲の内部などで起こる大規模な放電現象です。"
-    },
-    {
-        "category": "自然",
-        "topic": "虹",
-        "fact": "虹は太陽光が雨粒などの水滴の中で屈折や反射をすることで見えます。"
-    },
-    {
-        "category": "自然",
-        "topic": "火山",
-        "fact": "火山は地下のマグマが地表へ出てくる場所です。"
-    },
-    {
-        "category": "自然",
-        "topic": "森林",
-        "fact": "森林は多くの植物や動物が暮らす重要な生態系です。"
-    },
-    {
-        "category": "自然",
-        "topic": "植物",
-        "fact": "植物は光合成によって光エネルギーを利用し、有機物を作ります。"
-    },
-    {
-        "category": "自然",
-        "topic": "雲",
-        "fact": "雲は空気中の水滴や氷の結晶などが集まってできています。"
-    },
+    {"fact": "海は地球表面の大部分を占めています。", "keyword": "ocean"},
+    {"fact": "地球上には非常に多くの種類の植物が存在します。", "keyword": "forest plants"},
+    {"fact": "森林は二酸化炭素を吸収する重要な生態系の一つです。", "keyword": "forest"},
+    {"fact": "植物は光合成によって光エネルギーを化学エネルギーへ変換します。", "keyword": "photosynthesis"},
+    {"fact": "雲は空気中の水滴や氷の粒が集まってできています。", "keyword": "cloud"},
+    {"fact": "雨は雲の中の水滴や氷の粒が成長して地上へ落ちてくる現象です。", "keyword": "rain"},
+    {"fact": "雪の結晶は基本的に六角形の構造を持ちます。", "keyword": "snowflake"},
+    {"fact": "火山は地下のマグマなどが地表へ噴出する場所です。", "keyword": "volcano"},
+    {"fact": "砂漠は必ずしも一年中暑い場所というわけではありません。", "keyword": "desert"},
+    {"fact": "海水には多くの種類の塩類が溶けています。", "keyword": "seawater"},
+    {"fact": "潮の満ち引きには月や太陽の重力が関係しています。", "keyword": "ocean tide"},
+    {"fact": "地震は地下の岩盤に蓄積された力が急激に解放されることで発生することがあります。", "keyword": "earthquake"},
+    {"fact": "津波は海底の大きな変動などによって発生することがあります。", "keyword": "tsunami"},
+    {"fact": "虹は通常、太陽と雨滴の位置関係によって見え方が変わります。", "keyword": "rainbow sky"},
+    {"fact": "霧は地表付近の空気中に細かな水滴が浮かんでいる状態です。", "keyword": "fog"},
+    {"fact": "風は空気が移動する現象です。", "keyword": "wind"},
+    {"fact": "台風は暖かい海面から得たエネルギーによって発達します。", "keyword": "typhoon"},
+    {"fact": "氷河は長い時間をかけてゆっくり移動する巨大な氷の塊です。", "keyword": "glacier"},
+    {"fact": "サンゴ礁は多くの海洋生物が暮らす重要な生態系です。", "keyword": "coral reef"},
+    {"fact": "マングローブは海岸近くの塩分を含む環境に適応した植物群落です。", "keyword": "mangrove"},
+
+    # 身近な科学・生活
+    {"fact": "電子レンジは電磁波を利用して食品を加熱します。", "keyword": "microwave oven"},
+    {"fact": "冷蔵庫は食品から熱を外へ移動させることで内部を冷やします。", "keyword": "refrigerator"},
+    {"fact": "鏡は光を反射することで物体の像を見せます。", "keyword": "mirror"},
+    {"fact": "鉛筆の芯には黒鉛が使われています。", "keyword": "pencil"},
+    {"fact": "消しゴムは鉛筆の黒鉛などを紙から取り除くために使われます。", "keyword": "eraser pencil"},
+    {"fact": "シャボン玉の虹色は光の干渉によって生まれます。", "keyword": "soap bubble"},
+    {"fact": "氷を塩と混ぜると、氷だけの場合より低い温度になることがあります。", "keyword": "ice salt"},
+    {"fact": "水滴が丸くなろうとするのは表面張力が関係しています。", "keyword": "water droplet"},
+    {"fact": "磁石にはN極とS極があります。", "keyword": "bar magnet"},
+    {"fact": "同じ極同士の磁石は反発し、異なる極同士は引き合います。", "keyword": "magnets"},
+    {"fact": "金属は種類によって電気の通しやすさが異なります。", "keyword": "metal electricity"},
+    {"fact": "自転車のタイヤの空気圧は乗り心地や走行性能に影響します。", "keyword": "bicycle"},
+    {"fact": "飛行機が飛ぶためには、翼と空気の相互作用が重要です。", "keyword": "airplane wing"},
+    {"fact": "船が水に浮くのは、浮力が重力とつり合うためです。", "keyword": "ship ocean"},
+    {"fact": "エレベーターの安全装置には複数の仕組みが使われています。", "keyword": "elevator"},
+    {"fact": "LEDは発光ダイオードを利用した照明です。", "keyword": "LED light"},
+    {"fact": "太陽光発電は光エネルギーを電気エネルギーへ変換します。", "keyword": "solar panels"},
+    {"fact": "風力発電は風の運動エネルギーを利用して発電します。", "keyword": "wind turbine"},
+    {"fact": "水力発電は水の位置エネルギーや運動エネルギーを利用します。", "keyword": "hydroelectric power"},
+    {"fact": "バッテリーは化学エネルギーを電気エネルギーとして取り出します。", "keyword": "battery"},
+
+    # 歴史・文化
+    {"fact": "紙は古代中国で発明されたとされています。", "keyword": "ancient China paper"},
+    {"fact": "活版印刷は情報を大量に複製する技術の発展に大きく影響しました。", "keyword": "printing press"},
+    {"fact": "古代エジプトではピラミッドが建設されました。", "keyword": "Egypt pyramids"},
+    {"fact": "ローマ帝国では広大な道路網が整備されました。", "keyword": "Roman roads"},
+    {"fact": "万里の長城は中国にある巨大な防御施設群です。", "keyword": "Great Wall China"},
+    {"fact": "日本の奈良にある東大寺には大仏があります。", "keyword": "Todaiji Buddha"},
+    {"fact": "京都には多くの歴史的な寺社があります。", "keyword": "Kyoto Japan temple"},
+    {"fact": "日本の茶道では抹茶が使われます。", "keyword": "Japanese tea ceremony"},
+    {"fact": "浮世絵は日本の伝統的な木版画などの美術様式として知られています。", "keyword": "ukiyo-e"},
+    {"fact": "折り紙は紙を折ってさまざまな形を作る日本文化として世界的に知られています。", "keyword": "origami"},
+    {"fact": "能は日本の伝統芸能の一つです。", "keyword": "Japanese Noh theater"},
+    {"fact": "歌舞伎は日本を代表する伝統的な演劇の一つです。", "keyword": "kabuki theater"},
+    {"fact": "相撲は日本の伝統的な格闘技・スポーツとして知られています。", "keyword": "sumo wrestling"},
+    {"fact": "将棋では取った駒を自分の駒として再び使えるのが大きな特徴です。", "keyword": "shogi"},
+    {"fact": "囲碁は非常に長い歴史を持つボードゲームです。", "keyword": "Go board game"},
 ]
 
+random.shuffle(trivia)
 
-# ---------------------------------------
-# データをシャッフル
-# ---------------------------------------
-
-random.shuffle(facts)
-
-
-# ---------------------------------------
 # IDを付ける
-# ---------------------------------------
-
-for i, item in enumerate(facts, 1):
+for i, item in enumerate(trivia, start=1):
     item["id"] = i
 
+with open("trivia.json", "w", encoding="utf-8") as f:
+    json.dump(trivia, f, ensure_ascii=False, indent=2)
 
-# ---------------------------------------
-# trivia.jsonを作成
-# ---------------------------------------
-
-with open(
-    "trivia.json",
-    "w",
-    encoding="utf-8"
-) as f:
-
-    json.dump(
-        facts,
-        f,
-        ensure_ascii=False,
-        indent=2
-    )
-
-
-print("===================================")
-print("trivia.json 作成完了")
-print("雑学データ数:", len(facts))
-print("===================================")
+print(f"trivia.json を生成しました: {len(trivia)}件")
