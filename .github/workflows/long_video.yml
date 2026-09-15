@@ -16,7 +16,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-
       # 2. システムパッケージ
       - name: Install system packages
         run: |
@@ -28,18 +27,15 @@ jobs:
             jq \
             bc
 
-
       # 3. Pythonパッケージ
       - name: Install Python packages
         run: |
           python -m pip install --upgrade pip
-
           python -m pip install edge-tts
           python -m pip install google-api-python-client
           python -m pip install google-auth
           python -m pip install google-auth-httplib2
           python -m pip install google-auth-oauthlib
-
 
       # 4. Edge-TTSテスト
       - name: Test Edge TTS
@@ -62,7 +58,6 @@ jobs:
 
           echo "Edge-TTSテスト成功"
 
-
       # 5. 雑学データ生成
       - name: Generate trivia.json
         run: |
@@ -84,7 +79,6 @@ jobs:
 
           echo "trivia.json生成完了"
 
-
       # 6. 雑学データ確認
       - name: Check trivia data
         run: |
@@ -98,7 +92,6 @@ jobs:
           fi
 
           echo "120件以上あるのでOK"
-
 
       # 7. 雑学選択
       - name: Select trivia
@@ -131,7 +124,6 @@ jobs:
 
           print(f"今回使用する雑学: {len(selected)}件")
           PY
-
 
       # 8. YouTubeメタデータ
       - name: Generate YouTube metadata
@@ -169,7 +161,6 @@ jobs:
               "earth": "地球",
               "train": "乗り物",
               "weather": "天気",
-              "city": "街",
               "forest": "自然",
               "technology": "テクノロジー"
           }
@@ -264,7 +255,6 @@ jobs:
           print("カテゴリー:", categories)
           PY
 
-
       # 9. フォルダ作成
       - name: Prepare folders
         run: |
@@ -275,7 +265,6 @@ jobs:
           mkdir -p audio
           mkdir -p clips
           mkdir -p segments
-
 
       # 10. ナレーション＋映像生成
       - name: Generate narration and matching footage
@@ -314,7 +303,6 @@ jobs:
               "weather": "weather clouds",
               "city": "city street",
               "forest": "forest trees",
-
               "octopus": "octopus underwater",
               "cat": "cat animal",
               "dog": "dog animal",
@@ -323,26 +311,22 @@ jobs:
               "shark": "shark ocean",
               "whale": "whale ocean",
               "dolphin": "dolphin ocean",
-
               "brain": "human brain neuroscience",
               "heart": "human heart medical",
               "blood": "blood medical",
               "sleep": "sleeping person",
               "eye": "human eye",
               "ear": "human ear",
-
               "moon": "moon space",
               "sun": "sun space",
               "planet": "planet space",
               "black hole": "black hole space",
               "galaxy": "galaxy space",
-
               "water": "water",
               "ice": "ice",
               "fire": "fire",
               "rain": "rain",
               "snow": "snow",
-
               "computer": "computer technology",
               "internet": "internet technology",
               "robot": "robot technology"
@@ -399,7 +383,6 @@ jobs:
               ) as f:
                   f.write(fact)
 
-              # Edge-TTS
               run(
                   f'python -m edge_tts '
                   f'--voice ja-JP-NanamiNeural '
@@ -430,7 +413,6 @@ jobs:
                   f"音声時間: {duration:.2f}秒"
               )
 
-              # Pexels検索
               query = keyword_map.get(
                   keyword,
                   keyword if keyword else "science interesting"
@@ -608,7 +590,6 @@ jobs:
           print("=" * 70)
           PY
 
-
       # 11. 結合リスト
       - name: Create concat list
         run: |
@@ -621,7 +602,6 @@ jobs:
 
           cat concat.txt
 
-
       # 12. 動画結合
       - name: Concatenate segments
         run: |
@@ -631,7 +611,6 @@ jobs:
             -i concat.txt \
             -c copy \
             long_raw.mp4
-
 
       # 13. 字幕生成
       - name: Generate subtitles
@@ -807,7 +786,6 @@ jobs:
           print("字幕生成完了")
           PY
 
-
       # 14. 字幕焼き付け
       - name: Render final video
         run: |
@@ -822,7 +800,6 @@ jobs:
             -b:a 192k \
             -movflags +faststart \
             long_video.mp4
-
 
       # 15. サムネイル文字
       - name: Generate thumbnail text
@@ -869,7 +846,6 @@ jobs:
           print(text)
           PY
 
-
       # 16. サムネイル背景
       - name: Create thumbnail background
         run: |
@@ -879,7 +855,6 @@ jobs:
             -frames:v 1 \
             -vf "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,eq=brightness=-0.10:saturation=1.25" \
             thumbnail_base.jpg
-
 
       # 17. サムネイル作成
       - name: Create thumbnail
@@ -895,7 +870,6 @@ jobs:
             -q:v 5 \
             thumbnail.jpg
 
-
       # 18. 最終確認
       - name: Check final files
         run: |
@@ -910,7 +884,6 @@ jobs:
 
           echo "サムネイル:"
           ls -lh thumbnail.jpg
-
 
       # 19. YouTubeアップロード
       - name: Upload to YouTube
@@ -929,6 +902,7 @@ jobs:
           from googleapiclient.discovery import build
           from googleapiclient.http import MediaFileUpload
 
+
           credentials = Credentials(
               None,
               refresh_token=os.environ[
@@ -946,17 +920,20 @@ jobs:
               ]
           )
 
+
           youtube = build(
               "youtube",
               "v3",
               credentials=credentials
           )
 
+
           with open(
               "youtube_metadata.json",
               encoding="utf-8"
           ) as f:
               metadata = json.load(f)
+
 
           body = {
               "snippet": {
@@ -973,11 +950,18 @@ jobs:
               }
           }
 
+
+          print("======================================")
+          print("YouTube動画アップロード開始")
+          print("======================================")
+
+
           media = MediaFileUpload(
               "long_video.mp4",
               chunksize=8 * 1024 * 1024,
               resumable=True
           )
+
 
           request = youtube.videos().insert(
               part="snippet,status",
@@ -985,13 +969,13 @@ jobs:
               media_body=media
           )
 
+
           response = None
+
 
           while response is None:
 
-              status, response = (
-                  request.next_chunk()
-              )
+              status, response = request.next_chunk()
 
               if status:
                   print(
@@ -1002,38 +986,25 @@ jobs:
                       "%"
                   )
 
+
           video_id = response["id"]
 
-          print(
-              "YouTube動画ID:",
-              video_id
-          )
 
-          thumbnail_media = MediaFileUpload(
-              "thumbnail.jpg",
-              mimetype="image/jpeg"
-          )
-
-          youtube.thumbnails().set(
-              videoId=video_id,
-              media_body=thumbnail_media
-          ).execute()
-
-          print(
-              "======================================"
-          )
-
+          print()
+          print("======================================")
           print("YouTube公開完了")
-
+          print("======================================")
+          print("YouTube動画ID:", video_id)
           print(
               "https://www.youtube.com/watch?v="
               + video_id
           )
+          print("======================================")
+
 
           PY
 
           python upload_youtube.py
-
 
       # 20. 成果物保存
       - name: Upload artifacts
