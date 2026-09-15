@@ -28,6 +28,7 @@ jobs:
           sudo apt-get install -y \
             ffmpeg \
             fonts-noto-cjk \
+            fontconfig \
             jq \
             bc
 
@@ -79,10 +80,12 @@ jobs:
 
           echo "雑学データ件数: $COUNT"
 
-          if [ "$COUNT" -lt 100 ]; then
-            echo "ERROR: 雑学データが100件未満です"
+          if [ "$COUNT" -lt 120 ]; then
+            echo "ERROR: 雑学データが120件未満です"
             exit 1
           fi
+
+          echo "120件以上あるのでOKです"
 
 
       # ==================================================
@@ -99,7 +102,6 @@ jobs:
 
           random.shuffle(data)
 
-          # 120件使用
           selected = data[:120]
 
           for i, item in enumerate(selected, start=1):
@@ -129,7 +131,6 @@ jobs:
           python - <<'PY'
           import json
           import random
-          from collections import Counter
 
           with open(
               "selected_trivia.json",
@@ -207,23 +208,23 @@ jobs:
                   examples.append("・" + fact)
 
           description = f"""今回は、{category_text}を中心に、
-知っているようで意外と知らない雑学を120個紹介します。
+          知っているようで意外と知らない雑学を120個紹介します。
 
-身近なことから科学、宇宙、動物、人体、食べ物まで、
-「実は……」から始まる意外な事実をテンポよくまとめました。
+          身近なことから科学、宇宙、動物、人体、食べ物まで、
+          「実は……」から始まる意外な事実をテンポよくまとめました。
 
-今回登場する雑学の一部はこちら。
+          今回登場する雑学の一部はこちら。
 
-{chr(10).join(examples)}
+          {chr(10).join(examples)}
 
-気になった雑学や、初めて知ったことがあれば
-コメントで教えてください。
+          気になった雑学や、初めて知ったことがあれば
+          コメントで教えてください。
 
-この動画が面白かったら、
-高評価・チャンネル登録もよろしくお願いします。
+          この動画が面白かったら、
+          高評価・チャンネル登録もよろしくお願いします。
 
-#雑学 #豆知識 #トリビア
-"""
+          #雑学 #豆知識 #トリビア
+          """
 
           # ------------------------------------------
           # ハッシュタグ
@@ -568,7 +569,6 @@ jobs:
                       if not link:
                           continue
 
-                      # 横長＋高解像度を優先
                       score = 0
 
                       if width >= 1920:
@@ -933,7 +933,6 @@ jobs:
         run: |
           python - <<'PY'
           import json
-          import re
 
           with open(
               "selected_trivia.json",
@@ -943,19 +942,10 @@ jobs:
 
           first = data[0]
 
-          fact = first.get(
-              "fact",
-              "知らないと驚く雑学"
-          ).strip()
-
           keyword = first.get(
               "keyword",
               ""
           ).lower()
-
-          # ------------------------------------------
-          # 内容別のサムネタイトル
-          # ------------------------------------------
 
           if "space" in keyword:
 
@@ -1008,9 +998,6 @@ jobs:
       # ==================================================
       - name: Create thumbnail background
         run: |
-          # 最初の雑学に使った映像から
-          # サムネイル用画像を取得
-
           ffmpeg -y \
             -ss 1 \
             -i segments/1.mp4 \
@@ -1024,10 +1011,15 @@ jobs:
       # ==================================================
       - name: Create thumbnail
         run: |
+          FONT=$(fc-match -f '%{file}\n' "Noto Sans CJK JP:style=Bold" | head -n 1)
+
+          echo "使用フォント:"
+          echo "$FONT"
+
           ffmpeg -y \
             -i thumbnail_base.jpg \
-            -vf "drawbox=x=0:y=0:w=1280:h=720:color=black@0.28:t=fill,drawtext=fontfile=/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc:textfile=thumbnail_text.txt:fontcolor=white:fontsize=82:borderw=6:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2" \
-            -q:v 2 \
+            -vf "drawbox=x=0:y=0:w=1280:h=720:color=black@0.28:t=fill,drawtext=fontfile='$FONT':textfile=thumbnail_text.txt:fontcolor=white:fontsize=82:borderw=6:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2" \
+            -q:v 5 \
             thumbnail.jpg
 
           echo "サムネイル完成"
