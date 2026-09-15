@@ -13,7 +13,7 @@ jobs:
     steps:
 
       # ==================================================
-      # 1. GitHubからファイル取得
+      # 1. Checkout
       # ==================================================
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,15 +40,38 @@ jobs:
         run: |
           python -m pip install --upgrade pip
 
-          pip install edge-tts
-          pip install google-api-python-client
-          pip install google-auth
-          pip install google-auth-httplib2
-          pip install google-auth-oauthlib
+          python -m pip install edge-tts
+          python -m pip install google-api-python-client
+          python -m pip install google-auth
+          python -m pip install google-auth-httplib2
+          python -m pip install google-auth-oauthlib
 
 
       # ==================================================
-      # 4. 雑学データ生成
+      # 4. Edge-TTS動作確認
+      # ==================================================
+      - name: Test Edge TTS
+        run: |
+          echo "Edge-TTSバージョン確認"
+          python -m edge_tts --help > /dev/null
+
+          echo "Edge-TTSテスト音声生成"
+
+          echo "これは音声テストです。" > test_tts.txt
+
+          python -m edge_tts \
+            --voice ja-JP-NanamiNeural \
+            --rate=-10% \
+            --text-file test_tts.txt \
+            --write-media test_tts.mp3
+
+          test -f test_tts.mp3
+
+          echo "Edge-TTSテスト成功"
+
+
+      # ==================================================
+      # 5. 雑学データ生成
       # ==================================================
       - name: Generate trivia.json
         run: |
@@ -58,6 +81,10 @@ jobs:
 
           if [ ! -f generate_trivia.py ]; then
             echo "ERROR: generate_trivia.py がありません"
+            echo "現在の場所:"
+            pwd
+            echo "ファイル一覧:"
+            find . -maxdepth 3 -type f | sort
             exit 1
           fi
 
@@ -72,7 +99,7 @@ jobs:
 
 
       # ==================================================
-      # 5. 雑学データ確認
+      # 6. 雑学データ確認
       # ==================================================
       - name: Check trivia data
         run: |
@@ -89,7 +116,7 @@ jobs:
 
 
       # ==================================================
-      # 6. 今回の動画で使う雑学をランダム選択
+      # 7. 今回の動画で使う雑学をランダム選択
       # ==================================================
       - name: Select trivia
         run: |
@@ -124,7 +151,7 @@ jobs:
 
 
       # ==================================================
-      # 7. YouTubeタイトル・概要欄・タグ生成
+      # 8. YouTubeメタデータ生成
       # ==================================================
       - name: Generate YouTube metadata
         run: |
@@ -156,8 +183,6 @@ jobs:
               "food": "食べ物",
               "japan": "日本",
               "nature": "自然",
-              "history": "歴史",
-              "technology": "テクノロジー",
               "light": "科学",
               "ocean": "海",
               "earth": "地球",
@@ -197,10 +222,6 @@ jobs:
 
           title = random.choice(title_patterns)
 
-          # ------------------------------------------
-          # 概要欄
-          # ------------------------------------------
-
           examples = []
 
           for fact in facts[:8]:
@@ -220,15 +241,8 @@ jobs:
           気になった雑学や、初めて知ったことがあれば
           コメントで教えてください。
 
-          この動画が面白かったら、
-          高評価・チャンネル登録もよろしくお願いします。
-
           #雑学 #豆知識 #トリビア
           """
-
-          # ------------------------------------------
-          # ハッシュタグ
-          # ------------------------------------------
 
           hashtags = [
               "#雑学",
@@ -243,10 +257,6 @@ jobs:
                   hashtags.append(tag)
 
           hashtags = hashtags[:8]
-
-          # ------------------------------------------
-          # YouTubeタグ
-          # ------------------------------------------
 
           tags = [
               "雑学",
@@ -285,28 +295,14 @@ jobs:
                   indent=2
               )
 
-          print()
-          print("======================================")
-          print("YouTubeタイトル")
-          print("======================================")
-          print(title)
-
-          print()
-          print("======================================")
-          print("カテゴリー")
-          print("======================================")
-          print(categories)
-
-          print()
-          print("======================================")
-          print("ハッシュタグ")
-          print("======================================")
-          print(" ".join(hashtags))
+          print("タイトル:", title)
+          print("カテゴリー:", categories)
+          print("ハッシュタグ:", " ".join(hashtags))
           PY
 
 
       # ==================================================
-      # 8. 作業フォルダ作成
+      # 9. 作業フォルダ
       # ==================================================
       - name: Prepare folders
         run: |
@@ -320,7 +316,7 @@ jobs:
 
 
       # ==================================================
-      # 9. 雑学ごとのナレーション＋関連映像
+      # 10. ナレーション＋関連映像
       # ==================================================
       - name: Generate narration and matching footage
         env:
@@ -342,12 +338,7 @@ jobs:
 
           PEXELS_API_KEY = os.environ["PEXELS_API_KEY"]
 
-          # ------------------------------------------
-          # キーワード変換
-          # ------------------------------------------
-
           keyword_map = {
-
               "space": "outer space galaxy stars",
               "science": "science laboratory experiment",
               "animal": "wild animals nature",
@@ -355,7 +346,6 @@ jobs:
               "food": "food cooking",
               "japan": "Japan Tokyo Japanese",
               "nature": "nature landscape",
-              "history": "ancient history",
               "technology": "technology computer",
               "light": "light physics",
               "ocean": "ocean underwater",
@@ -399,17 +389,12 @@ jobs:
           }
 
           def run(command):
-              print(command)
-
+              print("実行:", command)
               subprocess.run(
                   command,
                   shell=True,
                   check=True
               )
-
-          # ------------------------------------------
-          # 1件ずつ処理
-          # ------------------------------------------
 
           for index, item in enumerate(
               selected,
@@ -432,10 +417,6 @@ jobs:
               print("キーワード:")
               print(keyword)
 
-              # ======================================
-              # ナレーションテキスト
-              # ======================================
-
               txt = f"audio/{index}.txt"
               mp3 = f"audio/{index}.mp3"
 
@@ -446,17 +427,22 @@ jobs:
               ) as f:
                   f.write(fact)
 
+              # ------------------------------------------
+              # Edge-TTS
+              # ------------------------------------------
+
               run(
-                  f'edge-tts '
+                  f'python -m edge_tts '
                   f'--voice ja-JP-NanamiNeural '
                   f'--rate=-10% '
                   f'--text-file "{txt}" '
                   f'--write-media "{mp3}"'
               )
 
-              # ======================================
-              # 音声の長さ
-              # ======================================
+              if not os.path.exists(mp3):
+                  raise RuntimeError(
+                      f"音声ファイルが生成されませんでした: {mp3}"
+                  )
 
               duration_result = subprocess.check_output(
                   f'ffprobe '
@@ -475,9 +461,9 @@ jobs:
                   f"音声時間: {duration:.2f}秒"
               )
 
-              # ======================================
-              # Pexels検索語
-              # ======================================
+              # ------------------------------------------
+              # Pexels
+              # ------------------------------------------
 
               query = keyword_map.get(
                   keyword,
@@ -510,7 +496,6 @@ jobs:
               videos = []
 
               try:
-
                   with urllib.request.urlopen(
                       request,
                       timeout=30
@@ -534,10 +519,6 @@ jobs:
                       error
                   )
 
-              # ======================================
-              # 高画質動画を選択
-              # ======================================
-
               selected_url = None
               best_score = -1
 
@@ -549,16 +530,12 @@ jobs:
                   ):
 
                       width = (
-                          video_file.get(
-                              "width"
-                          )
+                          video_file.get("width")
                           or 0
                       )
 
                       height = (
-                          video_file.get(
-                              "height"
-                          )
+                          video_file.get("height")
                           or 0
                       )
 
@@ -595,10 +572,6 @@ jobs:
 
               clip = f"clips/{index}.mp4"
 
-              # ======================================
-              # 動画ダウンロード
-              # ======================================
-
               downloaded = False
 
               if selected_url:
@@ -623,15 +596,10 @@ jobs:
                           error
                       )
 
-              # ======================================
-              # 映像がない場合の保険
-              # ======================================
-
               if not downloaded:
 
                   print(
-                      "関連映像が見つからなかったため"
-                      "黒背景を使用"
+                      "関連映像が見つからないため黒背景を使用"
                   )
 
                   run(
@@ -641,10 +609,6 @@ jobs:
                       f'-t {duration} '
                       f'"{clip}"'
                   )
-
-              # ======================================
-              # 映像＋ナレーション
-              # ======================================
 
               segment = (
                   f"segments/{index}.mp4"
@@ -678,14 +642,16 @@ jobs:
               time.sleep(0.2)
 
           print()
-          print("======================================")
-          print("全雑学の映像＋ナレーション完成")
-          print("======================================")
+          print("=" * 70)
+          print(
+              "全雑学の映像＋ナレーション完成"
+          )
+          print("=" * 70)
           PY
 
 
       # ==================================================
-      # 10. 動画結合リスト
+      # 11. 結合リスト
       # ==================================================
       - name: Create concat list
         run: |
@@ -701,7 +667,7 @@ jobs:
 
 
       # ==================================================
-      # 11. 全動画結合
+      # 12. 全動画結合
       # ==================================================
       - name: Concatenate segments
         run: |
@@ -714,7 +680,7 @@ jobs:
 
 
       # ==================================================
-      # 12. 字幕生成
+      # 13. 字幕生成
       # ==================================================
       - name: Generate subtitles
         run: |
@@ -749,15 +715,19 @@ jobs:
                   seconds * 1000
               )
 
-              hours = total_ms // 3600000
+              hours = (
+                  total_ms // 3600000
+              )
 
               minutes = (
                   total_ms % 3600000
-              ) // 60000
+                  // 60000
+              )
 
               secs = (
                   total_ms % 60000
-              ) // 1000
+                  // 1000
+              )
 
               millis = (
                   total_ms % 1000
@@ -801,15 +771,12 @@ jobs:
                           "？",
                           0,
                           max_chars
-                      ),
-                      text.rfind(
-                          " ",
-                          0,
-                          max_chars
                       )
                   ]
 
-                  cut = max(candidates)
+                  cut = max(
+                      candidates
+                  )
 
                   if cut <= 0:
                       cut = max_chars - 1
@@ -819,14 +786,18 @@ jobs:
                   ].strip()
 
                   if part:
-                      result.append(part)
+                      result.append(
+                          part
+                      )
 
                   text = text[
                       cut + 1:
                   ].strip()
 
               if text:
-                  result.append(text)
+                  result.append(
+                      text
+                  )
 
               return result
 
@@ -861,8 +832,8 @@ jobs:
                       continue
 
                   chunk_duration = (
-                      audio_duration /
-                      len(chunks)
+                      audio_duration
+                      / len(chunks)
                   )
 
                   for chunk_index, chunk in enumerate(
@@ -871,18 +842,14 @@ jobs:
 
                       start = (
                           current_time
-                          +
-                          chunk_index
-                          *
-                          chunk_duration
+                          + chunk_index
+                          * chunk_duration
                       )
 
                       end = (
                           current_time
-                          +
-                          (chunk_index + 1)
-                          *
-                          chunk_duration
+                          + (chunk_index + 1)
+                          * chunk_duration
                       )
 
                       srt.write(
@@ -900,7 +867,9 @@ jobs:
 
                       subtitle_id += 1
 
-                  current_time += audio_duration
+                  current_time += (
+                      audio_duration
+                  )
 
           print(
               "字幕生成完了"
@@ -909,7 +878,7 @@ jobs:
 
 
       # ==================================================
-      # 13. 字幕を動画に焼き付け
+      # 14. 字幕を動画に焼き付け
       # ==================================================
       - name: Render final video
         run: |
@@ -927,7 +896,7 @@ jobs:
 
 
       # ==================================================
-      # 14. サムネイル用テキスト作成
+      # 15. サムネイル文字
       # ==================================================
       - name: Generate thumbnail text
         run: |
@@ -942,41 +911,35 @@ jobs:
 
           first = data[0]
 
-          keyword = first.get(
-              "keyword",
-              ""
-          ).lower()
+          keyword = (
+              first.get(
+                  "keyword",
+                  ""
+              ).lower()
+          )
 
           if "space" in keyword:
-
               text = "宇宙の\nヤバい事実"
 
           elif "animal" in keyword:
-
               text = "動物の\n意外な秘密"
 
           elif "human" in keyword:
-
               text = "人体の\n驚きの事実"
 
           elif "food" in keyword:
-
               text = "食べ物の\n意外な事実"
 
           elif "japan" in keyword:
-
               text = "日本の\n知らない事実"
 
           elif "science" in keyword:
-
               text = "科学の\n驚きの雑学"
 
           elif "nature" in keyword:
-
               text = "自然の\n不思議"
 
           else:
-
               text = "実は知らない\n雑学120選"
 
           with open(
@@ -989,12 +952,13 @@ jobs:
           print(
               "サムネイル文字:"
           )
+
           print(text)
           PY
 
 
       # ==================================================
-      # 15. サムネイル背景作成
+      # 16. サムネイル背景
       # ==================================================
       - name: Create thumbnail background
         run: |
@@ -1007,11 +971,14 @@ jobs:
 
 
       # ==================================================
-      # 16. サムネイル文字入れ
+      # 17. サムネイル
       # ==================================================
       - name: Create thumbnail
         run: |
-          FONT=$(fc-match -f '%{file}\n' "Noto Sans CJK JP:style=Bold" | head -n 1)
+          FONT=$(fc-match \
+            -f '%{file}\n' \
+            "Noto Sans CJK JP:style=Bold" \
+            | head -n 1)
 
           echo "使用フォント:"
           echo "$FONT"
@@ -1026,7 +993,7 @@ jobs:
 
 
       # ==================================================
-      # 17. 最終ファイル確認
+      # 18. 最終確認
       # ==================================================
       - name: Check final files
         run: |
@@ -1058,7 +1025,7 @@ jobs:
 
 
       # ==================================================
-      # 18. YouTubeアップロード
+      # 19. YouTubeアップロード
       # ==================================================
       - name: Upload to YouTube
         env:
@@ -1076,11 +1043,6 @@ jobs:
           from googleapiclient.discovery import build
           from googleapiclient.http import MediaFileUpload
 
-
-          # ==================================================
-          # YouTube認証
-          # ==================================================
-
           CLIENT_ID = os.environ[
               "YOUTUBE_CLIENT_ID"
           ]
@@ -1097,7 +1059,6 @@ jobs:
               "https://www.googleapis.com/auth/youtube.upload"
           ]
 
-
           credentials = Credentials(
               None,
               refresh_token=REFRESH_TOKEN,
@@ -1107,17 +1068,11 @@ jobs:
               scopes=SCOPES
           )
 
-
           youtube = build(
               "youtube",
               "v3",
               credentials=credentials
           )
-
-
-          # ==================================================
-          # Metadata読み込み
-          # ==================================================
 
           with open(
               "youtube_metadata.json",
@@ -1126,31 +1081,19 @@ jobs:
 
               metadata = json.load(f)
 
-
-          title = metadata[
-              "title"
-          ]
-
-          description = metadata[
-              "description"
-          ]
-
-          tags = metadata[
-              "tags"
-          ]
-
-
-          # ==================================================
-          # 動画アップロード
-          # ==================================================
+          title = metadata["title"]
+          description = metadata["description"]
+          tags = metadata["tags"]
 
           print()
           print(
               "======================================"
           )
+
           print(
               "YouTubeへアップロード開始"
           )
+
           print(
               "======================================"
           )
@@ -1159,7 +1102,6 @@ jobs:
               "タイトル:",
               title
           )
-
 
           body = {
               "snippet": {
@@ -1177,20 +1119,17 @@ jobs:
               }
           }
 
-
           media = MediaFileUpload(
               "long_video.mp4",
               chunksize=8 * 1024 * 1024,
               resumable=True
           )
 
-
           request = youtube.videos().insert(
               part="snippet,status",
               body=body,
               media_body=media
           )
-
 
           response = None
 
@@ -1211,11 +1150,7 @@ jobs:
                       "%"
                   )
 
-
-          video_id = response[
-              "id"
-          ]
-
+          video_id = response["id"]
 
           print()
           print(
@@ -1223,21 +1158,14 @@ jobs:
               video_id
           )
 
-
-          # ==================================================
-          # サムネイル設定
-          # ==================================================
-
           print(
               "サムネイル設定中..."
           )
-
 
           thumbnail_media = MediaFileUpload(
               "thumbnail.jpg",
               mimetype="image/jpeg"
           )
-
 
           thumbnail_request = (
               youtube.thumbnails().set(
@@ -1246,11 +1174,7 @@ jobs:
               )
           )
 
-
-          thumbnail_response = (
-              thumbnail_request.execute()
-          )
-
+          thumbnail_request.execute()
 
           print(
               "サムネイル設定完了"
@@ -1260,9 +1184,11 @@ jobs:
           print(
               "======================================"
           )
+
           print(
               "YouTube公開完了"
           )
+
           print(
               "======================================"
           )
@@ -1274,12 +1200,11 @@ jobs:
 
           PY
 
-
           python upload_youtube.py
 
 
       # ==================================================
-      # 19. 成果物保存
+      # 20. 成果物保存
       # ==================================================
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
