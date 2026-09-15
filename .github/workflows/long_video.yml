@@ -1,1 +1,320 @@
+name: Generate Long Trivia Video
 
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-cjk jq
+
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install edge-tts
+
+      - name: Select topic
+        run: |
+          SEED=$GITHUB_RUN_NUMBER
+          echo "SEED=$SEED" >> "$GITHUB_ENV"
+
+          TOPICS=(
+            "実は知らない人体の雑学"
+            "誰かに話したくなる世界の雑学"
+            "知ると面白い食べ物の雑学"
+            "実はすごい動物の雑学"
+            "意外と知らない日本の雑学"
+            "思わず驚く科学の雑学"
+            "身近にある不思議な雑学"
+            "知らないと損する生活雑学"
+            "歴史に隠された意外な事実"
+            "脳と心理に関する不思議な雑学"
+          )
+
+          INDEX=$((SEED % ${#TOPICS[@]}))
+          TOPIC="${TOPICS[$INDEX]}"
+
+          echo "TOPIC=$TOPIC" >> "$GITHUB_ENV"
+
+          echo "Topic: $TOPIC"
+
+      - name: Create script
+        run: |
+          python - <<'PY'
+          import os
+
+          seed = int(os.environ["SEED"])
+          topic = os.environ["TOPIC"]
+
+          intros = [
+              "今回は、思わず誰かに話したくなる雑学を紹介します。最後まで見ると、きっと一つは知らなかった事実が見つかります。",
+              "あなたはこの事実を知っていますか。実は、私たちが普段何気なく見ているものには、意外な秘密が隠されています。",
+              "ここから紹介する雑学の中には、知った瞬間に誰かに話したくなるものがあります。特に最後の話はかなり意外です。",
+              "知らなくても困らない。でも、知ってしまうと誰かに話したくなる。今回はそんな雑学をまとめました。"
+          ]
+
+          facts = [
+              "実は、人間の脳は何もしない時間でも大量の情報を処理しています。ぼーっとしているように見えても、脳が完全に休んでいるとは限りません。",
+              "人間は同じ情報を何度も見ることで、それを身近なものだと感じやすくなります。これは日常生活のさまざまな場面で起きています。",
+              "私たちは普段、見えているものをすべて正確に認識しているわけではありません。脳が過去の経験を使って情報を補っているからです。",
+              "動物の世界には、人間からすると信じられない能力を持つ生き物がたくさんいます。中には自分の体を環境に合わせて変化させるような能力を持つものもいます。",
+              "食べ物にも意外な歴史があります。今では当たり前のように食べているものが、昔はまったく違う目的で使われていたこともあります。",
+              "日本には、毎日使っているのに意外と知られていない仕組みがたくさんあります。身近だからこそ気づかない秘密が隠されています。",
+              "科学の世界では、一見すると当たり前に思える現象にも理由があります。知ってみると、いつもの景色が少し違って見えてきます。",
+              "歴史を調べてみると、教科書ではあまり紹介されない意外な出来事が見つかります。私たちが知っている歴史は、ほんの一部分なのかもしれません。",
+              "心理学では、人間の行動にはある程度のパターンがあることが知られています。自分でも気づかないうちに、脳に影響されて行動していることがあります。",
+              "普段何気なく使っているものにも、実は合理的な理由があります。知ってしまうと、今まで気にしていなかった部分まで気になるようになります。"
+          ]
+
+          transitions = [
+              "そして、ここからが面白いところです。",
+              "でも、実はこれだけではありません。",
+              "ここで一つ、意外な事実があります。",
+              "さらに調べてみると、もっと面白いことが分かります。",
+              "ここまでなら知っている人もいるかもしれません。しかし次の話はどうでしょうか。",
+              "では、もう一つ紹介します。",
+              "この話には、もう一つ秘密があります。"
+          ]
+
+          endings = [
+              "いかがでしたか。知らなかった雑学が一つでもあったなら、ぜひ誰かに話してみてください。",
+              "知識そのものは小さなものでも、知ることで普段の景色が少し変わることがあります。",
+              "こうした身近な疑問を調べてみると、世の中にはまだまだ知らないことがたくさんあります。",
+              "最後まで見ていただきありがとうございました。また次回、思わず誰かに話したくなる雑学を紹介します。"
+          ]
+
+          intro = intros[seed % len(intros)]
+          ending = endings[seed % len(endings)]
+
+          selected = []
+
+          for i in range(18):
+              fact = facts[(seed + i * 3) % len(facts)]
+              transition = transitions[(seed + i) % len(transitions)]
+
+              selected.append(
+                  f"第{i+1}の雑学です。{fact}{transition}"
+              )
+
+          text = (
+              f"{intro}\n\n"
+              + "\n\n".join(selected)
+              + f"\n\n最後に、もう一度覚えておきたいポイントです。{ending}"
+          )
+
+          with open("script.txt", "w", encoding="utf-8") as f:
+              f.write(text)
+
+          print(text)
+          PY
+
+      - name: Generate narration
+        run: |
+          edge-tts \
+            --voice ja-JP-NanamiNeural \
+            --rate="-8%" \
+            --file script.txt \
+            --write-media voice.mp3
+
+          ffprobe -v error \
+            -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 \
+            voice.mp3
+
+      - name: Create subtitles
+        run: |
+          python - <<'PY'
+          import re
+          import subprocess
+
+          with open("script.txt", encoding="utf-8") as f:
+              text = f.read().strip()
+
+          result = subprocess.run(
+              [
+                  "ffprobe",
+                  "-v", "error",
+                  "-show_entries", "format=duration",
+                  "-of", "default=noprint_wrappers=1:nokey=1",
+                  "voice.mp3"
+              ],
+              capture_output=True,
+              text=True,
+              check=True
+          )
+
+          duration = float(result.stdout.strip())
+
+          chunks = re.split(r'(?<=[。！？])', text)
+          chunks = [x.strip() for x in chunks if x.strip()]
+
+          total_chars = sum(len(x) for x in chunks)
+
+          def timestamp(sec):
+              ms = int(sec * 1000)
+
+              h = ms // 3600000
+              ms %= 3600000
+
+              m = ms // 60000
+              ms %= 60000
+
+              s = ms // 1000
+              ms %= 1000
+
+              return f"{h:02}:{m:02}:{s:02},{ms:03}"
+
+          with open("captions.srt", "w", encoding="utf-8") as f:
+              current = 0
+
+              for i, chunk in enumerate(chunks, 1):
+                  length = duration * len(chunk) / max(total_chars, 1)
+
+                  start = current
+                  end = current + length
+
+                  f.write(f"{i}\n")
+                  f.write(f"{timestamp(start)} --> {timestamp(end)}\n")
+                  f.write(chunk + "\n\n")
+
+                  current = end
+
+          print("Subtitle created.")
+          PY
+
+      - name: Search background video
+        env:
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: |
+          curl -L --fail \
+            -H "Authorization: $PEXELS_API_KEY" \
+            "https://api.pexels.com/videos/search?query=abstract%20background&orientation=landscape&size=medium&per_page=20" \
+            -o pexels.json
+
+          COUNT=$(jq '.videos | length' pexels.json)
+
+          test "$COUNT" -gt 0
+
+          INDEX=$((SEED % COUNT))
+
+          VIDEO_URL=$(jq -r --argjson index "$INDEX" '
+            .videos[$index].video_files
+            | map(select(.file_type=="video/mp4"))
+            | sort_by(.width)
+            | reverse
+            | .[0].link
+          ' pexels.json)
+
+          test "$VIDEO_URL" != "null"
+
+          curl -L --fail "$VIDEO_URL" -o source.mp4
+
+      - name: Render long video
+        run: |
+          ffmpeg -y \
+            -stream_loop -1 \
+            -i source.mp4 \
+            -i voice.mp3 \
+            -vf "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,subtitles=captions.srt:force_style='FontName=Noto Sans CJK JP,FontSize=22,Alignment=2,MarginV=60,Outline=2'" \
+            -map 0:v:0 \
+            -map 1:a:0 \
+            -shortest \
+            -c:v libx264 \
+            -preset veryfast \
+            -crf 23 \
+            -c:a aac \
+            -b:a 128k \
+            long_video.mp4
+
+      - name: Upload to YouTube
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          cat > upload_youtube.py <<'PY'
+          import os
+
+          from google.oauth2.credentials import Credentials
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+
+          seed = int(os.environ["SEED"])
+          topic = os.environ["TOPIC"]
+
+          titles = [
+              "実は知らない人が多い雑学18選",
+              "最後まで見ると誰かに話したくなる雑学",
+              "知ってしまうと人に話したくなる雑学",
+              "意外と知らない身近な雑学18選",
+              "思わず驚く世界の雑学"
+          ]
+
+          title = titles[seed % len(titles)]
+
+          credentials = Credentials(
+              token=None,
+              refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],
+              token_uri="https://oauth2.googleapis.com/token",
+              client_id=os.environ["YOUTUBE_CLIENT_ID"],
+              client_secret=os.environ["YOUTUBE_CLIENT_SECRET"],
+              scopes=["https://www.googleapis.com/auth/youtube.upload"],
+          )
+
+          youtube = build(
+              "youtube",
+              "v3",
+              credentials=credentials
+          )
+
+          body = {
+              "snippet": {
+                  "title": title,
+                  "description": (
+                      f"{topic}\n\n"
+                      "最後まで見ていただきありがとうございます。\n"
+                      "気になった雑学があれば、ぜひコメントで教えてください。"
+                  ),
+                  "categoryId": "27"
+              },
+              "status": {
+                  "privacyStatus": "public",
+                  "selfDeclaredMadeForKids": False
+              }
+          }
+
+          media = MediaFileUpload(
+              "long_video.mp4",
+              mimetype="video/mp4",
+              resumable=True
+          )
+
+          request = youtube.videos().insert(
+              part="snippet,status",
+              body=body,
+              media_body=media
+          )
+
+          response = request.execute()
+
+          print("Long video uploaded!")
+          print("Video ID:", response["id"])
+          print("Title:", title)
+          PY
+
+          python upload_youtube.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: long-video
+          path: long_video.mp4
+          retention-days: 1
