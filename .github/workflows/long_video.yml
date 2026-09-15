@@ -2,31 +2,29 @@ name: Generate Long Trivia Video
 
 on:
   workflow_dispatch:
-
   schedule:
     - cron: "0 3 * * *"
 
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
 
-      # ==========================================
-      # 1. GitHubリポジトリ取得
-      # ==========================================
+      # ==================================================
+      # 1. GitHubからファイル取得
+      # ==================================================
       - name: Checkout
         uses: actions/checkout@v4
 
 
-      # ==========================================
-      # 2. 必要なソフトをインストール
-      # ==========================================
+      # ==================================================
+      # 2. システムパッケージ
+      # ==================================================
       - name: Install system packages
         run: |
           sudo apt-get update
-
           sudo apt-get install -y \
             ffmpeg \
             fonts-noto-cjk \
@@ -34,96 +32,84 @@ jobs:
             bc
 
 
-      # ==========================================
+      # ==================================================
       # 3. Pythonパッケージ
-      # ==========================================
+      # ==================================================
       - name: Install Python packages
         run: |
           python -m pip install --upgrade pip
 
-          pip install \
-            edge-tts \
-            google-api-python-client \
-            google-auth \
-            google-auth-httplib2 \
-            google-auth-oauthlib
+          pip install edge-tts
+          pip install google-api-python-client
+          pip install google-auth
+          pip install google-auth-httplib2
+          pip install google-auth-oauthlib
 
 
-      # ==========================================
+      # ==================================================
       # 4. 雑学データ生成
-      # ==========================================
+      # ==================================================
       - name: Generate trivia.json
         run: |
+          echo "======================================"
+          echo "雑学データを生成します"
+          echo "======================================"
 
           if [ ! -f generate_trivia.py ]; then
             echo "ERROR: generate_trivia.py がありません"
             exit 1
           fi
 
-          echo "==================================="
-          echo "雑学データ生成開始"
-          echo "==================================="
-
           python generate_trivia.py
 
           if [ ! -f trivia.json ]; then
-            echo "ERROR: trivia.json の生成に失敗しました"
+            echo "ERROR: trivia.json が生成されませんでした"
             exit 1
           fi
 
+          echo "trivia.json生成完了"
 
-      # ==========================================
+
+      # ==================================================
       # 5. 雑学データ確認
-      # ==========================================
-      - name: Check trivia.json
+      # ==================================================
+      - name: Check trivia data
         run: |
-
           COUNT=$(jq length trivia.json)
 
-          echo "==================================="
-          echo "雑学データ数: ${COUNT}"
-          echo "==================================="
+          echo "雑学データ件数: $COUNT"
 
           if [ "$COUNT" -lt 100 ]; then
-            echo "ERROR: 雑学データが100個未満です"
+            echo "ERROR: 雑学データが100件未満です"
             exit 1
           fi
 
 
-      # ==========================================
-      # 6. 今回使う雑学をランダム選択
-      # ==========================================
+      # ==================================================
+      # 6. 今回の動画で使う雑学をランダム選択
+      # ==================================================
       - name: Select trivia
         run: |
-
           python - <<'PY'
-
           import json
           import random
 
-          with open(
-              "trivia.json",
-              "r",
-              encoding="utf-8"
-          ) as f:
+          with open("trivia.json", encoding="utf-8") as f:
               data = json.load(f)
 
-          amount = min(
-              120,
-              len(data)
-          )
+          random.shuffle(data)
 
-          selected = random.sample(
-              data,
-              amount
-          )
+          # 120件使用
+          selected = data[:120]
+
+          for i, item in enumerate(selected, start=1):
+              item["video_index"] = i
 
           with open(
               "selected_trivia.json",
               "w",
               encoding="utf-8"
           ) as f:
-
               json.dump(
                   selected,
                   f,
@@ -131,285 +117,396 @@ jobs:
                   indent=2
               )
 
-          print(
-              "今回使用する雑学:",
-              len(selected)
-          )
-
+          print(f"今回使用する雑学: {len(selected)}件")
           PY
 
 
-      # ==========================================
-      # 7. フォルダ作成
-      # ==========================================
+      # ==================================================
+      # 7. YouTubeタイトル・概要欄・タグ生成
+      # ==================================================
+      - name: Generate YouTube metadata
+        run: |
+          python - <<'PY'
+          import json
+          import random
+          from collections import Counter
+
+          with open(
+              "selected_trivia.json",
+              encoding="utf-8"
+          ) as f:
+              data = json.load(f)
+
+          keywords = [
+              str(x.get("keyword", "")).lower()
+              for x in data
+          ]
+
+          facts = [
+              str(x.get("fact", "")).strip()
+              for x in data
+          ]
+
+          category_map = {
+              "space": "宇宙",
+              "science": "科学",
+              "animal": "動物",
+              "human": "人体",
+              "food": "食べ物",
+              "japan": "日本",
+              "nature": "自然",
+              "history": "歴史",
+              "technology": "テクノロジー",
+              "light": "科学",
+              "ocean": "海",
+              "earth": "地球",
+              "train": "乗り物",
+              "weather": "天気",
+              "city": "街",
+              "forest": "自然"
+          }
+
+          categories = []
+
+          for keyword in keywords:
+              for key, category in category_map.items():
+                  if key in keyword:
+                      if category not in categories:
+                          categories.append(category)
+
+          if not categories:
+              categories = [
+                  "科学",
+                  "動物",
+                  "宇宙"
+              ]
+
+          categories = categories[:5]
+
+          category_text = "・".join(categories)
+
+          title_patterns = [
+              f"「え、そうなの？」知った瞬間に誰かに話したくなる雑学120選【{category_text}】",
+              f"知らないとちょっと驚く雑学120選【{category_text}】",
+              f"知っているようで知らない雑学120選【{category_text}】",
+              f"思わず最後まで見たくなる雑学120選【{category_text}】",
+              f"実は知られていない意外な雑学120選【{category_text}】",
+              f"誰かに話したくなる「へぇ〜」な雑学120選【{category_text}】"
+          ]
+
+          title = random.choice(title_patterns)
+
+          # ------------------------------------------
+          # 概要欄
+          # ------------------------------------------
+
+          examples = []
+
+          for fact in facts[:8]:
+              if fact:
+                  examples.append("・" + fact)
+
+          description = f"""今回は、{category_text}を中心に、
+知っているようで意外と知らない雑学を120個紹介します。
+
+身近なことから科学、宇宙、動物、人体、食べ物まで、
+「実は……」から始まる意外な事実をテンポよくまとめました。
+
+今回登場する雑学の一部はこちら。
+
+{chr(10).join(examples)}
+
+気になった雑学や、初めて知ったことがあれば
+コメントで教えてください。
+
+この動画が面白かったら、
+高評価・チャンネル登録もよろしくお願いします。
+
+#雑学 #豆知識 #トリビア
+"""
+
+          # ------------------------------------------
+          # ハッシュタグ
+          # ------------------------------------------
+
+          hashtags = [
+              "#雑学",
+              "#豆知識",
+              "#トリビア"
+          ]
+
+          for category in categories:
+              tag = "#" + category
+
+              if tag not in hashtags:
+                  hashtags.append(tag)
+
+          hashtags = hashtags[:8]
+
+          # ------------------------------------------
+          # YouTubeタグ
+          # ------------------------------------------
+
+          tags = [
+              "雑学",
+              "豆知識",
+              "トリビア",
+              "雑学まとめ",
+              "面白い雑学",
+              "知らない雑学",
+              "意外な事実",
+              "知識",
+              "面白い豆知識",
+              "へぇと思う雑学"
+          ]
+
+          for category in categories:
+              if category not in tags:
+                  tags.append(category)
+
+          metadata = {
+              "title": title,
+              "description": description,
+              "hashtags": hashtags,
+              "tags": tags,
+              "categories": categories
+          }
+
+          with open(
+              "youtube_metadata.json",
+              "w",
+              encoding="utf-8"
+          ) as f:
+              json.dump(
+                  metadata,
+                  f,
+                  ensure_ascii=False,
+                  indent=2
+              )
+
+          print()
+          print("======================================")
+          print("YouTubeタイトル")
+          print("======================================")
+          print(title)
+
+          print()
+          print("======================================")
+          print("カテゴリー")
+          print("======================================")
+          print(categories)
+
+          print()
+          print("======================================")
+          print("ハッシュタグ")
+          print("======================================")
+          print(" ".join(hashtags))
+          PY
+
+
+      # ==================================================
+      # 8. 作業フォルダ作成
+      # ==================================================
       - name: Prepare folders
         run: |
+          rm -rf audio
+          rm -rf clips
+          rm -rf segments
 
           mkdir -p audio
           mkdir -p clips
           mkdir -p segments
 
 
-      # ==========================================
-      # 8. 各雑学ごとに
-      #    ナレーション + 関連動画を取得
-      # ==========================================
-      - name: Generate narration and matching videos
+      # ==================================================
+      # 9. 雑学ごとのナレーション＋関連映像
+      # ==================================================
+      - name: Generate narration and matching footage
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-
         run: |
-
           python - <<'PY'
-
           import json
           import os
           import subprocess
-          import urllib.parse
           import urllib.request
+          import urllib.parse
           import time
-
-
-          # --------------------------------------
-          # データ読み込み
-          # --------------------------------------
 
           with open(
               "selected_trivia.json",
-              "r",
               encoding="utf-8"
           ) as f:
+              selected = json.load(f)
 
-              items = json.load(f)
+          PEXELS_API_KEY = os.environ["PEXELS_API_KEY"]
 
-
-          pexels_key = os.environ["PEXELS_API_KEY"]
-
-
-          # --------------------------------------
-          # 日本語テーマ → Pexels検索語
-          # --------------------------------------
+          # ------------------------------------------
+          # キーワード変換
+          # ------------------------------------------
 
           keyword_map = {
 
-              "猫": "cat",
-              "犬": "dog",
-              "イルカ": "dolphin",
-              "クジラ": "whale",
-              "ペンギン": "penguin",
-              "カラス": "crow",
-              "タコ": "octopus",
-              "カメ": "turtle",
-              "ゾウ": "elephant",
-              "キリン": "giraffe",
-              "ライオン": "lion",
-              "チーター": "cheetah",
-              "フクロウ": "owl",
-              "コウモリ": "bat",
-              "アリ": "ant",
-              "ハチ": "bee",
+              "space": "outer space galaxy stars",
+              "science": "science laboratory experiment",
+              "animal": "wild animals nature",
+              "human": "human body medical",
+              "food": "food cooking",
+              "japan": "Japan Tokyo Japanese",
+              "nature": "nature landscape",
+              "history": "ancient history",
+              "technology": "technology computer",
+              "light": "light physics",
+              "ocean": "ocean underwater",
+              "earth": "earth planet",
+              "train": "train railway",
+              "weather": "weather clouds",
+              "city": "city street",
+              "forest": "forest trees",
 
-              "太陽": "sun",
-              "月": "moon",
-              "地球": "earth",
-              "火星": "mars",
-              "木星": "jupiter",
-              "土星": "saturn",
-              "金星": "venus",
-              "水星": "mercury",
-              "星": "stars",
-              "銀河": "galaxy",
-              "ブラックホール": "black hole",
-              "宇宙": "space",
+              "octopus": "octopus underwater",
+              "cat": "cat animal",
+              "dog": "dog animal",
+              "bird": "birds nature",
+              "fish": "fish underwater",
+              "shark": "shark ocean",
+              "whale": "whale ocean",
+              "dolphin": "dolphin ocean",
 
-              "脳": "human brain",
-              "心臓": "human heart",
-              "血液": "blood",
-              "筋肉": "muscle",
-              "骨": "human bones",
-              "皮膚": "human skin",
-              "目": "human eye",
-              "耳": "human ear",
-              "鼻": "human nose",
-              "睡眠": "sleep",
+              "brain": "human brain neuroscience",
+              "heart": "human heart medical",
+              "blood": "blood medical",
+              "sleep": "sleeping person",
+              "eye": "human eye",
+              "ear": "human ear",
 
-              "チョコレート": "chocolate",
-              "コーヒー": "coffee",
-              "お米": "rice",
-              "パン": "bread",
-              "卵": "egg",
-              "バナナ": "banana",
-              "りんご": "apple",
-              "トマト": "tomato",
-              "じゃがいも": "potato",
-              "カレー": "curry",
-              "寿司": "sushi",
-              "ラーメン": "ramen",
-              "牛乳": "milk",
-              "蜂蜜": "honey",
+              "moon": "moon space",
+              "sun": "sun space",
+              "planet": "planet space",
+              "black hole": "black hole space",
+              "galaxy": "galaxy space",
 
-              "スマートフォン": "smartphone",
-              "テレビ": "television",
-              "冷蔵庫": "refrigerator",
-              "電子レンジ": "microwave",
-              "エレベーター": "elevator",
-              "信号機": "traffic lights",
-              "傘": "umbrella",
-              "鉛筆": "pencil",
-              "鏡": "mirror",
-              "時計": "clock",
-              "鍵": "key",
+              "water": "water",
+              "ice": "ice",
+              "fire": "fire",
+              "rain": "rain",
+              "snow": "snow",
 
-              "東京": "Tokyo Japan",
-              "富士山": "Mount Fuji Japan",
-              "新幹線": "Shinkansen train Japan",
-              "コンビニ": "Japanese convenience store",
-              "温泉": "Japanese hot spring",
-              "桜": "cherry blossoms Japan",
-              "神社": "Japanese shrine",
-              "お寺": "Japanese temple",
-
-              "海": "ocean",
-              "山": "mountain",
-              "川": "river",
-              "雨": "rain",
-              "雪": "snow",
-              "雷": "lightning",
-              "雲": "clouds",
-              "虹": "rainbow",
-              "風": "wind",
-              "植物": "plants",
-              "森林": "forest",
-              "火山": "volcano"
+              "computer": "computer technology",
+              "internet": "internet technology",
+              "robot": "robot technology"
           }
 
-
-          # --------------------------------------
-          # コマンド実行
-          # --------------------------------------
-
-          def run(cmd):
+          def run(command):
+              print(command)
 
               subprocess.run(
-                  cmd,
+                  command,
+                  shell=True,
                   check=True
               )
 
+          # ------------------------------------------
+          # 1件ずつ処理
+          # ------------------------------------------
 
-          # --------------------------------------
-          # 各雑学を処理
-          # --------------------------------------
+          for index, item in enumerate(
+              selected,
+              start=1
+          ):
 
-          for index, item in enumerate(items):
-
-              fact = item.get(
-                  "fact",
-                  ""
+              fact = str(
+                  item.get("fact", "")
               ).strip()
 
-              if not fact:
-                  continue
+              keyword = str(
+                  item.get("keyword", "")
+              ).lower().strip()
 
+              print()
+              print("=" * 70)
+              print(f"{index}/{len(selected)}")
+              print("雑学:")
+              print(fact)
+              print("キーワード:")
+              print(keyword)
 
-              topic = item.get(
-                  "topic",
-                  ""
+              # ======================================
+              # ナレーションテキスト
+              # ======================================
+
+              txt = f"audio/{index}.txt"
+              mp3 = f"audio/{index}.mp3"
+
+              with open(
+                  txt,
+                  "w",
+                  encoding="utf-8"
+              ) as f:
+                  f.write(fact)
+
+              run(
+                  f'edge-tts '
+                  f'--voice ja-JP-NanamiNeural '
+                  f'--rate=-10% '
+                  f'--text-file "{txt}" '
+                  f'--write-media "{mp3}"'
               )
 
+              # ======================================
+              # 音声の長さ
+              # ======================================
 
-              query = keyword_map.get(
-                  topic,
-                  "science technology"
+              duration_result = subprocess.check_output(
+                  f'ffprobe '
+                  f'-v error '
+                  f'-show_entries format=duration '
+                  f'-of default=noprint_wrappers=1:nokey=1 '
+                  f'"{mp3}"',
+                  shell=True
               )
-
-
-              print("")
-              print("===================================")
-              print("雑学:", index + 1)
-              print("テーマ:", topic)
-              print("検索:", query)
-              print("内容:", fact)
-              print("===================================")
-
-
-              # ----------------------------------
-              # ナレーション
-              # ----------------------------------
-
-              audio_path = (
-                  f"audio/audio_{index:03d}.mp3"
-              )
-
-
-              run([
-                  "edge-tts",
-                  "--voice",
-                  "ja-JP-NanamiNeural",
-                  "--rate=-10%",
-                  "--text",
-                  fact,
-                  "--write-media",
-                  audio_path
-              ])
-
-
-              # ----------------------------------
-              # 音声時間
-              # ----------------------------------
-
-              result = subprocess.run(
-                  [
-                      "ffprobe",
-                      "-v",
-                      "error",
-                      "-show_entries",
-                      "format=duration",
-                      "-of",
-                      "default=noprint_wrappers=1:nokey=1",
-                      audio_path
-                  ],
-                  capture_output=True,
-                  text=True,
-                  check=True
-              )
-
 
               duration = float(
-                  result.stdout.strip()
+                  duration_result.decode().strip()
               )
 
+              print(
+                  f"音声時間: {duration:.2f}秒"
+              )
 
-              # ----------------------------------
-              # Pexels検索
-              # ----------------------------------
+              # ======================================
+              # Pexels検索語
+              # ======================================
+
+              query = keyword_map.get(
+                  keyword,
+                  keyword if keyword else "science interesting"
+              )
+
+              print(
+                  f"Pexels検索: {query}"
+              )
 
               params = urllib.parse.urlencode({
-
                   "query": query,
-
-                  "per_page": 10,
-
-                  "orientation": "landscape"
-
+                  "orientation": "landscape",
+                  "size": "large",
+                  "per_page": 15
               })
 
-
-              url = (
+              search_url = (
                   "https://api.pexels.com/videos/search?"
                   + params
               )
 
-
               request = urllib.request.Request(
-                  url,
+                  search_url,
                   headers={
-                      "Authorization": pexels_key
+                      "Authorization": PEXELS_API_KEY
                   }
               )
 
-
-              video_url = None
-
+              videos = []
 
               try:
 
@@ -418,515 +515,604 @@ jobs:
                       timeout=30
                   ) as response:
 
-                      data = json.loads(
+                      result = json.loads(
                           response.read().decode(
                               "utf-8"
                           )
                       )
 
-
-                  for video in data.get(
-                      "videos",
-                      []
-                  ):
-
-                      files = video.get(
-                          "video_files",
+                      videos = result.get(
+                          "videos",
                           []
                       )
 
-
-                      files = sorted(
-                          files,
-                          key=lambda x:
-                              x.get("width", 0)
-                              * x.get("height", 0),
-                          reverse=True
-                      )
-
-
-                      for vf in files:
-
-                          link = vf.get(
-                              "link"
-                          )
-
-                          width = vf.get(
-                              "width",
-                              0
-                          )
-
-
-                          if (
-                              link
-                              and width >= 1280
-                          ):
-
-                              video_url = link
-
-                              break
-
-
-                      if video_url:
-                          break
-
-
-              except Exception as e:
+              except Exception as error:
 
                   print(
                       "Pexels検索エラー:",
-                      e
+                      error
                   )
 
+              # ======================================
+              # 高画質動画を選択
+              # ======================================
 
-              # ----------------------------------
+              selected_url = None
+              best_score = -1
+
+              for video in videos:
+
+                  for video_file in video.get(
+                      "video_files",
+                      []
+                  ):
+
+                      width = (
+                          video_file.get(
+                              "width"
+                          )
+                          or 0
+                      )
+
+                      height = (
+                          video_file.get(
+                              "height"
+                          )
+                          or 0
+                      )
+
+                      link = video_file.get(
+                          "link"
+                      )
+
+                      if not link:
+                          continue
+
+                      # 横長＋高解像度を優先
+                      score = 0
+
+                      if width >= 1920:
+                          score += 100
+
+                      elif width >= 1280:
+                          score += 50
+
+                      if height >= 1080:
+                          score += 50
+
+                      if width > height:
+                          score += 20
+
+                      score += min(
+                          width / 100,
+                          30
+                      )
+
+                      if score > best_score:
+
+                          best_score = score
+                          selected_url = link
+
+              clip = f"clips/{index}.mp4"
+
+              # ======================================
               # 動画ダウンロード
-              # ----------------------------------
+              # ======================================
 
-              clip_path = (
-                  f"clips/clip_{index:03d}.mp4"
-              )
+              downloaded = False
 
-
-              if video_url:
+              if selected_url:
 
                   try:
 
-                      urllib.request.urlretrieve(
-                          video_url,
-                          clip_path
+                      print(
+                          "映像ダウンロード中..."
                       )
 
-                  except Exception as e:
+                      urllib.request.urlretrieve(
+                          selected_url,
+                          clip
+                      )
+
+                      downloaded = True
+
+                  except Exception as error:
 
                       print(
-                          "動画取得失敗:",
-                          e
+                          "ダウンロード失敗:",
+                          error
                       )
 
-                      video_url = None
+              # ======================================
+              # 映像がない場合の保険
+              # ======================================
 
-
-              # ----------------------------------
-              # 見つからなかった場合
-              # ----------------------------------
-
-              if not video_url:
+              if not downloaded:
 
                   print(
-                      "関連映像なし → 黒背景を使用"
+                      "関連映像が見つからなかったため"
+                      "黒背景を使用"
                   )
 
+                  run(
+                      f'ffmpeg -y '
+                      f'-f lavfi '
+                      f'-i color=c=black:s=1920x1080:r=30 '
+                      f'-t {duration} '
+                      f'"{clip}"'
+                  )
 
-                  run([
-                      "ffmpeg",
-                      "-y",
-                      "-f",
-                      "lavfi",
-                      "-i",
-                      "color=c=black:s=1920x1080:r=30",
-                      "-t",
-                      str(
-                          max(
-                              duration,
-                              3
-                          )
-                      ),
-                      "-c:v",
-                      "libx264",
-                      "-pix_fmt",
-                      "yuv420p",
-                      clip_path
-                  ])
+              # ======================================
+              # 映像＋ナレーション
+              # ======================================
 
-
-              # ----------------------------------
-              # 映像 + 音声を1セグメント化
-              # ----------------------------------
-
-              segment_path = (
-                  f"segments/"
-                  f"segment_{index:03d}.mp4"
+              segment = (
+                  f"segments/{index}.mp4"
               )
 
-
-              run([
-                  "ffmpeg",
-                  "-y",
-
-                  "-stream_loop",
-                  "-1",
-
-                  "-i",
-                  clip_path,
-
-                  "-i",
-                  audio_path,
-
-                  "-t",
-                  str(duration),
-
-                  "-vf",
-                  "scale=1920:1080:"
-                  "force_original_aspect_ratio=increase,"
-                  "crop=1920:1080",
-
-                  "-map",
-                  "0:v:0",
-
-                  "-map",
-                  "1:a:0",
-
-                  "-c:v",
-                  "libx264",
-
-                  "-preset",
-                  "veryfast",
-
-                  "-crf",
-                  "23",
-
-                  "-c:a",
-                  "aac",
-
-                  "-b:a",
-                  "192k",
-
-                  "-pix_fmt",
-                  "yuv420p",
-
-                  "-shortest",
-
-                  segment_path
-              ])
-
-
-              time.sleep(
-                  0.3
+              run(
+                  f'ffmpeg -y '
+                  f'-stream_loop -1 '
+                  f'-i "{clip}" '
+                  f'-i "{mp3}" '
+                  f'-t {duration} '
+                  f'-vf "scale=1920:1080:'
+                  f'force_original_aspect_ratio=increase,'
+                  f'crop=1920:1080" '
+                  f'-map 0:v:0 '
+                  f'-map 1:a:0 '
+                  f'-c:v libx264 '
+                  f'-preset veryfast '
+                  f'-crf 23 '
+                  f'-pix_fmt yuv420p '
+                  f'-c:a aac '
+                  f'-b:a 128k '
+                  f'-shortest '
+                  f'"{segment}"'
               )
 
+              print(
+                  f"{index}番目 完了"
+              )
 
-          print("")
-          print("===================================")
-          print("全セグメント生成完了")
-          print("===================================")
+              time.sleep(0.2)
 
+          print()
+          print("======================================")
+          print("全雑学の映像＋ナレーション完成")
+          print("======================================")
           PY
 
 
-      # ==========================================
-      # 9. 動画結合リスト
-      # ==========================================
+      # ==================================================
+      # 10. 動画結合リスト
+      # ==================================================
       - name: Create concat list
         run: |
-
           rm -f concat.txt
 
           for file in segments/*.mp4
           do
-
-            if [ -f "$file" ]; then
-
-              echo "file '$PWD/$file'" \
-                >> concat.txt
-
-            fi
-
+            echo "file '$PWD/$file'" >> concat.txt
           done
 
+          echo "結合対象:"
           cat concat.txt
 
 
-      # ==========================================
-      # 10. 全動画を結合
-      # ==========================================
-      - name: Concatenate video
+      # ==================================================
+      # 11. 全動画結合
+      # ==================================================
+      - name: Concatenate segments
         run: |
-
-          ffmpeg \
-            -y \
+          ffmpeg -y \
             -f concat \
             -safe 0 \
             -i concat.txt \
             -c copy \
-            long_video_no_subtitles.mp4
+            long_raw.mp4
 
 
-      # ==========================================
-      # 11. 字幕作成
-      # ==========================================
-      - name: Create subtitles
+      # ==================================================
+      # 12. 字幕生成
+      # ==================================================
+      - name: Generate subtitles
         run: |
-
           python - <<'PY'
-
           import json
           import subprocess
-          import re
-          import os
-
 
           with open(
               "selected_trivia.json",
-              "r",
               encoding="utf-8"
           ) as f:
+              data = json.load(f)
 
-              items = json.load(f)
+          def get_duration(path):
 
-
-          def duration(path):
-
-              result = subprocess.run(
-                  [
-                      "ffprobe",
-                      "-v",
-                      "error",
-                      "-show_entries",
-                      "format=duration",
-                      "-of",
-                      "default=noprint_wrappers=1:nokey=1",
-                      path
-                  ],
-                  capture_output=True,
-                  text=True,
-                  check=True
+              result = subprocess.check_output(
+                  f'ffprobe '
+                  f'-v error '
+                  f'-show_entries format=duration '
+                  f'-of default=noprint_wrappers=1:nokey=1 '
+                  f'"{path}"',
+                  shell=True
               )
 
               return float(
-                  result.stdout.strip()
+                  result.decode().strip()
               )
 
+          def timestamp(seconds):
 
-          def timestamp(sec):
-
-              ms = int(
-                  sec * 1000
+              total_ms = int(
+                  seconds * 1000
               )
 
-              h = ms // 3600000
+              hours = total_ms // 3600000
 
-              ms %= 3600000
+              minutes = (
+                  total_ms % 3600000
+              ) // 60000
 
-              m = ms // 60000
+              secs = (
+                  total_ms % 60000
+              ) // 1000
 
-              ms %= 60000
-
-              s = ms // 1000
-
-              ms %= 1000
+              millis = (
+                  total_ms % 1000
+              )
 
               return (
-                  f"{h:02d}:"
-                  f"{m:02d}:"
-                  f"{s:02d},"
-                  f"{ms:03d}"
+                  f"{hours:02d}:"
+                  f"{minutes:02d}:"
+                  f"{secs:02d},"
+                  f"{millis:03d}"
               )
 
+          def split_text(
+              text,
+              max_chars=24
+          ):
 
-          current = 0.0
+              result = []
 
-          subtitle_index = 1
+              text = text.strip()
 
+              while len(text) > max_chars:
+
+                  candidates = [
+                      text.rfind(
+                          "。",
+                          0,
+                          max_chars
+                      ),
+                      text.rfind(
+                          "、",
+                          0,
+                          max_chars
+                      ),
+                      text.rfind(
+                          "！",
+                          0,
+                          max_chars
+                      ),
+                      text.rfind(
+                          "？",
+                          0,
+                          max_chars
+                      ),
+                      text.rfind(
+                          " ",
+                          0,
+                          max_chars
+                      )
+                  ]
+
+                  cut = max(candidates)
+
+                  if cut <= 0:
+                      cut = max_chars - 1
+
+                  part = text[
+                      :cut + 1
+                  ].strip()
+
+                  if part:
+                      result.append(part)
+
+                  text = text[
+                      cut + 1:
+                  ].strip()
+
+              if text:
+                  result.append(text)
+
+              return result
+
+          current_time = 0.0
+          subtitle_id = 1
 
           with open(
               "subtitles.srt",
               "w",
               encoding="utf-8"
-          ) as f:
+          ) as srt:
 
-
-              for i, item in enumerate(
-                  items
+              for index, item in enumerate(
+                  data,
+                  start=1
               ):
 
-
-                  audio_path = (
-                      f"audio/audio_{i:03d}.mp3"
-                  )
-
-
-                  if not os.path.exists(
-                      audio_path
-                  ):
-                      continue
-
-
-                  text = item.get(
+                  fact = item.get(
                       "fact",
                       ""
                   ).strip()
 
-
-                  if not text:
-                      continue
-
-
-                  dur = duration(
-                      audio_path
+                  audio_duration = get_duration(
+                      f"audio/{index}.mp3"
                   )
 
-
-                  # 文章を自然な区切りで分割
-                  chunks = re.findall(
-                      r".{1,24}(?:。|、|！|？|$)",
-                      text
+                  chunks = split_text(
+                      fact
                   )
-
-
-                  chunks = [
-                      x.strip()
-                      for x in chunks
-                      if x.strip()
-                  ]
-
 
                   if not chunks:
+                      continue
 
-                      chunks = [
-                          text
-                      ]
-
-
-                  total_chars = sum(
-                      len(x)
-                      for x in chunks
+                  chunk_duration = (
+                      audio_duration /
+                      len(chunks)
                   )
 
+                  for chunk_index, chunk in enumerate(
+                      chunks
+                  ):
 
-                  local = current
-
-
-                  for chunk in chunks:
-
-
-                      chunk_dur = (
-                          dur
-                          * len(chunk)
-                          / total_chars
+                      start = (
+                          current_time
+                          +
+                          chunk_index
+                          *
+                          chunk_duration
                       )
-
-
-                      start = local
 
                       end = (
-                          local
-                          + chunk_dur
+                          current_time
+                          +
+                          (chunk_index + 1)
+                          *
+                          chunk_duration
                       )
 
+                      srt.write(
+                          f"{subtitle_id}\n"
+                      )
 
-                      f.write(
-                          f"{subtitle_index}\n"
+                      srt.write(
                           f"{timestamp(start)} --> "
                           f"{timestamp(end)}\n"
-                          f"{chunk}\n\n"
                       )
 
+                      srt.write(
+                          chunk + "\n\n"
+                      )
 
-                      subtitle_index += 1
+                      subtitle_id += 1
 
-                      local = end
-
-
-                  current += dur
-
+                  current_time += audio_duration
 
           print(
-              "字幕作成完了:",
-              subtitle_index - 1,
-              "個"
+              "字幕生成完了"
           )
-
           PY
 
 
-      # ==========================================
-      # 12. 字幕を動画に焼き込み
-      # ==========================================
-      - name: Render subtitles
+      # ==================================================
+      # 13. 字幕を動画に焼き付け
+      # ==================================================
+      - name: Render final video
         run: |
-
-          ffmpeg \
-            -y \
-            -i long_video_no_subtitles.mp4 \
-            -vf "subtitles=subtitles.srt:force_style='FontName=Noto Sans CJK JP,FontSize=30,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,Outline=3,Shadow=1,Alignment=2,MarginV=70'" \
+          ffmpeg -y \
+            -i long_raw.mp4 \
+            -vf "subtitles=subtitles.srt:force_style='FontName=Noto Sans CJK JP,FontSize=42,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=3,Shadow=1,Alignment=2,MarginV=65'" \
             -c:v libx264 \
             -preset veryfast \
-            -crf 23 \
-            -c:a copy \
+            -crf 22 \
             -pix_fmt yuv420p \
+            -c:a aac \
+            -b:a 192k \
+            -movflags +faststart \
             long_video.mp4
 
 
-      # ==========================================
-      # 13. 完成動画確認
-      # ==========================================
-      - name: Check final video
+      # ==================================================
+      # 14. サムネイル用テキスト作成
+      # ==================================================
+      - name: Generate thumbnail text
         run: |
+          python - <<'PY'
+          import json
+          import re
 
-          echo "==================================="
-          echo "完成動画"
-          echo "==================================="
+          with open(
+              "selected_trivia.json",
+              encoding="utf-8"
+          ) as f:
+              data = json.load(f)
 
+          first = data[0]
+
+          fact = first.get(
+              "fact",
+              "知らないと驚く雑学"
+          ).strip()
+
+          keyword = first.get(
+              "keyword",
+              ""
+          ).lower()
+
+          # ------------------------------------------
+          # 内容別のサムネタイトル
+          # ------------------------------------------
+
+          if "space" in keyword:
+
+              text = "宇宙の\nヤバい事実"
+
+          elif "animal" in keyword:
+
+              text = "動物の\n意外な秘密"
+
+          elif "human" in keyword:
+
+              text = "人体の\n驚きの事実"
+
+          elif "food" in keyword:
+
+              text = "食べ物の\n意外な事実"
+
+          elif "japan" in keyword:
+
+              text = "日本の\n知らない事実"
+
+          elif "science" in keyword:
+
+              text = "科学の\n驚きの雑学"
+
+          elif "nature" in keyword:
+
+              text = "自然の\n不思議"
+
+          else:
+
+              text = "実は知らない\n雑学120選"
+
+          with open(
+              "thumbnail_text.txt",
+              "w",
+              encoding="utf-8"
+          ) as f:
+              f.write(text)
+
+          print(
+              "サムネイル文字:"
+          )
+          print(text)
+          PY
+
+
+      # ==================================================
+      # 15. サムネイル背景作成
+      # ==================================================
+      - name: Create thumbnail background
+        run: |
+          # 最初の雑学に使った映像から
+          # サムネイル用画像を取得
+
+          ffmpeg -y \
+            -ss 1 \
+            -i segments/1.mp4 \
+            -frames:v 1 \
+            -vf "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,eq=brightness=-0.10:saturation=1.25" \
+            thumbnail_base.jpg
+
+
+      # ==================================================
+      # 16. サムネイル文字入れ
+      # ==================================================
+      - name: Create thumbnail
+        run: |
+          ffmpeg -y \
+            -i thumbnail_base.jpg \
+            -vf "drawbox=x=0:y=0:w=1280:h=720:color=black@0.28:t=fill,drawtext=fontfile=/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc:textfile=thumbnail_text.txt:fontcolor=white:fontsize=82:borderw=6:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2" \
+            -q:v 2 \
+            thumbnail.jpg
+
+          echo "サムネイル完成"
+
+
+      # ==================================================
+      # 17. 最終ファイル確認
+      # ==================================================
+      - name: Check final files
+        run: |
+          echo "======================================"
+          echo "ファイル確認"
+          echo "======================================"
+
+          test -f long_video.mp4
+          test -f thumbnail.jpg
+          test -f subtitles.srt
+          test -f youtube_metadata.json
+          test -f selected_trivia.json
+
+          echo ""
+          echo "動画:"
           ls -lh long_video.mp4
 
-          ffprobe \
-            -v error \
-            -show_entries format=duration \
-            -show_entries format=size \
-            -of default=noprint_wrappers=1 \
-            long_video.mp4
+          echo ""
+          echo "サムネイル:"
+          ls -lh thumbnail.jpg
+
+          echo ""
+          echo "字幕:"
+          ls -lh subtitles.srt
+
+          echo ""
+          echo "Metadata:"
+          ls -lh youtube_metadata.json
 
 
-      # ==========================================
-      # 14. YouTubeアップロード
-      # ==========================================
+      # ==================================================
+      # 18. YouTubeアップロード
+      # ==================================================
       - name: Upload to YouTube
         env:
-
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-
         run: |
 
           cat > upload_youtube.py <<'PY'
 
           import os
-          import random
+          import json
 
           from google.oauth2.credentials import Credentials
-
           from googleapiclient.discovery import build
-
           from googleapiclient.http import MediaFileUpload
 
 
+          # ==================================================
+          # YouTube認証
+          # ==================================================
+
+          CLIENT_ID = os.environ[
+              "YOUTUBE_CLIENT_ID"
+          ]
+
+          CLIENT_SECRET = os.environ[
+              "YOUTUBE_CLIENT_SECRET"
+          ]
+
+          REFRESH_TOKEN = os.environ[
+              "YOUTUBE_REFRESH_TOKEN"
+          ]
+
+          SCOPES = [
+              "https://www.googleapis.com/auth/youtube.upload"
+          ]
+
+
           credentials = Credentials(
-
               None,
-
-              refresh_token=os.environ[
-                  "YOUTUBE_REFRESH_TOKEN"
-              ],
-
-              token_uri=(
-                  "https://oauth2.googleapis.com/token"
-              ),
-
-              client_id=os.environ[
-                  "YOUTUBE_CLIENT_ID"
-              ],
-
-              client_secret=os.environ[
-                  "YOUTUBE_CLIENT_SECRET"
-              ],
-
-              scopes=[
-                  "https://www.googleapis.com/auth/youtube.upload"
-              ]
+              refresh_token=REFRESH_TOKEN,
+              token_uri="https://oauth2.googleapis.com/token",
+              client_id=CLIENT_ID,
+              client_secret=CLIENT_SECRET,
+              scopes=SCOPES
           )
 
 
@@ -937,88 +1123,161 @@ jobs:
           )
 
 
-          titles = [
+          # ==================================================
+          # Metadata読み込み
+          # ==================================================
 
-              "知らないと損する意外な雑学",
+          with open(
+              "youtube_metadata.json",
+              encoding="utf-8"
+          ) as f:
 
-              "知った瞬間誰かに話したくなる雑学",
+              metadata = json.load(f)
 
-              "実は知られていない身近な雑学",
 
-              "最後まで見ると世界の見え方が変わる雑学",
+          title = metadata[
+              "title"
+          ]
 
-              "思わず続きを見たくなる雑学集",
+          description = metadata[
+              "description"
+          ]
 
-              "意外すぎる身近な事実",
-
-              "知っているようで知らない雑学",
-
-              "あなたはいくつ知ってる？"
-
+          tags = metadata[
+              "tags"
           ]
 
 
+          # ==================================================
+          # 動画アップロード
+          # ==================================================
+
+          print()
+          print(
+              "======================================"
+          )
+          print(
+              "YouTubeへアップロード開始"
+          )
+          print(
+              "======================================"
+          )
+
+          print(
+              "タイトル:",
+              title
+          )
+
+
           body = {
-
               "snippet": {
-
-                  "title": random.choice(
-                      titles
-                  ),
-
-                  "description": (
-                      "身近なのに意外と知らない雑学をまとめました。"
-                      "\n\n"
-                      "知っているようで知らない、"
-                      "思わず誰かに話したくなる雑学を"
-                      "テンポよく紹介しています。"
-                      "\n\n"
-                      "#雑学 #豆知識 #トリビア"
-                  ),
-
-                  "categoryId": "27"
+                  "title": title,
+                  "description": description,
+                  "tags": tags,
+                  "categoryId": "27",
+                  "defaultLanguage": "ja",
+                  "defaultAudioLanguage": "ja"
               },
 
               "status": {
-
                   "privacyStatus": "public",
-
                   "selfDeclaredMadeForKids": False
-
               }
           }
 
 
           media = MediaFileUpload(
-
               "long_video.mp4",
-
-              chunksize=-1,
-
-              resumable=True,
-
-              mimetype="video/mp4"
-
+              chunksize=8 * 1024 * 1024,
+              resumable=True
           )
 
 
           request = youtube.videos().insert(
-
               part="snippet,status",
-
               body=body,
-
               media_body=media
-
           )
 
 
-          response = request.execute()
+          response = None
+
+          while response is None:
+
+              status, response = (
+                  request.next_chunk()
+              )
+
+              if status:
+
+                  print(
+                      "アップロード進捗:",
+                      int(
+                          status.progress()
+                          * 100
+                      ),
+                      "%"
+                  )
+
+
+          video_id = response[
+              "id"
+          ]
+
+
+          print()
+          print(
+              "YouTube動画ID:",
+              video_id
+          )
+
+
+          # ==================================================
+          # サムネイル設定
+          # ==================================================
+
+          print(
+              "サムネイル設定中..."
+          )
+
+
+          thumbnail_media = MediaFileUpload(
+              "thumbnail.jpg",
+              mimetype="image/jpeg"
+          )
+
+
+          thumbnail_request = (
+              youtube.thumbnails().set(
+                  videoId=video_id,
+                  media_body=thumbnail_media
+              )
+          )
+
+
+          thumbnail_response = (
+              thumbnail_request.execute()
+          )
 
 
           print(
-              "YouTube upload complete:",
-              response["id"]
+              "サムネイル設定完了"
+          )
+
+          print()
+          print(
+              "======================================"
+          )
+          print(
+              "YouTube公開完了"
+          )
+          print(
+              "======================================"
+          )
+
+          print(
+              "https://www.youtube.com/watch?v="
+              + video_id
           )
 
           PY
@@ -1027,22 +1286,18 @@ jobs:
           python upload_youtube.py
 
 
-      # ==========================================
-      # 15. 完成ファイル保存
-      # ==========================================
+      # ==================================================
+      # 19. 成果物保存
+      # ==================================================
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
-
         with:
-
-          name: long-video
-
+          name: long-video-output
           path: |
-
             long_video.mp4
-
+            thumbnail.jpg
             subtitles.srt
-
             selected_trivia.json
-
             trivia.json
+            youtube_metadata.json
+          retention-days: 7
