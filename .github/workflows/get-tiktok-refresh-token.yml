@@ -1,0 +1,52 @@
+name: Get TikTok Refresh Token
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  get-refresh-token:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get TikTok refresh token and save it
+        env:
+          TIKTOK_AUTH_CODE: ${{ secrets.TIKTOK_AUTH_CODE_TEMP }}
+          CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+          CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+          REDIRECT_URI: ${{ secrets.TIKTOK_REDIRECT_URI }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+
+          if [ -z "$TIKTOK_AUTH_CODE" ]; then
+            echo "TIKTOK_AUTH_CODE_TEMP がありません"
+            exit 1
+          fi
+
+          RESPONSE=$(curl -sS -X POST \
+            "https://open.tiktokapis.com/v2/oauth/token/" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "client_key=$CLIENT_KEY" \
+            --data-urlencode "client_secret=$CLIENT_SECRET" \
+            --data-urlencode "code=$TIKTOK_AUTH_CODE" \
+            --data-urlencode "grant_type=authorization_code" \
+            --data-urlencode "redirect_uri=$REDIRECT_URI")
+
+          echo "$RESPONSE" | jq 'del(.data.access_token, .data.refresh_token, .access_token, .refresh_token)'
+
+          REFRESH_TOKEN=$(echo "$RESPONSE" | jq -r '.data.refresh_token // .refresh_token // empty')
+
+          if [ -z "$REFRESH_TOKEN" ]; then
+            echo "Refresh Tokenを取得できませんでした"
+            exit 1
+          fi
+
+          echo "::add-mask::$REFRESH_TOKEN"
+
+          echo "$REFRESH_TOKEN" | gh secret set TIKTOK_REFRESH_TOKEN \
+            --repo "${{ github.repository }}"
+
+          echo "TIKTOK_REFRESH_TOKEN の保存に成功しました"
