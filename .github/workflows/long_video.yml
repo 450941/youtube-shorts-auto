@@ -1,1060 +1,1065 @@
-name: Generate Trivia Video
+name: Generate Long Trivia Video
 
 on:
   workflow_dispatch:
   schedule:
     - cron: "0 3 * * *"
 
+permissions:
+  contents: read
+
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install system packages
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            ffmpeg \
-            fonts-noto-cjk \
-            fontconfig \
-            jq \
-            bc
-
-      - name: Install Python packages
-        run: |
+          sudo apt-get install -y ffmpeg fonts-noto-cjk
           python -m pip install --upgrade pip
-          python -m pip install edge-tts
-          python -m pip install google-api-python-client
-          python -m pip install google-auth
-          python -m pip install google-auth-httplib2
-          python -m pip install google-auth-oauthlib
+          pip install edge-tts requests google-api-python-client google-auth google-auth-oauthlib google-auth-httplib2
 
-      - name: Test Edge TTS
+      # =========================================================
+      # 30本の長め雑学原稿を作成
+      # =========================================================
+      - name: Generate trivia scripts
         run: |
-          echo "これは音声テストです。" > test_tts.txt
-
-          python -m edge_tts \
-            --voice ja-JP-NanamiNeural \
-            --rate=5% \
-            --file test_tts.txt \
-            --write-media test_tts.mp3
-
-          test -f test_tts.mp3
-
-          echo "Edge-TTS OK"
-
-      - name: Generate trivia
-        run: |
-          test -f generate_trivia.py
-          python generate_trivia.py
-          test -f trivia.json
-
-      - name: Check trivia
-        run: |
-          COUNT=$(jq length trivia.json)
-
-          echo "雑学件数: $COUNT"
-
-          if [ "$COUNT" -lt 30 ]; then
-            echo "ERROR: 30件未満です"
-            exit 1
-          fi
-
-      - name: Select trivia
-        run: |
-          python - <<'PY'
+          cat > generate_trivia.py <<'PY'
           import json
-          import random
 
-          with open("trivia.json", encoding="utf-8") as f:
-              data = json.load(f)
+          trivia = [
 
-          random.shuffle(data)
+            {
+              "title": "人間の脳は「何もしない時」も動いている",
+              "keyword": "brain thinking",
+              "script": """
+          まず最初の雑学です。
+          実は、人間の脳は「何もしていない時」でも完全に休んでいるわけではありません。
+          ぼーっとしている時、何も考えていないように感じますよね。
+          でも脳の中では、過去の出来事を思い出したり、これから起こることを想像したり、自分自身について考えたりする活動が続いています。
+          つまり、ベッドでぼーっとしている時間も、脳が完全に停止している時間ではありません。
+          むしろ、突然いいアイデアが浮かんだり、悩みの答えが出てきたりするのは、こうした時間が関係していることがあります。
+          「何もしない時間」って、実は完全な無駄ではないのかもしれません。
+              """.strip()
+            },
 
-          selected = data[:30]
+            {
+              "title": "匂いで昔の記憶が突然よみがえる理由",
+              "keyword": "perfume memory",
+              "script": """
+          次の雑学。
+          昔の記憶が、突然よみがえった経験はありませんか？
+          特に不思議なのが「匂い」です。
+          例えば、昔住んでいた家の匂いを嗅いだ瞬間、何年も思い出していなかった記憶が一気によみがえることがあります。
+          これは偶然ではありません。
+          嗅覚は、感情や記憶に関係する脳の領域と強く結びついています。
+          だから、写真を見るよりも、昔の匂いを嗅いだほうが当時の感情までリアルによみがえることがあります。
+          香水、雨の匂い、学校の教室、実家の料理。
+          あなたにも「この匂いを嗅ぐと昔を思い出す」というものがあるかもしれません。
+              """.strip()
+            },
 
-          for i, item in enumerate(selected, 1):
-              item["video_index"] = i
+            {
+              "title": "知らない場所では時間が長く感じることがある",
+              "keyword": "travel city walking",
+              "script": """
+          旅行に行った時、行きは長く感じたのに、帰りはあっという間だった。
+          そんな経験ありませんか？
+          実は、人間の時間の感じ方は、出来事の数や新しさに影響されます。
+          初めて行く場所では、見るもの、聞くもの、覚えるものがたくさんあります。
+          そのため、後から振り返ると「ものすごく長い時間を過ごした」ように感じることがあります。
+          一方、いつもの通勤や通学のように、毎日同じことを繰り返していると、記憶に残る新しい情報が少なくなります。
+          すると、振り返った時に時間が一瞬で過ぎたように感じることがあります。
+          「最近、一年が早すぎる」と感じるなら、新しいことを始めてみるのも面白いかもしれません。
+              """.strip()
+            },
 
-          with open(
-              "selected_trivia.json",
-              "w",
-              encoding="utf-8"
-          ) as f:
-              json.dump(
-                  selected,
-                  f,
-                  ensure_ascii=False,
-                  indent=2
-              )
+            {
+              "title": "同じ曲を何度も聴くと好きになることがある",
+              "keyword": "headphones music",
+              "script": """
+          最初は特に好きじゃなかった曲なのに、何度も聴いているうちに好きになった。
+          こんな経験ありませんか？
+          これは、人間の心理として知られている現象の一つです。
+          同じものに繰り返し触れることで、親しみを感じやすくなることがあります。
+          曲の最初の印象が普通でも、何度も聴いているうちにメロディーを覚え、次に来る展開まで予想できるようになります。
+          そして「知っている」という感覚が、心地よさにつながることがあります。
+          だから、何度も聴いてしまう曲があるのは不思議なことではありません。
+          気づいたら口ずさんでいる曲ほど、あなたの頭の中にしっかり入り込んでいるのかもしれません。
+              """.strip()
+            },
 
-          print("今回使用:", len(selected))
+            {
+              "title": "人は自分の名前に反応しやすい",
+              "keyword": "people conversation",
+              "script": """
+          騒がしい場所でも、自分の名前だけは聞こえた。
+          そんな経験ありませんか？
+          実は、人間は自分に関係する情報へ注意を向けやすい傾向があります。
+          たくさんの人が話している場所でも、自分の名前や、自分に関係する話題が聞こえると、急に注意が向くことがあります。
+          これは、自分にとって重要な情報を脳が優先して処理するためだと考えられています。
+          だから、人混みの中で名前を呼ばれると、思わず振り返ってしまいます。
+          逆に言えば、誰かと話す時に相手の名前を呼ぶことは、相手の注意を引くきっかけにもなります。
+          ただし、使いすぎるとちょっと不自然なので、そこはほどほどに。
+              """.strip()
+            },
+
+            {
+              "title": "眠っている間に記憶は整理されている",
+              "keyword": "sleep bedroom",
+              "script": """
+          寝るという行為は、ただ体を休ませるだけではありません。
+          実は睡眠中、脳では記憶や学習に関係するさまざまな処理が行われています。
+          昼間に覚えたことを、睡眠によって整理し、長期的な記憶として定着させる働きがあると考えられています。
+          だから、テスト前に徹夜して全部覚えようとするより、勉強した後にしっかり眠ることも大切です。
+          「寝たら忘れそう」と思うかもしれません。
+          でも実際には、睡眠は記憶を整理するための大切な時間でもあります。
+          今日覚えたことを脳に定着させるためにも、睡眠は意外と重要なんです。
+              """.strip()
+            },
+
+            {
+              "title": "朝の光が体内時計に関係している",
+              "keyword": "morning sunlight",
+              "script": """
+          朝起きたらカーテンを開ける。
+          たったこれだけの行動が、生活リズムに関係しています。
+          人間の体には、約一日の周期で変化する体内時計があります。
+          そして光は、その体内時計を調整する重要な刺激の一つです。
+          朝に光を浴びることで、体は「今は朝なんだ」と認識しやすくなります。
+          反対に、夜遅くまで強い光を浴び続けると、眠気のタイミングに影響することがあります。
+          もちろん生活リズムには個人差があります。
+          でも、朝起きて太陽の光を浴びるというシンプルな習慣には、体内時計を整える助けになる面があります。
+              """.strip()
+            },
+
+            {
+              "title": "人間は同時に何個ものことへ集中するのが苦手",
+              "keyword": "multitasking computer",
+              "script": """
+          スマホを見ながらテレビを見て、さらに誰かと話す。
+          自分はマルチタスクが得意だと思っていませんか？
+          実は、人間の注意力は、何個もの作業を同時に完全処理しているというより、作業を高速で切り替えていることが多いとされています。
+          例えばメッセージを確認してから仕事に戻ると、仕事へ再び集中するまでに少し時間がかかります。
+          これを何度も繰り返すと、思った以上に集中力が削られることがあります。
+          「ながら作業なら時間を有効活用できる」と思っていても、実際には切り替えそのものにコストがかかっている場合があります。
+          集中したい時は、一つだけに絞る。
+          シンプルですが、かなり大切な考え方です。
+              """.strip()
+            },
+
+            {
+              "title": "予想外の出来事に脳が強く反応する",
+              "keyword": "surprise reaction",
+              "script": """
+          人間は、予想していたことより、予想外のことが起きた時に強く反応します。
+          例えば、普通の動画を見ている途中で突然展開が変わると、思わず画面に集中しますよね。
+          これは、脳が常に「次に何が起こるか」をある程度予測しているからです。
+          そして現実が予測と違った時、その違いが重要な情報として扱われます。
+          「え、そうなるの？」という瞬間に注意が向くのは、そのためです。
+          面白い動画に意外な展開が多いのも、こうした人間の性質と相性がいいからかもしれません。
+          つまり、予想を裏切る瞬間には、人間の注意を一気に引きつける力があります。
+              """.strip()
+            },
+
+            {
+              "title": "小さな達成感が次の行動につながる",
+              "keyword": "achievement success",
+              "script": """
+          「今日は何もできなかった」と思ってしまう日ってありますよね。
+          そんな時は、目標をものすごく小さくしてみる方法があります。
+          例えば、部屋を全部掃除するのではなく、机の上だけ片づける。
+          一時間勉強するのではなく、まず五分だけ始める。
+          小さな目標を達成すると、「自分は少し進んだ」という感覚を得やすくなります。
+          そして、その小さな達成感が次の行動のきっかけになることがあります。
+          最初から完璧を目指す必要はありません。
+          「一歩だけ進む」という考え方でも、行動を始めるハードルを下げることができます。
+              """.strip()
+            },
+
+            {
+              "title": "人は失敗を成功より強く覚えることがある",
+              "keyword": "sad person thinking",
+              "script": """
+          十回褒められたのに、一回の失敗だけがずっと頭に残る。
+          そんなことありませんか？
+          人間には、ネガティブな情報へ強く注意を向けやすい面があります。
+          これは、危険や失敗を見逃さないために役立ってきた仕組みとも考えられています。
+          例えば、何度も安全に道路を渡った経験より、一度危ない目に遭った経験のほうが強烈に残ることがあります。
+          だから、たった一つの失敗で「全部ダメだった」と感じてしまうことがあります。
+          でも、頭に残りやすいことと、それが人生全体を決めることは別です。
+          一つの失敗が強く見えている時ほど、それ以外にあった成功や努力も思い出してみると、見え方が変わるかもしれません。
+              """.strip()
+            },
+
+            {
+              "title": "笑うだけでも体には変化が起こる",
+              "keyword": "laughing friends",
+              "script": """
+          本気で笑った後、なんとなく体が軽くなったように感じることはありませんか？
+          笑うという行動では、顔の筋肉や呼吸など、体にさまざまな変化が起こります。
+          また、笑いは感情とも深く関係しています。
+          面白い動画を見たり、友達とくだらない話をしたりすると、気分まで変わることがありますよね。
+          もちろん、笑えばどんな悩みも解決するという意味ではありません。
+          でも、笑うことが気分転換のきっかけになることはあります。
+          最近あまり笑っていないなと思ったら、昔好きだったコメディや、友達との面白かった動画を見返してみるのもいいかもしれません。
+              """.strip()
+            },
+
+            {
+              "title": "好きな音楽で気分が変わる理由",
+              "keyword": "music concert headphones",
+              "script": """
+          落ち込んでいる時に、好きな曲を聴いたら少し気分が変わった。
+          これは多くの人が経験していることです。
+          音楽は、感情や記憶と強く結びついています。
+          だから、昔よく聴いていた曲を流すだけで、その頃の出来事や感情まで思い出すことがあります。
+          また、テンポやメロディーによって、音楽から受ける印象も変わります。
+          静かな曲で落ち着く人もいれば、激しい曲を聴いてスッキリする人もいます。
+          面白いのは、「良い音楽」と感じるものは人によって全然違うこと。
+          あなたが何度も聴きたくなる一曲には、音そのものだけではなく、あなた自身の記憶も詰まっているのかもしれません。
+              """.strip()
+            },
+
+            {
+              "title": "散歩中にアイデアが浮かびやすいことがある",
+              "keyword": "walking park thinking",
+              "script": """
+          机の前では何時間考えても思いつかなかったのに、散歩していたら突然アイデアが浮かんだ。
+          そんな経験ありませんか？
+          歩くという軽い身体活動や、周囲の景色の変化が、思考に影響する可能性があります。
+          ずっと同じ画面を見続けるより、少し場所を変えることで頭の中の状態が変わることもあります。
+          だから、何かに行き詰まった時に、いったん立ち上がって歩いてみるという方法には意味があります。
+          もちろん、歩けば必ず天才的なアイデアが出るわけではありません。
+          でも「考える場所を変える」というだけで、いつもとは違う考え方ができることがあります。
+          アイデアが出ない時は、頭だけではなく体も動かしてみる。
+          これ、意外と使える方法です。
+              """.strip()
+            },
+
+            {
+              "title": "新しいことをすると記憶に残りやすい",
+              "keyword": "new experience travel",
+              "script": """
+          子どもの頃の一日は長かったのに、大人になると一年が一瞬で過ぎる。
+          そんな感覚を持つ人は少なくありません。
+          時間そのものが速くなっているわけではありません。
+          毎日が似たような生活になると、新しい出来事が少なくなり、後から振り返った時に印象的な記憶が少なくなることがあります。
+          一方で、初めて行った場所や初めて挑戦したことは、細かい記憶がたくさん残ります。
+          そのため、振り返った時に「長い時間を過ごした」と感じやすくなることがあります。
+          もし毎日があっという間だと感じるなら、小さな新しい経験を一つ入れてみる。
+          それだけでも、時間の感じ方が少し変わるかもしれません。
+              """.strip()
+            },
+
+            {
+              "title": "深呼吸すると落ち着きやすくなる理由",
+              "keyword": "breathing meditation",
+              "script": """
+          緊張した時に「深呼吸して」と言われることがありますよね。
+          これには理由があります。
+          呼吸は、自律神経の働きと関係しています。
+          ゆっくりとした呼吸を意識することで、体の緊張状態から少し落ち着いた状態へ切り替えるきっかけになることがあります。
+          大切なのは、無理に大きく吸うことではありません。
+          苦しくならない範囲で、ゆっくり呼吸すること。
+          試験前、発表前、人前で話す前など、緊張する場面で呼吸に意識を向けるだけでも、自分の状態を確認する時間になります。
+          「落ち着かなきゃ」と考え続けるより、まず呼吸をゆっくりする。
+          シンプルですが、覚えておいて損はありません。
+              """.strip()
+            },
+
+            {
+              "title": "人は予測できるものに安心を感じやすい",
+              "keyword": "routine daily life",
+              "script": """
+          毎朝同じ道を通る。
+          同じ時間にご飯を食べる。
+          いつもの音楽を聴く。
+          こうした「ルーティン」は、単調に見えて実は便利な面があります。
+          何をするか毎回ゼロから決めなくていいからです。
+          例えば朝起きてからの行動が決まっていれば、「次は何をしよう」と考える必要がありません。
+          一方で、新しい経験には刺激があります。
+          つまり、毎日同じことにもメリットがあり、新しいことにもメリットがあります。
+          大切なのは、どちらか一方だけにすることではなく、安心できるルーティンの中に、少しだけ新しいことを入れること。
+          それだけでも毎日の感覚が変わるかもしれません。
+              """.strip()
+            },
+
+            {
+              "title": "スマホをあと5分が止まらない理由",
+              "keyword": "smartphone social media",
+              "script": """
+          「あと5分だけスマホを見よう」。
+          そう思って気づいたら30分経っていた。
+          これは珍しいことではありません。
+          SNSや動画アプリには、次々と新しい情報が表示されます。
+          次に何が出てくるかわからない状態そのものが、注意を引き続ける要因になります。
+          「次はもっと面白いものが出るかもしれない」。
+          そう思うと、画面を閉じるタイミングを失いやすくなります。
+          しかも、一つの動画が終わればすぐ次の動画が始まる。
+          これでは「ここで終わり」という区切りがありません。
+          だから、スマホをやめたい時は意志の強さだけに頼るより、通知を切ったり、時間を決めたり、物理的に距離を置いたりする方法も役立ちます。
+              """.strip()
+            },
+
+            {
+              "title": "人は自分に関係する情報を見つけるのが得意",
+              "keyword": "crowd attention",
+              "script": """
+          街中でたくさんの人を見ているのに、なぜか知り合いだけすぐ見つかる。
+          これにも人間の注意の特徴が関係しています。
+          私たちは周囲にあるすべての情報を同じ強さで処理しているわけではありません。
+          自分に関係がありそうな情報を優先して注意することがあります。
+          例えば、自分が欲しい車を探していると、街中でその車ばかり目につくようになった気がする。
+          そんな経験もありますよね。
+          実際には急にその車が増えたわけではありません。
+          自分の注意が、その情報を見つけやすい状態になっているのです。
+          「最近よく見るな」と思った時は、世界が変わったのではなく、自分の見るポイントが変わった可能性もあります。
+              """.strip()
+            },
+
+            {
+              "title": "記憶は録画ではなく再構成される",
+              "keyword": "old photos memories",
+              "script": """
+          自分が体験したことなら、絶対に正確に覚えている。
+          そう思っていませんか？
+          実は、人間の記憶はカメラの録画データのようなものではありません。
+          思い出す時には、記憶を再構成している面があります。
+          そのため、同じ出来事を経験した人同士でも、覚えている内容が少し違うことがあります。
+          写真を見返したことで、「そうだった」と思っていた記憶が変わることもあります。
+          これは、人間の記憶が壊れているという話ではありません。
+          むしろ、経験を整理しながら意味づけしているからこそ、記憶には変化が起こります。
+          だから昔の出来事について意見が食い違った時、どちらかが必ず嘘をついているとは限らないのです。
+              """.strip()
+            },
+
+            {
+              "title": "人は他人の表情から感情を読み取る",
+              "keyword": "friends facial expression",
+              "script": """
+          友達が何も言っていないのに、「なんか今日元気ない？」と気づいたことはありませんか？
+          人間は、言葉だけで相手の状態を判断しているわけではありません。
+          表情、声のトーン、姿勢、動きなど、さまざまな情報を組み合わせています。
+          だから、本人が「大丈夫」と言っていても、表情や声の違いから何かを感じ取ることがあります。
+          もちろん、人の気持ちを完全に読み取ることはできません。
+          同じ表情でも、疲れているだけかもしれません。
+          だからこそ「大丈夫？」と決めつけずに聞いてみることが大切です。
+          人間は言葉以外の情報からも、相手の状態を感じ取っているんです。
+              """.strip()
+            },
+
+            {
+              "title": "好きなものを見ると報酬系が働く",
+              "keyword": "favorite food happiness",
+              "script": """
+          好きな食べ物を目の前にした瞬間、テンションが上がる。
+          これは気のせいだけではありません。
+          私たちの脳には、報酬や「これは価値がある」と感じることに関係する仕組みがあります。
+          美味しそうな食べ物、好きな音楽、楽しみにしていたイベント。
+          こうしたものを見るだけでも、期待や喜びにつながる反応が起こることがあります。
+          面白いのは、実際に手に入れた瞬間だけではなく、「もうすぐ手に入る」という期待でも気分が変わること。
+          だから旅行の前日が一番ワクワクする人もいます。
+          楽しみは、実際に起きる瞬間だけに存在するわけではありません。
+          「これから起こる」という期待にも、ちゃんと力があります。
+              """.strip()
+            },
+
+            {
+              "title": "人は適度な環境音で集中しやすい場合がある",
+              "keyword": "coffee shop studying",
+              "script": """
+          完全な無音より、カフェのような少しザワザワした場所のほうが集中できる。
+          そんな人もいます。
+          もちろん個人差はありますが、一定の背景音があることで、周囲の細かい音に一つ一つ注意を向けにくくなる場合があります。
+          例えばカフェでは、人の話し声や食器の音が常にあります。
+          でも、その音を全部聞こうとはしません。
+          逆に完全な静寂だと、小さな音が気になってしまう人もいます。
+          だから勉強用BGMや環境音の動画が人気になるのも不思議ではありません。
+          ただし、歌詞のある曲だと歌詞に注意を取られる人もいます。
+          結局、自分が一番集中できる音を探すのがポイントです。
+              """.strip()
+            },
+
+            {
+              "title": "朝と夜で集中しやすさが違う",
+              "keyword": "morning night working",
+              "script": """
+          朝のほうが集中できる人もいれば、夜になると急に頭が冴える人もいます。
+          これは単純に「朝型が正解、夜型がダメ」という話ではありません。
+          人間の睡眠や覚醒のリズムには個人差があります。
+          さらに、睡眠時間や生活習慣、光を浴びる時間なども影響します。
+          だから、自分がいつ集中しやすいのかを知ることには意味があります。
+          例えば重要な作業を、最も集中できる時間帯に持ってくる。
+          逆に、単純作業を集中しにくい時間に回す。
+          こうすると、同じ一日でも時間の使い方を変えられます。
+          「みんなが朝型だから自分も朝型にしなきゃ」と決めつける必要はありません。
+              """.strip()
+            },
+
+            {
+              "title": "光は眠気にも関係している",
+              "keyword": "bedroom night light",
+              "script": """
+          夜にスマホを見ていたら、眠かったはずなのに目が冴えた。
+          そんな経験ありませんか？
+          光は体内時計や眠気の調整に関係しています。
+          特に夜に強い光を浴びることは、睡眠に影響する可能性があります。
+          だから寝る前には部屋を少し暗くしたり、画面を見る時間を減らしたりする工夫が使われます。
+          もちろん、一度スマホを見たら必ず眠れなくなるという話ではありません。
+          睡眠には光以外にも、生活リズムやストレス、カフェインなどさまざまな要素があります。
+          でも「夜の光は体にとって朝の光とは違う意味を持つ」。
+          これは覚えておくと役立つ知識です。
+              """.strip()
+            },
+
+            {
+              "title": "水分は体のさまざまな働きに必要",
+              "keyword": "water drinking",
+              "script": """
+          人間の体にとって、水分はかなり重要です。
+          水は体温調節や血液循環、栄養素の運搬など、さまざまな働きに関係しています。
+          汗をかけば水分が失われますし、暑い環境では体から出ていく水分も増えます。
+          だから喉が渇いた時には、水分を補給することが大切です。
+          ただし「水は多ければ多いほどいい」という意味ではありません。
+          必要な量は、気温、運動量、食事、体の状態などによって変わります。
+          普段から自分の体のサインに注意すること。
+          そして暑い日や運動する日は、特に水分補給を意識する。
+          シンプルですが、とても基本的な体のケアです。
+              """.strip()
+            },
+
+            {
+              "title": "心拍数は感情でも変わる",
+              "keyword": "heart emotion running",
+              "script": """
+          心臓は運動した時だけ速くなると思っていませんか？
+          実は、緊張や興奮などの感情でも心拍数は変化します。
+          人前で話す前にドキドキする。
+          好きな人から連絡が来て心臓が速くなる。
+          怖い映画を見てドキドキする。
+          こうした変化は、感情と体の反応がつながっていることを示しています。
+          私たちは「頭で考えていること」と「体で起きていること」を別々だと思いがちです。
+          でも実際には、感情が体に影響し、体の状態が気分に影響することもあります。
+          だから緊張した時に「なんでこんなにドキドキするんだ」と焦るより、「今、体が緊張に反応しているんだ」と捉えるだけでも見方が変わります。
+              """.strip()
+            },
+
+            {
+              "title": "人間は新しいものに注意を向ける",
+              "keyword": "new technology curiosity",
+              "script": """
+          見慣れた景色の中に、突然見たことのないものがあったら、つい目が行きませんか？
+          人間は新しい情報に注意を向けやすい傾向があります。
+          これは、生きていく上で新しい情報が重要だったからだと考えられています。
+          いつもと違う音。
+          見慣れない場所。
+          初めて見るもの。
+          こうした変化は、自然と注意を引きます。
+          だから動画でも、最初の数秒に「え？何それ？」と思う情報があると、続きを見たくなることがあります。
+          人間の脳は、完全に予想できるものより、少し意外なものに目を向けます。
+          「知らない」ということには、実は強い引力があるんです。
+              """.strip()
+            },
+
+            {
+              "title": "期待だけでもワクワクする",
+              "keyword": "concert audience excitement",
+              "script": """
+          遊園地に着く前からワクワクする。
+          旅行の前日から楽しみで眠れない。
+          実は、楽しいのはイベントが始まってからだけではありません。
+          「これから何か良いことが起こる」という期待そのものが、強い感情を生み出すことがあります。
+          だから旅行の計画を立てている時間や、プレゼントを開ける直前にもワクワクします。
+          まだ何も起きていないのに、もう楽しい。
+          人間にとって「未来を想像すること」には、それだけの力があります。
+          逆に言えば、楽しみを予定に入れるだけでも、日常に小さな楽しみを作ることができます。
+          「週末に何をしよう」と考える時間も、実は楽しみの一部なのかもしれません。
+              """.strip()
+            },
+
+            {
+              "title": "人は誰かと楽しさを共有すると気分が変わる",
+              "keyword": "friends laughing together",
+              "script": """
+          面白い動画を一人で見るより、友達と見て笑ったほうが楽しい。
+          そんな経験ありませんか？
+          人間は感情を他人と共有することで、体験の感じ方が変わることがあります。
+          同じ景色でも「すごい！」と言い合える相手がいると、思い出として強く残ることがあります。
+          旅行の写真が楽しいのも、景色そのものだけではなく、その時に誰といたかという記憶が一緒に残るからかもしれません。
+          もちろん、一人の時間が悪いわけではありません。
+          一人だからこそ楽しめることもたくさんあります。
+          でも「これ面白い！」を誰かと共有することには、人間ならではの楽しさがあります。
+              """.strip()
+            },
+
+            {
+              "title": "歩くと気分転換になる理由",
+              "keyword": "walking city park",
+              "script": """
+          気分がモヤモヤした時、少し歩いたらスッキリした。
+          そんな経験はありませんか？
+          歩くことは、体を動かすだけではありません。
+          景色が変わり、視線が変わり、入ってくる情報も変わります。
+          ずっと同じ場所で同じことを考えていると、考えが堂々巡りになることがあります。
+          そんな時に場所を変えると、思考の流れが変わるきっかけになります。
+          もちろん、歩けば悩みが全部解決するわけではありません。
+          でも、頭の中だけで考え続ける状態から、一度外へ出て体を動かすことで、気分を切り替えるきっかけにはできます。
+          悩んだ時ほど、五分だけ歩いてみる。
+          それくらい小さな方法でもいいんです。
+              """.strip()
+            },
+
+            {
+              "title": "小さな変化でも脳は気づく",
+              "keyword": "city traffic change",
+              "script": """
+          いつも通っている道に、突然新しい店ができている。
+          すると、なぜかすぐ気づきませんか？
+          人間は、環境の変化に注意を向ける傾向があります。
+          毎日見ている景色は、脳にとって「いつもの情報」になります。
+          そこに新しい看板や建物が現れると、「いつもと違う」という違いが目立ちます。
+          これは、毎日同じ景色を見ているからこそ起こる現象です。
+          逆に、旅行先ではほとんどすべてが新しいので、目に入る情報が一気に増えます。
+          「最近、街が変わったな」と感じる瞬間は、街だけではなく、自分の脳が変化を見つけている瞬間でもあります。
+              """.strip()
+            },
+
+            {
+              "title": "人間は予想できる展開より少し意外な展開に惹かれる",
+              "keyword": "movie cinema suspense",
+              "script": """
+          映画を見ていて、「この後こうなるな」と思った瞬間に、予想を裏切られる。
+          すると一気に面白く感じることがあります。
+          人間は、ある程度の予測をしながら周囲の出来事を見ています。
+          だから、完全に予想通りでも退屈に感じることがあります。
+          逆に、何が起きるか全くわからない状態では、理解することが難しくなることもあります。
+          そこで「だいたい予想できるけど、少しだけ違う」という状態が強い興味を生みます。
+          面白い話には、伏線、意外な展開、予想外のオチが入っていることがあります。
+          「知っている」と「知らない」の間。
+          そこに、人間が夢中になるポイントが隠れているのかもしれません。
+              """.strip()
+            },
+
+            {
+              "title": "最後の一個が気になる心理",
+              "keyword": "choice mystery curiosity",
+              "script": """
+          「残り一個です」と言われると、急に気になったことはありませんか？
+          人間は、情報が途中で止まっている状態を気にすることがあります。
+          例えば、話の途中で「実はこの後、とんでもないことが起きて……」と言われたら、続きを知りたくなりますよね。
+          これは「まだ答えを知らない」という状態そのものが注意を引くからです。
+          だから物語では、あえて情報を全部見せずに、少しだけ隠すことがあります。
+          ただし、何でも隠せば面白くなるわけではありません。
+          「答えを知りたい」と思えるだけの情報を最初に渡すことが重要です。
+          人間は、知らないことそのものより、「あと少しで答えがわかりそう」という状態に強く惹かれることがあります。
+              """.strip()
+            },
+
+            {
+              "title": "一度に全部やろうとすると動けなくなることがある",
+              "keyword": "overwhelmed desk work",
+              "script": """
+          部屋を片づけなきゃ。
+          勉強もしなきゃ。
+          仕事もしなきゃ。
+          やることが多すぎると、逆に何もしたくなくなることがあります。
+          これは、やることの量そのものだけではなく、「どこから始めればいいかわからない」という状態も関係します。
+          そんな時は、作業を小さく分ける方法があります。
+          「部屋を片づける」ではなく「机の上だけ」。
+          「勉強する」ではなく「問題を一問だけ」。
+          最初の一歩を小さくすると、始めるための心理的なハードルを下げられます。
+          完璧なスタートを切る必要はありません。
+          とにかく一つだけ終わらせる。
+          そこから次へ進むという方法もあります。
+              """.strip()
+            },
+
+            {
+              "title": "人は未来の楽しみを想像できる",
+              "keyword": "dream future sunset",
+              "script": """
+          人間には、まだ起きていない未来を想像する能力があります。
+          「来週旅行に行ったら何を食べよう」
+          「次の休みは何をしよう」
+          そんなふうに未来を想像するだけでも、気分が変わることがあります。
+          未来を想像することで、実際に起きる前から楽しみを感じられるからです。
+          もちろん、未来を想像しすぎて不安になることもあります。
+          でも、楽しみな予定を考えることには、日常の中で「これから何かある」という感覚を作る面があります。
+          大きなイベントじゃなくても構いません。
+          好きなものを食べる。
+          映画を見る。
+          散歩する。
+          明日の小さな楽しみを一つ決めるだけでもいい。
+          人間は、未来そのものだけではなく、未来を想像する時間も楽しめる生き物なんです。
+              """.strip()
+            },
+
+            {
+              "title": "最後に一番意外な雑学",
+              "keyword": "earth space stars",
+              "script": """
+          最後の雑学です。
+          ここまで見てきたように、人間の脳は、記憶、音、匂い、光、予測、感情など、さまざまな情報を組み合わせながら毎日を過ごしています。
+          そして面白いのは、私たちは自分の脳について、まだすべてを理解しているわけではないということです。
+          普段は当たり前だと思っている「思い出す」「好きになる」「驚く」「集中する」という行動にも、たくさんの仕組みが関係しています。
+          今日紹介した雑学の中に、一つでも「知らなかった」と思うものがあったなら、それだけでこの動画を見る意味はありました。
+          そして次に誰かと話す時、
+          「そういえば知ってる？」
+          と今日の雑学を一つ話してみてください。
+          知識って、覚えて終わりではなく、誰かと共有した瞬間にもっと面白くなるものです。
+              """.strip()
+            }
+
+          ]
+
+          with open("trivia.json", "w", encoding="utf-8") as f:
+              json.dump(trivia, f, ensure_ascii=False, indent=2)
+
+          print("Created", len(trivia), "trivia scripts")
           PY
 
-      - name: Create folders
-        run: |
-          rm -rf audio clips segments subtitles
-          mkdir -p audio clips segments subtitles
+          python generate_trivia.py
 
-      - name: Generate narration and footage
+      # =========================================================
+      # 動画生成
+      # =========================================================
+      - name: Create video
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: |
-          python - <<'PY'
+          cat > create_video.py <<'PY'
           import json
           import os
           import subprocess
-          import urllib.request
-          import urllib.parse
+          import requests
           import time
+          import html
+          import re
 
-          with open(
-              "selected_trivia.json",
-              encoding="utf-8"
-          ) as f:
-              data = json.load(f)
+          W = 1920
+          H = 1080
 
-          API_KEY = os.environ["PEXELS_API_KEY"]
+          os.makedirs("audio", exist_ok=True)
+          os.makedirs("clips", exist_ok=True)
+          os.makedirs("segments", exist_ok=True)
 
-          keyword_map = {
-              "octopus": [
-                  "octopus underwater",
-                  "octopus ocean",
-                  "octopus animal"
-              ],
-              "cat": [
-                  "cat animal",
-                  "cat close up",
-                  "cute cat"
-              ],
-              "dog": [
-                  "dog animal",
-                  "dog running",
-                  "dog close up"
-              ],
-              "bird": [
-                  "birds flying",
-                  "bird nature",
-                  "birds wildlife"
-              ],
-              "shark": [
-                  "shark ocean",
-                  "shark underwater",
-                  "shark swimming"
-              ],
-              "whale": [
-                  "whale ocean",
-                  "whale underwater",
-                  "whale swimming"
-              ],
-              "dolphin": [
-                  "dolphin ocean",
-                  "dolphin underwater",
-                  "dolphins swimming"
-              ],
-              "fish": [
-                  "fish underwater",
-                  "tropical fish",
-                  "fish ocean"
-              ],
-              "brain": [
-                  "human brain",
-                  "brain neuroscience",
-                  "human neuroscience"
-              ],
-              "heart": [
-                  "human heart",
-                  "heart medical",
-                  "human body"
-              ],
-              "blood": [
-                  "blood cells",
-                  "blood medical",
-                  "human blood"
-              ],
-              "sleep": [
-                  "sleeping person",
-                  "sleep bedroom",
-                  "person sleeping"
-              ],
-              "eye": [
-                  "human eye",
-                  "eye close up",
-                  "human face eye"
-              ],
-              "ear": [
-                  "human ear",
-                  "ear close up",
-                  "human anatomy"
-              ],
-              "moon": [
-                  "moon space",
-                  "moon night",
-                  "full moon"
-              ],
-              "sun": [
-                  "sun space",
-                  "sun sky",
-                  "sunlight"
-              ],
-              "planet": [
-                  "planet space",
-                  "solar system",
-                  "space planet"
-              ],
-              "black hole": [
-                  "black hole space",
-                  "space galaxy",
-                  "deep space"
-              ],
-              "galaxy": [
-                  "galaxy space",
-                  "milky way",
-                  "deep space"
-              ],
-              "space": [
-                  "outer space",
-                  "galaxy stars",
-                  "space universe"
-              ],
-              "ocean": [
-                  "ocean underwater",
-                  "deep ocean",
-                  "ocean waves"
-              ],
-              "water": [
-                  "water",
-                  "water drops",
-                  "ocean water"
-              ],
-              "ice": [
-                  "ice close up",
-                  "ice glacier",
-                  "melting ice"
-              ],
-              "fire": [
-                  "fire flames",
-                  "fire close up",
-                  "burning fire"
-              ],
-              "rain": [
-                  "rain",
-                  "rain drops",
-                  "rain city"
-              ],
-              "snow": [
-                  "snow",
-                  "snowfall",
-                  "winter snow"
-              ],
-              "forest": [
-                  "forest",
-                  "forest trees",
-                  "nature forest"
-              ],
-              "train": [
-                  "train railway",
-                  "high speed train",
-                  "Japanese train"
-              ],
-              "japan": [
-                  "Japan Tokyo",
-                  "Japan city",
-                  "Japanese street"
-              ],
-              "computer": [
-                  "computer technology",
-                  "computer screen",
-                  "technology"
-              ],
-              "internet": [
-                  "internet technology",
-                  "computer network",
-                  "digital technology"
-              ],
-              "robot": [
-                  "robot technology",
-                  "robot",
-                  "artificial intelligence"
-              ],
-              "food": [
-                  "food cooking",
-                  "food close up",
-                  "Japanese food"
-              ],
-              "science": [
-                  "science laboratory",
-                  "scientist experiment",
-                  "science experiment"
-              ],
-              "nature": [
-                  "nature landscape",
-                  "nature wildlife",
-                  "beautiful nature"
-              ]
-          }
+          with open("trivia.json", encoding="utf-8") as f:
+              trivia = json.load(f)
 
           def run(cmd):
-              print(cmd)
-
-              result = subprocess.run(
-                  cmd,
-                  shell=True,
-                  text=True,
-                  capture_output=True
-              )
-
-              if result.stdout:
-                  print(result.stdout)
-
-              if result.stderr:
-                  print(result.stderr)
-
-              if result.returncode != 0:
-                  raise RuntimeError(
-                      f"失敗: {cmd}"
-                  )
+              print("RUN:", " ".join(cmd))
+              subprocess.run(cmd, check=True)
 
           def duration(path):
-              result = subprocess.check_output(
+              result = subprocess.run(
                   [
                       "ffprobe",
-                      "-v",
-                      "error",
-                      "-show_entries",
-                      "format=duration",
-                      "-of",
-                      "default=noprint_wrappers=1:nokey=1",
+                      "-v", "error",
+                      "-show_entries", "format=duration",
+                      "-of", "default=noprint_wrappers=1:nokey=1",
                       path
-                  ]
+                  ],
+                  capture_output=True,
+                  text=True,
+                  check=True
               )
+              return float(result.stdout.strip())
 
-              return float(
-                  result.decode().strip()
-              )
+          # ---------------------------------------------------------
+          # Edge TTS
+          # ---------------------------------------------------------
+          intro_text = (
+              "絶対に誰かに話したくなる雑学30連発。"
+              "知っているようで知らない、人間の脳と日常の不思議を紹介します。"
+              "最後まで見ると、誰かに話したくなる雑学がきっと一つ見つかります。"
+          )
 
-          def search_pexels(query):
-              params = urllib.parse.urlencode({
-                  "query": query,
-                  "orientation": "landscape",
-                  "size": "large",
-                  "per_page": 15
-              })
+          with open("intro.txt", "w", encoding="utf-8") as f:
+              f.write(intro_text)
 
-              url = (
-                  "https://api.pexels.com/videos/search?"
-                  + params
-              )
+          run([
+              "python", "-m", "edge_tts",
+              "--voice", "ja-JP-NanamiNeural",
+              "--rate=+5%",
+              "--file", "intro.txt",
+              "--write-media", "audio/intro.mp3"
+          ])
 
-              request = urllib.request.Request(
-                  url,
-                  headers={
-                      "Authorization": API_KEY
-                  }
-              )
+          # ---------------------------------------------------------
+          # SRT生成
+          # 同じ原稿から字幕を作るのでナレーションと内容が一致する
+          # ---------------------------------------------------------
+          def split_text(text, max_chars=24):
+              text = re.sub(r"\s+", "", text)
+              parts = re.split(r"(?<=[。！？])", text)
+              result = []
 
-              try:
-                  with urllib.request.urlopen(
-                      request,
-                      timeout=30
-                  ) as response:
+              for p in parts:
+                  p = p.strip()
+                  if not p:
+                      continue
 
-                      return json.loads(
-                          response.read().decode(
-                              "utf-8"
-                          )
-                      ).get("videos", [])
+                  while len(p) > max_chars:
+                      result.append(p[:max_chars])
+                      p = p[max_chars:]
 
-              except Exception as e:
-                  print(
-                      "Pexels検索失敗:",
-                      e
-                  )
+                  if p:
+                      result.append(p)
 
-                  return []
+              return result
 
-          def select_video(videos):
+          def srt_time(sec):
+              ms = int((sec - int(sec)) * 1000)
+              sec = int(sec)
+              s = sec % 60
+              m = (sec // 60) % 60
+              h = sec // 3600
+              return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
-              candidates = []
+          # ---------------------------------------------------------
+          # Pexels動画取得
+          # ---------------------------------------------------------
+          def download_pexels(keyword, number):
+              key = os.environ.get("PEXELS_API_KEY")
 
-              for video in videos:
-
-                  for vf in video.get(
-                      "video_files",
-                      []
-                  ):
-
-                      link = vf.get("link")
-                      width = vf.get("width") or 0
-                      height = vf.get("height") or 0
-
-                      if not link:
-                          continue
-
-                      if width < 1000:
-                          continue
-
-                      if height <= 0:
-                          continue
-
-                      if width <= height:
-                          continue
-
-                      score = width
-
-                      quality = str(
-                          vf.get(
-                              "quality",
-                              ""
-                          )
-                      ).lower()
-
-                      if quality == "hd":
-                          score += 5000
-
-                      if quality == "sd":
-                          score -= 1000
-
-                      candidates.append(
-                          (score, link)
-                      )
-
-              if not candidates:
+              if not key:
+                  print("PEXELS_API_KEY is not set")
                   return None
 
-              candidates.sort(
-                  reverse=True
-              )
+              headers = {
+                  "Authorization": key
+              }
 
-              return candidates[0][1]
-
-          hooks = [
-              "これ、知ってたらちょっと得した気分になる話です。",
-              "ほとんどの人が知らない、意外な事実です。",
-              "ここで一つ、かなり意外な話。",
-              "これを知ると、いつもの景色が少し違って見えます。",
-              "一見普通ですが、実はとんでもない秘密があります。",
-              "思わず誰かに話したくなる雑学です。",
-              "知った瞬間に『え？』となる話です。",
-              "実はこれ、かなり不思議なんです。"
-          ]
-
-          endings = [
-              "知ってしまうと、もう気になってしまいますよね。",
-              "こういう雑学、意外と忘れられません。",
-              "身近なものほど、知らない秘密が隠れています。",
-              "次にこれを見たとき、きっと思い出すはずです。",
-              "こう考えると、ちょっと面白くありませんか？",
-              "まだまだ知らないことはたくさんあります。",
-              "そして次の雑学も、かなり意外です。",
-              "では、次の雑学です。"
-          ]
-
-          for index, item in enumerate(
-              data,
-              1
-          ):
-
-              fact = str(
-                  item.get(
-                      "fact",
-                      ""
-                  )
-              ).strip()
-
-              keyword = str(
-                  item.get(
-                      "keyword",
-                      ""
-                  )
-              ).lower().strip()
-
-              hook = hooks[
-                  (index - 1) % len(hooks)
-              ]
-
-              ending = endings[
-                  (index - 1) % len(endings)
-              ]
-
-              script = (
-                  hook
-                  + " "
-                  + fact
-                  + "。 "
-                  + ending
-              )
-
-              if len(script) > 150:
-
-                  script = (
-                      hook
-                      + " "
-                      + fact
-                      + "。"
+              try:
+                  r = requests.get(
+                      "https://api.pexels.com/videos/search",
+                      headers=headers,
+                      params={
+                          "query": keyword,
+                          "per_page": 15,
+                          "orientation": "landscape"
+                      },
+                      timeout=30
                   )
 
-              txt = f"audio/{index}.txt"
-              mp3 = f"audio/{index}.mp3"
+                  if r.status_code != 200:
+                      print("Pexels status:", r.status_code)
+                      return None
 
-              with open(
-                  txt,
-                  "w",
-                  encoding="utf-8"
-              ) as f:
+                  videos = r.json().get("videos", [])
+
+                  candidates = []
+
+                  for video in videos:
+                      for vf in video.get("video_files", []):
+                          width = vf.get("width") or 0
+                          height = vf.get("height") or 0
+                          link = vf.get("link")
+
+                          if (
+                              link
+                              and width >= 1280
+                              and width > height
+                          ):
+                              candidates.append(vf)
+
+                  if not candidates:
+                      return None
+
+                  candidates.sort(
+                      key=lambda x: abs((x.get("width") or 1280) - 1920)
+                  )
+
+                  url = candidates[0]["link"]
+                  path = f"clips/{number}.mp4"
+
+                  data = requests.get(url, timeout=90)
+
+                  if data.status_code == 200 and len(data.content) > 10000:
+                      with open(path, "wb") as f:
+                          f.write(data.content)
+
+                      return path
+
+              except Exception as e:
+                  print("Pexels error:", e)
+
+              return None
+
+          # ---------------------------------------------------------
+          # 各雑学の音声
+          # ---------------------------------------------------------
+          scripts = []
+
+          for i, item in enumerate(trivia, 1):
+              script = f"第{i}問。{item['script']}"
+              scripts.append(script)
+
+              txt = f"audio/{i}.txt"
+              mp3 = f"audio/{i}.mp3"
+
+              with open(txt, "w", encoding="utf-8") as f:
                   f.write(script)
 
-              run(
-                  f'python -m edge_tts '
-                  f'--voice ja-JP-NanamiNeural '
-                  f'--rate=5% '
-                  f'--file "{txt}" '
-                  f'--write-media "{mp3}"'
-              )
+              run([
+                  "python", "-m", "edge_tts",
+                  "--voice", "ja-JP-NanamiNeural",
+                  "--rate=+3%",
+                  "--file", txt,
+                  "--write-media", mp3
+              ])
 
-              audio_duration = duration(
-                  mp3
-              )
+          # ---------------------------------------------------------
+          # 映像を取得
+          # ---------------------------------------------------------
+          for i, item in enumerate(trivia, 1):
+              path = f"clips/{i}.mp4"
 
-              queries = keyword_map.get(
-                  keyword,
-                  [
-                      keyword,
-                      "interesting science",
-                      "nature documentary"
-                  ]
-              )
+              if os.path.exists(path) and os.path.getsize(path) > 10000:
+                  continue
 
-              selected_url = None
+              print(f"Downloading footage {i}: {item['keyword']}")
 
-              for query in queries:
-
-                  print(
-                      f"Pexels検索: {query}"
-                  )
-
-                  videos = search_pexels(
-                      query
-                  )
-
-                  selected_url = select_video(
-                      videos
-                  )
-
-                  if selected_url:
-                      break
-
-              clip = f"clips/{index}.mp4"
-
-              downloaded = False
-
-              if selected_url:
-
-                  try:
-
-                      urllib.request.urlretrieve(
-                          selected_url,
-                          clip
-                      )
-
-                      if os.path.getsize(
-                          clip
-                      ) > 100000:
-
-                          subprocess.run(
-                              [
-                                  "ffprobe",
-                                  "-v",
-                                  "error",
-                                  clip
-                              ],
-                              check=True
-                          )
-
-                          downloaded = True
-
-                  except Exception as e:
-
-                      print(
-                          "映像取得失敗:",
-                          e
-                      )
+              downloaded = download_pexels(item["keyword"], i)
 
               if not downloaded:
+                  print("Fallback video for", i)
 
-                  print(
-                      "映像なし。代替映像を作成"
-                  )
+                  run([
+                      "ffmpeg", "-y",
+                      "-f", "lavfi",
+                      "-i", "color=c=0x111111:s=1920x1080:r=30",
+                      "-f", "lavfi",
+                      "-i", "noise=alls=8:allf=t+u",
+                      "-t", "30",
+                      "-filter_complex",
+                      "[0:v][1:v]blend=all_mode=screen",
+                      "-c:v", "libx264",
+                      "-pix_fmt", "yuv420p",
+                      path
+                  ])
 
-                  run(
-                      f'ffmpeg -y '
-                      f'-f lavfi '
-                      f'-i "color=c=black:'
-                      f'size=1920x1080:rate=30" '
-                      f'-t {audio_duration} '
-                      f'-vf "drawtext='
-                      f'fontfile=/usr/share/fonts/'
-                      f'opentype/noto/NotoSansCJK-Regular.ttc:'
-                      f'text='
-                      f'"雑学 {index}":'
-                      f'fontcolor=white:'
-                      f'fontsize=80:'
-                      f'x=(w-text_w)/2:'
-                      f'y=(h-text_h)/2" '
-                      f'-c:v libx264 '
-                      f'-pix_fmt yuv420p '
-                      f'"{clip}"'
-                  )
+          # ---------------------------------------------------------
+          # イントロ
+          # ---------------------------------------------------------
+          intro_duration = duration("audio/intro.mp3") + 1
 
-              segment = (
-                  f"segments/{index}.mp4"
+          run([
+              "ffmpeg", "-y",
+              "-f", "lavfi",
+              "-i", "color=c=0x101010:s=1920x1080:r=30",
+              "-i", "audio/intro.mp3",
+              "-t", str(intro_duration),
+              "-vf",
+              "drawtext="
+              "fontfile=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc:"
+              "text='雑学30連発':"
+              "fontcolor=white:"
+              "fontsize=100:"
+              "x=(w-text_w)/2:"
+              "y=(h-text_h)/2,"
+              "drawtext="
+              "fontfile=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc:"
+              "text='最後まで見ると誰かに話したくなる':"
+              "fontcolor=white:"
+              "fontsize=42:"
+              "x=(w-text_w)/2:"
+              "y=650",
+              "-c:v", "libx264",
+              "-preset", "veryfast",
+              "-c:a", "aac",
+              "-b:a", "192k",
+              "-pix_fmt", "yuv420p",
+              "-shortest",
+              "intro.mp4"
+          ])
+
+          segments = ["intro.mp4"]
+
+          # ---------------------------------------------------------
+          # 各雑学動画
+          # ---------------------------------------------------------
+          for i, item in enumerate(trivia, 1):
+
+              audio = f"audio/{i}.mp3"
+              video = f"clips/{i}.mp4"
+              srt = f"segments/{i}.srt"
+              output = f"segments/{i}.mp4"
+
+              d = duration(audio) + 0.4
+
+              # 字幕
+              pieces = split_text(scripts[i-1])
+
+              total_chars = sum(len(x) for x in pieces) or 1
+              current = 0.0
+
+              with open(srt, "w", encoding="utf-8") as f:
+                  for n, piece in enumerate(pieces, 1):
+                      part_duration = d * len(piece) / total_chars
+                      start = current
+                      end = min(d, current + part_duration)
+
+                      f.write(
+                          f"{n}\n"
+                          f"{srt_time(start)} --> {srt_time(end)}\n"
+                          f"{piece}\n\n"
+                      )
+
+                      current = end
+
+              subtitle_path = os.path.abspath(srt).replace(":", "\\:")
+
+              vf = (
+                  "scale=1920:1080:force_original_aspect_ratio=increase,"
+                  "crop=1920:1080,"
+                  "setsar=1,"
+                  "eq=saturation=1.08:contrast=1.04,"
+                  "subtitles='"
+                  + subtitle_path
+                  + "':"
+                  "force_style='"
+                  "FontName=Noto Sans CJK JP,"
+                  "FontSize=20,"
+                  "PrimaryColour=&H00FFFFFF,"
+                  "OutlineColour=&H80000000,"
+                  "BorderStyle=3,"
+                  "Outline=2,"
+                  "Shadow=1,"
+                  "Alignment=2,"
+                  "MarginV=70"
+                  "'"
               )
 
-              run(
-                  f'ffmpeg -y '
-                  f'-stream_loop -1 '
-                  f'-i "{clip}" '
-                  f'-i "{mp3}" '
-                  f'-t {audio_duration} '
-                  f'-vf "scale=1920:1080:'
-                  f'force_original_aspect_ratio=increase,'
-                  f'crop=1920:1080,'
-                  f'zoompan='
-                  f'z=1.02:'
-                  f'd=1:'
-                  f's=1920x1080:'
-                  f'fps=30" '
-                  f'-map 0:v:0 '
-                  f'-map 1:a:0 '
-                  f'-c:v libx264 '
-                  f'-preset veryfast '
-                  f'-crf 23 '
-                  f'-pix_fmt yuv420p '
-                  f'-c:a aac '
-                  f'-b:a 128k '
-                  f'-shortest '
-                  f'"{segment}"'
-              )
+              run([
+                  "ffmpeg", "-y",
+                  "-stream_loop", "-1",
+                  "-i", video,
+                  "-i", audio,
+                  "-t", str(d),
+                  "-vf", vf,
+                  "-map", "0:v:0",
+                  "-map", "1:a:0",
+                  "-c:v", "libx264",
+                  "-preset", "veryfast",
+                  "-crf", "23",
+                  "-c:a", "aac",
+                  "-b:a", "192k",
+                  "-pix_fmt", "yuv420p",
+                  "-shortest",
+                  output
+              ])
 
-              with open(
-                  f"subtitles/{index}.txt",
-                  "w",
-                  encoding="utf-8"
-              ) as f:
+              segments.append(output)
+
+          # ---------------------------------------------------------
+          # 結合
+          # ---------------------------------------------------------
+          with open("concat.txt", "w", encoding="utf-8") as f:
+              for path in segments:
+                  f.write(f"file '{os.path.abspath(path)}'\n")
+
+          run([
+              "ffmpeg", "-y",
+              "-f", "concat",
+              "-safe", "0",
+              "-i", "concat.txt",
+              "-c", "copy",
+              "trivia_video.mp4"
+          ])
+
+          # ---------------------------------------------------------
+          # 字幕原稿も保存
+          # ---------------------------------------------------------
+          with open("subtitles.txt", "w", encoding="utf-8") as f:
+              for i, script in enumerate(scripts, 1):
+                  f.write(f"\n===== 雑学{i} =====\n")
                   f.write(script)
+                  f.write("\n")
 
-              print(
-                  f"{index}/30 完了"
-              )
+          final_duration = duration("trivia_video.mp4")
 
-              time.sleep(0.2)
+          print("======================================")
+          print("VIDEO CREATED")
+          print("Duration:", round(final_duration / 60, 2), "minutes")
+          print("======================================")
 
-          print(
-              "映像・音声生成完了"
-          )
+          if final_duration < 8 * 60:
+              print("WARNING: Video is shorter than expected.")
+
+          if final_duration > 20 * 60:
+              print("WARNING: Video is longer than 20 minutes.")
+
           PY
 
-      - name: Create intro
+          python create_video.py
+
+          test -s trivia_video.mp4
+
+      # =========================================================
+      # サムネイル
+      # =========================================================
+      - name: Create thumbnail
         run: |
-          cat > intro.txt <<'EOF'
-          この動画、最後まで見ると誰かに話したくなるかもしれません。
-          知っているようで知らない、意外な雑学を30個。
-          それでは、いきましょう。
-          EOF
-
-          python -m edge_tts \
-            --voice ja-JP-NanamiNeural \
-            --rate=8% \
-            --file intro.txt \
-            --write-media intro.mp3
-
-          INTRO_DURATION=$(ffprobe \
-            -v error \
-            -show_entries format=duration \
-            -of default=noprint_wrappers=1:nokey=1 \
-            intro.mp3)
-
           ffmpeg -y \
             -f lavfi \
-            -i "color=c=black:size=1920x1080:rate=30" \
-            -i intro.mp3 \
-            -t "$INTRO_DURATION" \
-            -vf "drawtext=fontfile=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc:text='最後まで見ると誰かに話したくなる雑学30選':fontcolor=white:fontsize=70:x=(w-text_w)/2:y=(h-text_h)/2" \
-            -c:v libx264 \
-            -pix_fmt yuv420p \
-            -c:a aac \
-            -b:a 128k \
-            intro.mp4
-
-      - name: Create concat list
-        run: |
-          rm -f concat.txt
-
-          echo "file '$PWD/intro.mp4'" >> concat.txt
-
-          for file in segments/*.mp4
-          do
-            echo "file '$PWD/$file'" >> concat.txt
-          done
-
-          cat concat.txt
-
-      - name: Concatenate video
-        run: |
-          ffmpeg -y \
-            -f concat \
-            -safe 0 \
-            -i concat.txt \
-            -c copy \
-            long_raw.mp4
-
-      - name: Generate subtitles
-        run: |
-          python - <<'PY'
-          import json
-          import subprocess
-          import os
-
-          with open(
-              "selected_trivia.json",
-              encoding="utf-8"
-          ) as f:
-              data = json.load(f)
-
-          def get_duration(path):
-
-              result = subprocess.check_output(
-                  [
-                      "ffprobe",
-                      "-v",
-                      "error",
-                      "-show_entries",
-                      "format=duration",
-                      "-of",
-                      "default=noprint_wrappers=1:nokey=1",
-                      path
-                  ]
-              )
-
-              return float(
-                  result.decode().strip()
-              )
-
-          def timestamp(sec):
-
-              ms = int(sec * 1000)
-
-              h = ms // 3600000
-              m = (ms % 3600000) // 60000
-              s = (ms % 60000) // 1000
-              ms = ms % 1000
-
-              return (
-                  f"{h:02d}:"
-                  f"{m:02d}:"
-                  f"{s:02d},"
-                  f"{ms:03d}"
-              )
-
-          def split_text(text):
-
-              chunks = []
-
-              while len(text) > 22:
-
-                  cut = -1
-
-                  for mark in [
-                      "。",
-                      "！",
-                      "？",
-                      "、"
-                  ]:
-
-                      p = text.rfind(
-                          mark,
-                          0,
-                          22
-                      )
-
-                      if p > cut:
-                          cut = p
-
-                  if cut < 5:
-                      cut = 21
-
-                  chunks.append(
-                      text[:cut + 1].strip()
-                  )
-
-                  text = text[
-                      cut + 1:
-                  ].strip()
-
-              if text:
-                  chunks.append(text)
-
-              return chunks
-
-          current = 0
-          subtitle_id = 1
-
-          with open(
-              "subtitles.srt",
-              "w",
-              encoding="utf-8"
-          ) as srt:
-
-              intro_duration = get_duration(
-                  "intro.mp3"
-              )
-
-              intro_text = (
-                  "この動画、最後まで見ると誰かに話したくなるかもしれません。"
-                  "知っているようで知らない、意外な雑学を30個。"
-                  "それでは、いきましょう。"
-              )
-
-              intro_chunks = split_text(
-                  intro_text
-              )
-
-              total_chars = sum(
-                  len(x)
-                  for x in intro_chunks
-              )
-
-              offset = 0
-
-              for chunk in intro_chunks:
-
-                  chunk_time = (
-                      intro_duration
-                      * len(chunk)
-                      / total_chars
-                  )
-
-                  srt.write(
-                      f"{subtitle_id}\n"
-                  )
-
-                  srt.write(
-                      f"{timestamp(offset)} --> "
-                      f"{timestamp(offset + chunk_time)}\n"
-                  )
-
-                  srt.write(
-                      chunk + "\n\n"
-                  )
-
-                  subtitle_id += 1
-                  offset += chunk_time
-
-              current = intro_duration
-
-              for index in range(
-                  1,
-                  len(data) + 1
-              ):
-
-                  path = f"audio/{index}.mp3"
-                  text_path = (
-                      f"subtitles/{index}.txt"
-                  )
-
-                  if not os.path.exists(path):
-                      continue
-
-                  with open(
-                      text_path,
-                      encoding="utf-8"
-                  ) as f:
-                      text = f.read().strip()
-
-                  d = get_duration(path)
-
-                  chunks = split_text(text)
-
-                  if not chunks:
-                      continue
-
-                  total_chars = sum(
-                      len(x)
-                      for x in chunks
-                  )
-
-                  offset = 0
-
-                  for chunk in chunks:
-
-                      chunk_time = (
-                          d
-                          * len(chunk)
-                          / total_chars
-                      )
-
-                      start = current + offset
-                      end = start + chunk_time
-
-                      srt.write(
-                          f"{subtitle_id}\n"
-                      )
-
-                      srt.write(
-                          f"{timestamp(start)} --> "
-                          f"{timestamp(end)}\n"
-                      )
-
-                      srt.write(
-                          chunk + "\n\n"
-                      )
-
-                      subtitle_id += 1
-                      offset += chunk_time
-
-                  current += d
-
-          print("字幕生成完了")
-          PY
-
-      - name: Render subtitles
-        run: |
-          ffmpeg -y \
-            -i long_raw.mp4 \
-            -vf "subtitles=subtitles.srt:force_style='FontName=Noto Sans CJK JP,FontSize=42,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=3,Shadow=1,Alignment=2,MarginV=65'" \
-            -c:v libx264 \
-            -preset veryfast \
-            -crf 22 \
-            -pix_fmt yuv420p \
-            -c:a aac \
-            -b:a 192k \
-            -movflags +faststart \
-            long_video.mp4
-
-      - name: Generate YouTube metadata
-        run: |
-          python - <<'PY'
-          import json
-          import random
-
-          title_list = [
-              "最後まで見ると誰かに話したくなる雑学30選",
-              "「え、そうなの？」知った瞬間に驚く雑学30選",
-              "ほとんどの人が知らない意外な雑学30選",
-              "次々と予想を裏切ってくる雑学30選",
-              "知らないと損する？意外すぎる雑学30選",
-              "友達に話したくなる面白い雑学30選"
-          ]
-
-          title = random.choice(
-              title_list
-          )
-
-          description = (
-              "知っているようで知らない。"
-              "一見普通に見えるものの裏側には、"
-              "意外な事実が隠れています。"
-              "\n\n"
-              "今回は、動物、人体、宇宙、科学、"
-              "食べ物、自然などから、"
-              "思わず誰かに話したくなる雑学を"
-              "テンポよく30個紹介します。"
-              "\n\n"
-              "あなたはいくつ知っていましたか？"
-              "\n\n"
-              "#雑学 #豆知識 #トリビア #面白い雑学"
-          )
-
-          metadata = {
-              "title": title,
-              "description": description,
-              "tags": [
-                  "雑学",
-                  "豆知識",
-                  "トリビア",
-                  "雑学まとめ",
-                  "面白い雑学",
-                  "意外な事実",
-                  "知らない雑学",
-                  "暇つぶし",
-                  "面白い話"
-              ]
-          }
-
-          with open(
-              "youtube_metadata.json",
-              "w",
-              encoding="utf-8"
-          ) as f:
-              json.dump(
-                  metadata,
-                  f,
-                  ensure_ascii=False,
-                  indent=2
-              )
-
-          print(
-              "タイトル:",
-              title
-          )
-          PY
-
-      - name: Generate thumbnail
-        run: |
-          ffmpeg -y \
-            -ss 1 \
-            -i segments/1.mp4 \
+            -i color=c=0x101010:s=1280x720 \
+            -vf "drawtext=fontfile=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc:text='絶対に誰かに話したくなる':fontcolor=white:fontsize=72:x=(w-text_w)/2:y=180,drawtext=fontfile=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc:text='雑学30連発':fontcolor=white:fontsize=110:x=(w-text_w)/2:y=300,drawtext=fontfile=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc:text='あなたはいくつ知ってる？':fontcolor=white:fontsize=46:x=(w-text_w)/2:y=470" \
             -frames:v 1 \
-            -vf "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,eq=brightness=-0.10:saturation=1.25" \
             thumbnail.jpg
 
-      - name: Check files
-        run: |
-          test -f long_video.mp4
-          test -f thumbnail.jpg
-          test -f subtitles.srt
-          test -f selected_trivia.json
-          test -f youtube_metadata.json
+      # =========================================================
+      # GitHubから動画を確認できるように保存
+      # =========================================================
+      - name: Upload video artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivia-video
+          path: |
+            trivia_video.mp4
+            thumbnail.jpg
+            subtitles.txt
+            segments/*.srt
+          retention-days: 7
 
-          ls -lh long_video.mp4
-          ls -lh thumbnail.jpg
-
+      # =========================================================
+      # YouTube自動投稿
+      # =========================================================
       - name: Upload to YouTube
         env:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
-
           cat > upload_youtube.py <<'PY'
-
           import os
-          import json
 
           from google.oauth2.credentials import Credentials
           from googleapiclient.discovery import build
           from googleapiclient.http import MediaFileUpload
 
+          scopes = [
+              "https://www.googleapis.com/auth/youtube.upload"
+          ]
+
           credentials = Credentials(
               None,
-              refresh_token=os.environ[
-                  "YOUTUBE_REFRESH_TOKEN"
-              ],
+              refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],
               token_uri="https://oauth2.googleapis.com/token",
-              client_id=os.environ[
-                  "YOUTUBE_CLIENT_ID"
-              ],
-              client_secret=os.environ[
-                  "YOUTUBE_CLIENT_SECRET"
-              ],
-              scopes=[
-                  "https://www.googleapis.com/auth/youtube.upload"
-              ]
+              client_id=os.environ["YOUTUBE_CLIENT_ID"],
+              client_secret=os.environ["YOUTUBE_CLIENT_SECRET"],
+              scopes=scopes
           )
 
           youtube = build(
@@ -1063,20 +1068,36 @@ jobs:
               credentials=credentials
           )
 
-          with open(
-              "youtube_metadata.json",
-              encoding="utf-8"
-          ) as f:
-              metadata = json.load(f)
-
           body = {
               "snippet": {
-                  "title": metadata["title"],
-                  "description": metadata["description"],
-                  "tags": metadata["tags"],
-                  "categoryId": "27",
-                  "defaultLanguage": "ja",
-                  "defaultAudioLanguage": "ja"
+                  "title": "絶対に誰かに話したくなる雑学30連発【知らないと損】",
+                  "description": """
+          知っているようで知らない雑学を30個紹介します。
+
+          人間の脳、記憶、睡眠、音楽、スマホ、日常生活など、
+          思わず誰かに話したくなる雑学をまとめました。
+
+          あなたはいくつ知っていましたか？
+
+          #雑学
+          #豆知識
+          #トリビア
+          #面白い雑学
+          #知識
+                  """.strip(),
+                  "tags": [
+                      "雑学",
+                      "豆知識",
+                      "トリビア",
+                      "面白い雑学",
+                      "雑学動画",
+                      "知識",
+                      "脳科学",
+                      "心理学",
+                      "睡眠",
+                      "人間の不思議"
+                  ],
+                  "categoryId": "27"
               },
               "status": {
                   "privacyStatus": "public",
@@ -1085,9 +1106,10 @@ jobs:
           }
 
           media = MediaFileUpload(
-              "long_video.mp4",
-              chunksize=8 * 1024 * 1024,
-              resumable=True
+              "trivia_video.mp4",
+              mimetype="video/mp4",
+              resumable=True,
+              chunksize=1024 * 1024 * 8
           )
 
           request = youtube.videos().insert(
@@ -1099,41 +1121,23 @@ jobs:
           response = None
 
           while response is None:
-
               status, response = request.next_chunk()
 
               if status:
-
                   print(
-                      "アップロード:",
-                      int(
-                          status.progress() * 100
-                      ),
+                      "Upload progress:",
+                      int(status.progress() * 100),
                       "%"
                   )
 
-          print(
-              "YouTube公開完了"
-          )
-
+          print("======================================")
+          print("YouTube upload complete")
+          print("Video ID:", response["id"])
           print(
               "https://www.youtube.com/watch?v="
               + response["id"]
           )
-
+          print("======================================")
           PY
 
           python upload_youtube.py
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivia-video-output
-          path: |
-            long_video.mp4
-            thumbnail.jpg
-            subtitles.srt
-            selected_trivia.json
-            trivia.json
-            youtube_metadata.json
-          retention-days: 7
