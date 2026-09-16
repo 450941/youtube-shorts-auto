@@ -11,18 +11,39 @@ jobs:
     timeout-minutes: 20
 
     steps:
+
+      # ==========================================
+      # 1. 必要ツール
+      # ==========================================
       - name: Install tools
         run: |
+          set -e
+
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-noto-cjk jq
 
+      # ==========================================
+      # 2. Python
+      # ==========================================
       - name: Install Python packages
         run: |
           python -m pip install --upgrade pip
-          pip install edge-tts google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib
 
-      - name: Select content and duration
+          pip install \
+            edge-tts \
+            google-api-python-client \
+            google-auth \
+            google-auth-httplib2 \
+            google-auth-oauthlib
+
+      # ==========================================
+      # 3. SEED作成
+      # ==========================================
+      - name: Create seed
         run: |
+
+          set -e
+
           DAY=$(($(date +%s) / 86400))
           HOUR=$(date -u +%H)
           HOUR=$((10#$HOUR))
@@ -32,223 +53,628 @@ jobs:
 
           echo "SEED=$SEED" >> "$GITHUB_ENV"
 
-          # 偶数 = 60秒
-          # 奇数 = 15秒
-          if (( SEED % 2 == 0 )); then
-            DURATION=60
-          else
-            DURATION=15
-          fi
+          echo "================================"
+          echo "SEED: $SEED"
+          echo "================================"
 
-          echo "DURATION=$DURATION" >> "$GITHUB_ENV"
+      # ==========================================
+      # 4. 300,000パターン生成
+      # ==========================================
+      - name: Generate 300000 patterns
+        run: |
 
-          INDEX=$((SEED % 20))
+          set -e
 
-          case $INDEX in
-            0) QUERY="calm nature" ;;
-            1) QUERY="sunset" ;;
-            2) QUERY="city night" ;;
-            3) QUERY="ocean" ;;
-            4) QUERY="walking" ;;
-            5) QUERY="rain" ;;
-            6) QUERY="morning" ;;
-            7) QUERY="mountain" ;;
-            8) QUERY="coffee" ;;
-            9) QUERY="peaceful life" ;;
-            10) QUERY="forest" ;;
-            11) QUERY="road trip" ;;
-            12) QUERY="clouds" ;;
-            13) QUERY="river" ;;
-            14) QUERY="beach" ;;
-            15) QUERY="stars night" ;;
-            16) QUERY="flowers" ;;
-            17) QUERY="city walking" ;;
-            18) QUERY="sunrise" ;;
-            19) QUERY="quiet room" ;;
-          esac
+          python - <<'PY'
+
+          import os
+
+          seed = int(os.environ["SEED"])
+
+          # =====================================================
+          # 雑学本体
+          #
+          # 30種類
+          # =====================================================
+
+          facts = [
+
+              {
+                  "query": "octopus underwater",
+                  "title": "タコの心臓は3つ",
+                  "text": "タコには心臓が3つあります。しかも、そのうち2つはエラへ血液を送っています。"
+              },
+
+              {
+                  "query": "octopus underwater",
+                  "title": "タコの血は青い",
+                  "text": "タコの血は青色です。酸素を運ぶ成分に、鉄ではなく銅を含む物質が使われています。"
+              },
+
+              {
+                  "query": "cat cute",
+                  "title": "猫は甘さを感じにくい",
+                  "text": "猫は人間のように甘味を感じるための仕組みがうまく働きません。だから甘い物への反応が違います。"
+              },
+
+              {
+                  "query": "butterfly",
+                  "title": "チョウは足で味を感じる",
+                  "text": "チョウには足にも味を感じるための器官があります。花に止まったとき、食べられるものか確認しています。"
+              },
+
+              {
+                  "query": "bat flying",
+                  "title": "コウモリは空を飛べる哺乳類",
+                  "text": "コウモリは、継続的な飛行ができる唯一の哺乳類です。しかも種類によっては音で周囲を把握します。"
+              },
+
+              {
+                  "query": "hummingbird",
+                  "title": "ハチドリは後ろ向きに飛べる",
+                  "text": "ハチドリは鳥の中でも珍しく、後ろ向きに飛ぶことができます。翼を特殊な動かし方で使っています。"
+              },
+
+              {
+                  "query": "penguin",
+                  "title": "ペンギンには膝がある",
+                  "text": "ペンギンにも膝があります。ただし、脚の奥に隠れているため、外からは分かりにくいんです。"
+              },
+
+              {
+                  "query": "wombat",
+                  "title": "ウォンバットのフンは四角い",
+                  "text": "ウォンバットのフンは四角い形をしています。腸の形や収縮の仕組みが関係しています。"
+              },
+
+              {
+                  "query": "crow bird",
+                  "title": "カラスは人の顔を覚える",
+                  "text": "カラスは人の顔を見分ける能力について研究されています。人間が思う以上に記憶力が優れています。"
+              },
+
+              {
+                  "query": "dolphin ocean",
+                  "title": "イルカには特徴的な呼び声がある",
+                  "text": "イルカには個体ごとに特徴的な呼び声があり、仲間とのコミュニケーションに使われています。"
+              },
+
+              {
+                  "query": "human brain",
+                  "title": "記憶は録画ではない",
+                  "text": "人間の記憶は、動画のようにそのまま保存されるわけではありません。思い出すときに再構成されます。"
+              },
+
+              {
+                  "query": "brain psychology",
+                  "title": "自分の名前には反応しやすい",
+                  "text": "騒がしい場所でも、自分の名前が聞こえると注意を向けやすくなる現象が知られています。"
+              },
+
+              {
+                  "query": "brain thinking",
+                  "title": "マルチタスクは切り替えが多い",
+                  "text": "人間は複数のことを同時にしているように感じても、実際には注意を素早く切り替えている場合があります。"
+              },
+
+              {
+                  "query": "sleep bed",
+                  "title": "睡眠中も脳は働いている",
+                  "text": "眠っている間も脳が完全に停止するわけではありません。睡眠中にもさまざまな活動が続いています。"
+              },
+
+              {
+                  "query": "music headphones",
+                  "title": "音楽は記憶を呼び起こす",
+                  "text": "音楽は過去の出来事や感情と結びつき、昔の記憶を思い出すきっかけになることがあります。"
+              },
+
+              {
+                  "query": "smell perfume",
+                  "title": "香りは記憶と結びつきやすい",
+                  "text": "香りは記憶や感情と強く結びつくことがあります。昔の香りで突然記憶がよみがえることがあるのはそのためです。"
+              },
+
+              {
+                  "query": "banana",
+                  "title": "バナナは植物学上ベリー",
+                  "text": "植物学上では、バナナはベリーに分類されます。普段のイメージとはかなり違います。"
+              },
+
+              {
+                  "query": "strawberry",
+                  "title": "イチゴは植物学上のベリーではない",
+                  "text": "イチゴは普段ベリーと呼ばれますが、植物学上の分類では一般的なベリーとは異なります。"
+              },
+
+              {
+                  "query": "popcorn",
+                  "title": "ポップコーンが爆発する理由",
+                  "text": "ポップコーンの粒の中には水分があります。加熱すると水蒸気になり、圧力で粒が弾けます。"
+              },
+
+              {
+                  "query": "bread bakery",
+                  "title": "パンが古くなる科学",
+                  "text": "パンが時間とともに硬くなるのは、単純に水分がなくなるだけではありません。デンプンの変化も関係しています。"
+              },
+
+              {
+                  "query": "ice water",
+                  "title": "氷は水に浮く",
+                  "text": "氷は液体の水より密度が低いため、水に浮きます。これは水が持つ珍しい性質の一つです。"
+              },
+
+              {
+                  "query": "lightning storm",
+                  "title": "雷は太陽表面より高温になることがある",
+                  "text": "雷の放電が通る空気は、瞬間的に太陽表面より高い温度になることがあります。"
+              },
+
+              {
+                  "query": "rainbow sky",
+                  "title": "虹は条件次第で円に見える",
+                  "text": "虹は条件がそろうと円形に近い姿として見えることがあります。地上では一部しか見えないことが多いんです。"
+              },
+
+              {
+                  "query": "sky blue",
+                  "title": "空が青く見える理由",
+                  "text": "空が青く見えるのは、太陽光が大気中で散乱するためです。青い光は特に散乱されやすい性質があります。"
+              },
+
+              {
+                  "query": "moon space",
+                  "title": "月の光は自分で作っていない",
+                  "text": "夜空で輝いて見える月の光は、月自身が作った光ではありません。太陽の光を反射しています。"
+              },
+
+              {
+                  "query": "sun earth space",
+                  "title": "太陽の光が地球に届くまで",
+                  "text": "太陽から地球まで光が届くには、およそ8分20秒かかります。今見ている太陽は少し前の姿です。"
+              },
+
+              {
+                  "query": "venus planet",
+                  "title": "金星は1日が1年より長い",
+                  "text": "金星では、自転にかかる時間が公転周期より長いという不思議な特徴があります。"
+              },
+
+              {
+                  "query": "mars planet",
+                  "title": "火星では青い夕焼けが見える",
+                  "text": "火星の夕焼けは、地球とは違って青っぽく見えることがあります。大気中の細かなちりが関係しています。"
+              },
+
+              {
+                  "query": "saturn planet",
+                  "title": "土星は水より平均密度が低い",
+                  "text": "土星の平均密度は水より低いです。もちろん実際に巨大な水槽へ浮かべることはできません。"
+              },
+
+              {
+                  "query": "airplane window",
+                  "title": "飛行機の窓には小さな穴がある",
+                  "text": "飛行機の窓にある小さな穴は、窓の層の間の圧力差を調整する役割があります。"
+              }
+
+          ]
+
+          # =====================================================
+          # 100種類の導入
+          # 10 × 10
+          # =====================================================
+
+          hook_a = [
+              "実は、",
+              "意外ですが、",
+              "知っていましたか？",
+              "これ、意外と知られていません。",
+              "ここで一つ、面白い話です。",
+              "身近な話ですが、",
+              "一見普通ですが、",
+              "思わず誰かに話したくなるのが、",
+              "実は私たちの身近に、",
+              "たった15秒ですが、"
+          ]
+
+          hook_b = [
+              "こんな事実があります。",
+              "ちゃんと理由があります。",
+              "科学で説明できます。",
+              "意外な仕組みがあります。",
+              "面白い秘密があります。",
+              "知られざる特徴があります。",
+              "ちょっと不思議な現象があります。",
+              "知ると見方が変わります。",
+              "意外な事実が隠れています。",
+              "答えを知ると納得します。"
+          ]
+
+          hooks = [
+              a + b
+              for a in hook_a
+              for b in hook_b
+          ]
+
+          # =====================================================
+          # 100種類の締め
+          # 10 × 10
+          # =====================================================
+
+          end_a = [
+              "知っておくと",
+              "覚えておくと",
+              "次に見たときは",
+              "誰かに話すと",
+              "こういう話を知ると",
+              "身近な世界を見ると",
+              "次にこの話題が出たら",
+              "今日の雑学として",
+              "こういう小さな発見が",
+              "世界はこうして見ると"
+          ]
+
+          end_b = [
+              "ちょっと得した気分です。",
+              "思わず話したくなります。",
+              "少し見え方が変わります。",
+              "きっと思い出せます。",
+              "意外と面白いですよね。",
+              "また一つ知識が増えました。",
+              "ちょっとだけ楽しくなります。",
+              "話のネタになります。",
+              "不思議に感じるはずです。",
+              "まだまだ奥深いんです。"
+          ]
+
+          endings = [
+              a + "、" + b
+              for a in end_a
+              for b in end_b
+          ]
+
+          # =====================================================
+          # 300,000通り
+          #
+          # 30 facts
+          # × 100 hooks
+          # × 100 endings
+          # = 300,000
+          #
+          # seedを混ぜて順番に消化
+          # =====================================================
+
+          FACT_COUNT = len(facts)
+          HOOK_COUNT = len(hooks)
+          END_COUNT = len(endings)
+
+          TOTAL = (
+              FACT_COUNT
+              * HOOK_COUNT
+              * END_COUNT
+          )
+
+          # mixed-radix
+          #
+          # これにより300,000組を一周するまで
+          # 同じ組み合わせが基本的に再登場しません。
+
+          fact_index = seed % FACT_COUNT
+
+          hook_index = (
+              seed // FACT_COUNT
+          ) % HOOK_COUNT
+
+          ending_index = (
+              seed // (FACT_COUNT * HOOK_COUNT)
+          ) % END_COUNT
+
+          fact = facts[fact_index]
+
+          hook = hooks[hook_index]
+
+          ending = endings[ending_index]
+
+          # =====================================================
+          # 台本
+          # =====================================================
+
+          script = (
+              hook
+              + "\n"
+              + fact["text"]
+              + "\n"
+              + ending
+          )
+
+          # =====================================================
+          # 保存
+          # =====================================================
+
+          with open(
+              "script.txt",
+              "w",
+              encoding="utf-8"
+          ) as f:
+
+              f.write(script)
+
+          with open(
+              "category.txt",
+              "w",
+              encoding="utf-8"
+          ) as f:
+
+              f.write(fact["title"])
+
+          with open(
+              "pexels_query.txt",
+              "w",
+              encoding="utf-8"
+          ) as f:
+
+              f.write(fact["query"])
+
+          with open(
+              "video_title.txt",
+              "w",
+              encoding="utf-8"
+          ) as f:
+
+              f.write(
+                  fact["title"]
+                  + " #Shorts"
+              )
+
+          # =====================================================
+          # ログ
+          # =====================================================
+
+          print("")
+          print("========================================")
+          print("300,000 PATTERN ENGINE")
+          print("========================================")
+
+          print(
+              "Facts:",
+              FACT_COUNT
+          )
+
+          print(
+              "Hooks:",
+              HOOK_COUNT
+          )
+
+          print(
+              "Endings:",
+              END_COUNT
+          )
+
+          print(
+              "TOTAL:",
+              TOTAL
+          )
+
+          print(
+              "Seed:",
+              seed
+          )
+
+          print(
+              "Fact index:",
+              fact_index
+          )
+
+          print(
+              "Hook index:",
+              hook_index
+          )
+
+          print(
+              "Ending index:",
+              ending_index
+          )
+
+          print("")
+          print("TITLE:")
+          print(fact["title"])
+
+          print("")
+          print("SCRIPT:")
+          print(script)
+
+          print("========================================")
+
+          PY
+
+          QUERY=$(cat pexels_query.txt)
+
+          VIDEO_TITLE=$(cat video_title.txt)
 
           echo "QUERY=$QUERY" >> "$GITHUB_ENV"
 
-          echo "SEED=$SEED"
-          echo "DURATION=$DURATION"
-          echo "QUERY=$QUERY"
+          echo "VIDEO_TITLE=$VIDEO_TITLE" >> "$GITHUB_ENV"
 
-      - name: Search Pexels video
+      # ==========================================
+      # 5. Pexels映像
+      # ==========================================
+      - name: Download Pexels video
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: |
-          curl -L --fail \
+
+          set -e
+
+          ENCODED_QUERY=$(python - <<PY
+          import urllib.parse
+          print(
+              urllib.parse.quote(
+                  """$QUERY"""
+              )
+          )
+          PY
+          )
+
+          curl \
+            --fail \
+            -L \
             -H "Authorization: $PEXELS_API_KEY" \
-            "https://api.pexels.com/videos/search?query=$(printf '%s' "$QUERY" | sed 's/ /%20/g')&orientation=portrait&size=medium&per_page=20" \
+            "https://api.pexels.com/videos/search?query=${ENCODED_QUERY}&orientation=portrait&size=medium&per_page=20" \
             -o pexels.json
 
           COUNT=$(jq '.videos | length' pexels.json)
 
+          echo "Pexels videos: $COUNT"
+
+          if [ "$COUNT" -eq 0 ]; then
+
+            echo "No portrait video found."
+            echo "Trying fallback..."
+
+            curl \
+              --fail \
+              -L \
+              -H "Authorization: $PEXELS_API_KEY" \
+              "https://api.pexels.com/videos/search?query=people&orientation=portrait&size=medium&per_page=20" \
+              -o pexels.json
+
+            COUNT=$(jq '.videos | length' pexels.json)
+
+          fi
+
           test "$COUNT" -gt 0
 
-          VIDEO_INDEX=$((SEED % COUNT))
+          INDEX=$((SEED % COUNT))
 
-          VIDEO_URL=$(jq -r --argjson index "$VIDEO_INDEX" '
+          VIDEO_URL=$(jq -r \
+            --argjson index "$INDEX" \
+            '
             .videos[$index].video_files
-            | map(select(.file_type=="video/mp4"))
+            | map(
+                select(
+                  .file_type=="video/mp4"
+                )
+              )
             | sort_by(.width)
             | reverse
             | .[0].link
-          ' pexels.json)
+            ' \
+            pexels.json
+          )
 
           test -n "$VIDEO_URL"
-          test "$VIDEO_URL" != "null"
 
-          curl -L --fail "$VIDEO_URL" -o source.mp4
+          curl \
+            --fail \
+            -L \
+            "$VIDEO_URL" \
+            -o source.mp4
 
           test -s source.mp4
 
-          ffprobe -v error source.mp4
+          echo "Pexels video downloaded."
 
-      - name: Create script
+      # ==========================================
+      # 6. ナレーション
+      # ==========================================
+      - name: Generate narration
         run: |
-          python - <<'PY'
-          import os
 
-          seed = int(os.environ["SEED"])
-          duration = int(os.environ["DURATION"])
-
-          openings = [
-              "もし今、何もやる気が出ないなら、この動画だけ見てください。",
-              "実は、頑張っている人ほど気づいていないことがあります。",
-              "最近、心から笑えていますか。",
-              "誰にも言えないけど、しんどいと思っていませんか。",
-              "何もしたくない日がある人へ。",
-              "周りは前に進んでいるのに、自分だけ止まっている気がする。",
-              "頑張っているのに、なぜか報われない。そんな日があります。",
-              "夜になると急に不安になる人へ。",
-              "自分だけ弱いと思っていませんか。",
-              "今日、何もできなかったと思っているあなたへ。",
-              "本当は疲れているのに、無理して笑っていませんか。",
-              "誰かの言葉に傷ついたあなたへ。",
-              "人生がうまくいかないと感じるときがあります。",
-              "忘れられない失敗を、何度も思い出してしまう人へ。",
-              "大丈夫なふりをしている人へ。",
-              "もしかすると、あなたに必要なのは努力じゃないかもしれません。",
-              "自分を責めることが癖になっていませんか。",
-              "朝起きるだけで疲れている。そんな日もあります。",
-              "人と比べて落ち込んでしまうあなたへ。",
-              "今日は少しだけ、頑張るのをやめてみませんか。"
-          ]
-
-          middles = [
-              "それは怠けているからではなく、心が休みたがっているサインかもしれません。ずっと同じ力で走り続けられる人はいません。頑張る時間があるなら、休む時間があってもいいんです。今日は少しだけ、自分に優しくしてみてください。",
-              "他人の人生と自分の人生を比べなくても大丈夫です。SNSでは誰かの成功ばかりが目に入ります。でも、その人にも見えない苦しさがあります。あなたにはあなたの時間があります。焦って誰かと同じ速さになる必要はありません。",
-              "今日できなかったことばかり考えてしまうかもしれません。でも、今日ここまで耐えたことも、ちゃんと一つの頑張りです。何もできない日があってもいいんです。明日になったら、また小さなことから始めればいい。",
-              "つらいときは、全部を一人で抱えなくても大丈夫です。誰かに話すだけで、答えが見つからなくても心が少し軽くなることがあります。助けを求めることは弱さではありません。自分を守るための大切な行動です。",
-              "失敗したからといって、あなた自身が失敗した人になるわけではありません。過去の自分も、そのときできることを精一杯やっていました。だから、いつまでも自分を責め続けなくていいんです。少しずつ前を向けば十分です。",
-              "完璧じゃなくても大丈夫です。誰かの期待通りに生きる必要もありません。うまくいかない日があるからこそ、うまくいった日の嬉しさにも気づけます。今の自分を否定する前に、まずはそのまま受け止めてみてください。",
-              "心が疲れているときは、普通にできていたことさえ難しくなることがあります。それを自分の弱さだと思わなくて大丈夫です。今できることを一つだけやってみる。それだけでも十分な一日があります。",
-              "何も変わらないように見える日にも、時間は少しずつ進んでいます。すぐに答えを出さなくてもいいんです。立ち止まっても、遠回りしても大丈夫です。自分の歩幅で進めば、それでいいんです。",
-              "あなたの価値は、仕事ができるかどうかや、誰かに認められるかどうかだけでは決まりません。何も成し遂げられないと思う日にも、あなた自身の価値はなくなりません。自分に向ける言葉を、少しだけ優しくしてみてください。",
-              "元気になれない自分を、無理に元気にしなくても大丈夫です。つらい気持ちをすぐに消そうとしなくてもいいんです。今日は今日を乗り越える。それだけを目標にしてもいい。小さな一歩は、思っている以上に大きな一歩です。",
-              "過去のことを何度も思い出してしまう夜があります。でも、過去の出来事があなたの未来まで決めるわけではありません。これから先に、まだ経験していない日があります。今日だけを見て、未来まで諦めなくて大丈夫です。",
-              "誰かと同じ速さで進む必要はありません。早く結果が出る人もいれば、時間をかけて進む人もいます。大切なのは、誰かに勝つことではなく、自分自身を見失わないことです。ゆっくりでも、自分の道を歩いていけばいいんです。",
-              "誰にも褒められない努力もあります。誰にも気づかれない頑張りもあります。でも、それが無意味になるわけではありません。見えないところで積み重ねたものは、ちゃんとあなたの中に残っています。",
-              "つらい気持ちは、無理に消そうとしなくても大丈夫です。悲しいなら悲しくていい。疲れたなら休んでいい。自分の感情を否定するより、まずは今そう感じている自分を受け止めてあげてください。",
-              "人生には、自分ではどうにもできない時期もあります。そんなときに無理やり前へ進もうとすると、もっと疲れてしまうことがあります。立ち止まることも人生の一部です。休んだあとに、また歩き出せばいいんです。",
-              "焦って答えを探さなくても大丈夫です。人生にはすぐに答えが出ないこともあります。今は分からなくても、時間が経ってから意味に気づくことがあります。だから今日は、今日できることだけで十分です。",
-              "自分を責めることが癖になっている人は、できなかったことばかり数えてしまいます。でも本当は、できたこともたくさんあります。朝起きたこと。ここまで来たこと。それだけでも、今日を頑張った証拠です。",
-              "誰かに理解されなくても、あなたが感じた苦しさは本物です。無理に笑わなくてもいいし、大丈夫なふりをしなくてもいいんです。あなた自身が少しでも楽になれる場所を、大切にしてください。",
-              "明日のことを考えるだけで苦しくなる夜があります。そんなときは、一週間先のことまで考えなくても大丈夫です。まずは今日を終えることだけ考えてください。そして、できるならゆっくり眠ってください。",
-              "本当に強い人は、ずっと頑張り続ける人ではありません。自分が疲れていることを認めて、休むことができる人でもあります。頑張ることだけが正解ではありません。自分を守ることも、立派な選択です。",
-              "誰かの期待通りに生きなくても大丈夫です。人生は一度きりだからこそ、自分がどう生きたいかを少しずつ考えていいんです。すぐに答えが出なくても大丈夫。自分のペースで探していけばいいんです。"
-          ]
-
-          endings = [
-              "だから今日は、自分に「よくやった」と言ってあげてください。",
-              "今日をここまで生きた。それだけでも十分です。",
-              "焦らなくて大丈夫です。あなたにはあなたの時間があります。",
-              "何もできない日があっても、あなたの価値は変わりません。",
-              "明日は今日より少しだけ、心が軽くなりますように。",
-              "あなたの物語は、まだ終わっていません。",
-              "今日は、自分にも少し優しくしてあげてください。",
-              "つらいときは、誰かに話してください。一人で抱えなくても大丈夫です。",
-              "また明日、ここから始めればいいんです。",
-              "今日も一日、本当にお疲れさまでした。",
-              "休むことは、諦めることではありません。",
-              "あなたには、あなたの歩幅があります。",
-              "今は無理をしなくても大丈夫です。",
-              "小さな一歩でも、それは前進です。",
-              "今日を乗り越えた。それだけで十分です。",
-              "明日の自分に、今日の自分を責めさせなくていいんです。",
-              "自分を大切にすることも、立派な選択です。",
-              "すぐに答えが出なくても大丈夫です。",
-              "ゆっくりでいいんです。あなたの人生だから。",
-              "今夜は少しだけ、心を休ませてあげてください。"
-          ]
-
-          short_lines = [
-              "無理して頑張らなくても大丈夫です。今日は休んでいいんです。",
-              "今日何もできなかったとしても、あなたの価値は変わりません。",
-              "人と比べなくて大丈夫。あなたにはあなたの時間があります。",
-              "疲れたら休んでいい。休むことも前に進むための一歩です。",
-              "つらいときは、一人で全部抱えなくても大丈夫です。",
-              "頑張れない日は、頑張らなくていい日なのかもしれません。",
-              "明日のことまで考えなくていい。まずは今日を終えれば十分です。",
-              "自分を責めるより、今日ここまで来た自分を認めてあげてください。",
-              "人生は遠回りしても大丈夫。自分の歩幅で進めばいいんです。",
-              "あなたの価値は、誰かと比べて決まるものではありません。"
-          ]
-
-          opening = openings[seed % len(openings)]
-          middle = middles[(seed // len(openings)) % len(middles)]
-          ending = endings[(seed // len(openings) // len(middles)) % len(endings)]
-
-          if duration == 15:
-              line = short_lines[(seed // 7) % len(short_lines)]
-              text = f"{opening} {line} {ending}"
-          else:
-              text = f"{opening} {middle} {ending}"
-
-          with open("script.txt", "w", encoding="utf-8") as f:
-              f.write(text)
-
-          print("Duration:", duration)
-          print("Script:")
-          print(text)
-          PY
-
-      - name: Generate Japanese voice
-        run: |
-          if [ "$DURATION" -eq 15 ]; then
-            RATE="-8%"
-          else
-            RATE="-5%"
-          fi
+          set -e
 
           edge-tts \
             --voice ja-JP-NanamiNeural \
-            --rate="$RATE" \
+            --rate="+8%" \
             --file script.txt \
             --write-media voice.mp3
 
-          ffprobe -v error \
+          echo "Voice generated."
+
+          ffprobe \
+            -v error \
             -show_entries format=duration \
             -of default=noprint_wrappers=1:nokey=1 \
             voice.mp3
 
-      - name: Create subtitles synced to voice
+      # ==========================================
+      # 7. 音声を15秒以内へ調整
+      # ==========================================
+      - name: Fit narration
         run: |
+
+          set -e
+
+          DURATION=$(ffprobe \
+            -v error \
+            -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 \
+            voice.mp3
+          )
+
+          echo "Narration: $DURATION seconds"
+
+          if awk "BEGIN {exit !($DURATION > 14.5)}"; then
+
+            SPEED=$(python - <<PY
+          d = float("$DURATION")
+          speed = d / 14.5
+
+          if speed < 1:
+              speed = 1
+
+          if speed > 1.95:
+              speed = 1.95
+
+          print(f"{speed:.6f}")
+          PY
+            )
+
+            echo "Speed: $SPEED"
+
+            ffmpeg \
+              -y \
+              -i voice.mp3 \
+              -filter:a "atempo=$SPEED" \
+              voice2.mp3
+
+            mv voice2.mp3 voice.mp3
+
+          fi
+
+      # ==========================================
+      # 8. 字幕
+      # ==========================================
+      - name: Create subtitles
+        run: |
+
+          set -e
+
           python - <<'PY'
+
           import subprocess
-          import re
 
-          with open("script.txt", encoding="utf-8") as f:
-              text = f.read().strip()
+          with open(
+              "script.txt",
+              encoding="utf-8"
+          ) as f:
 
-          # 音声の実際の長さを取得
+              lines = [
+                  x.strip()
+                  for x in f.read().splitlines()
+                  if x.strip()
+              ]
+
           result = subprocess.run(
               [
                   "ffprobe",
-                  "-v", "error",
-                  "-show_entries", "format=duration",
-                  "-of", "default=noprint_wrappers=1:nokey=1",
+                  "-v",
+                  "error",
+                  "-show_entries",
+                  "format=duration",
+                  "-of",
+                  "default=noprint_wrappers=1:nokey=1",
                   "voice.mp3"
               ],
               capture_output=True,
@@ -256,170 +682,197 @@ jobs:
               check=True
           )
 
-          audio_duration = float(result.stdout.strip())
+          duration = float(
+              result.stdout.strip()
+          )
 
-          # 句点などで文章を分割
-          chunks = re.split(r'(?<=[。！？])', text)
-          chunks = [x.strip() for x in chunks if x.strip()]
+          duration = min(
+              duration,
+              14.5
+          )
 
-          # 各文章の文字数に応じて時間を配分
-          total_chars = sum(len(x) for x in chunks)
+          total_chars = sum(
+              len(x)
+              for x in lines
+          )
 
-          def timestamp(sec):
-              ms = int(sec * 1000)
+          def ts(seconds):
+
+              ms = int(seconds * 1000)
 
               h = ms // 3600000
+
               ms %= 3600000
 
               m = ms // 60000
+
               ms %= 60000
 
               s = ms // 1000
+
               ms %= 1000
 
-              return f"{h:02}:{m:02}:{s:02},{ms:03}"
+              return (
+                  f"{h:02}:"
+                  f"{m:02}:"
+                  f"{s:02},"
+                  f"{ms:03}"
+              )
 
-          with open("captions.srt", "w", encoding="utf-8") as f:
-              current = 0.0
+          current = 0
 
-              for i, chunk in enumerate(chunks, 1):
-                  portion = len(chunk) / max(total_chars, 1)
-                  length = audio_duration * portion
+          with open(
+              "captions.srt",
+              "w",
+              encoding="utf-8"
+          ) as f:
+
+              for i, line in enumerate(
+                  lines,
+                  1
+              ):
+
+                  ratio = (
+                      len(line)
+                      /
+                      max(total_chars, 1)
+                  )
+
+                  segment = (
+                      duration
+                      * ratio
+                  )
 
                   start = current
-                  end = current + length
 
-                  f.write(f"{i}\n")
-                  f.write(
-                      f"{timestamp(start)} --> "
-                      f"{timestamp(end)}\n"
+                  end = min(
+                      current + segment,
+                      14.5
                   )
-                  f.write(chunk + "\n\n")
+
+                  f.write(
+                      f"{i}\n"
+                  )
+
+                  f.write(
+                      f"{ts(start)} --> "
+                      f"{ts(end)}\n"
+                  )
+
+                  f.write(
+                      line
+                  )
+
+                  f.write("\n\n")
 
                   current = end
 
-          print("Audio duration:", audio_duration)
-          print("Subtitle chunks:", len(chunks))
           PY
 
-          cat captions.srt
-
-      - name: Render video
+      # ==========================================
+      # 9. 動画生成
+      # ==========================================
+      - name: Render 15 second Short
         run: |
-          ffmpeg -y \
+
+          set -e
+
+          ffmpeg \
+            -y \
             -stream_loop -1 \
             -i source.mp4 \
             -i voice.mp3 \
-            -t "$DURATION" \
-            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=captions.srt:force_style='FontName=Noto Sans CJK JP,FontSize=24,Alignment=2,MarginV=180,Outline=2'" \
+            -t 15 \
+            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=captions.srt:force_style='FontName=Noto Sans CJK JP,FontSize=28,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=230'" \
             -map 0:v:0 \
             -map 1:a:0 \
-            -af "apad=pad_dur=$DURATION,atrim=0:$DURATION" \
             -c:v libx264 \
             -preset veryfast \
             -crf 23 \
+            -pix_fmt yuv420p \
             -c:a aac \
             -b:a 128k \
-            -t "$DURATION" \
+            -ar 44100 \
+            -af "apad=pad_dur=15,atrim=0:15" \
+            -t 15 \
             short.mp4
 
-      - name: Check output
+          test -s short.mp4
+
+      # ==========================================
+      # 10. 動画チェック
+      # ==========================================
+      - name: Check video
         run: |
+
+          set -e
+
+          echo "================================"
+          echo "FINAL VIDEO"
+          echo "================================"
+
           ls -lh short.mp4
 
-          DURATION_CHECK=$(ffprobe -v error \
+          ffprobe \
+            -v error \
             -show_entries format=duration \
-            -of default=noprint_wrappers=1:nokey=1 short.mp4)
+            -of default=noprint_wrappers=1:nokey=1 \
+            short.mp4
 
-          echo "Final video duration: $DURATION_CHECK seconds"
+          ffprobe \
+            -v error \
+            -show_streams \
+            short.mp4
 
-          ffprobe -v error short.mp4
-
+      # ==========================================
+      # 11. YouTube投稿
+      # ==========================================
       - name: Upload to YouTube
         env:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
-          cat > upload_youtube.py <<'PY'
+
+          set -e
+
+          cat > upload.py <<'PY'
+
           import os
 
           from google.oauth2.credentials import Credentials
+
           from googleapiclient.discovery import build
+
           from googleapiclient.http import MediaFileUpload
 
-          seed = int(os.environ.get("SEED", "0"))
-          duration = int(os.environ.get("DURATION", "60"))
-
-          titles_60 = [
-              "今、疲れているあなたへ #Shorts",
-              "頑張りすぎているあなたへ #Shorts",
-              "今日、何もできなかったあなたへ #Shorts",
-              "心が疲れた夜に見てほしい言葉 #Shorts",
-              "もう頑張れないと思ったあなたへ #Shorts",
-              "自分を責めてしまう人へ #Shorts",
-              "人生に疲れたときに見てほしい #Shorts",
-              "しんどいとき、この言葉を思い出して #Shorts",
-              "大丈夫なふりをしているあなたへ #Shorts",
-              "今日を頑張ったあなたへ #Shorts",
-              "何もしたくない日に見てほしい #Shorts",
-              "夜、不安になったあなたへ #Shorts",
-              "自分だけ遅れている気がする人へ #Shorts",
-              "心が限界になる前に見てほしい #Shorts",
-              "疲れた心に届けたい言葉 #Shorts",
-              "あなたは一人じゃない #Shorts",
-              "うまくいかない日に思い出して #Shorts",
-              "自分の人生に迷ったときへ #Shorts",
-              "今日もよく頑張りました #Shorts",
-              "少し疲れたあなたへ #Shorts"
-          ]
-
-          titles_15 = [
-              "これだけは覚えておいて #Shorts",
-              "疲れたときに思い出して #Shorts",
-              "頑張れない日はこれを見て #Shorts",
-              "自分を責めているあなたへ #Shorts",
-              "15秒だけ聞いてください #Shorts",
-              "しんどいあなたへ #Shorts",
-              "今日を頑張ったあなたへ #Shorts",
-              "心が疲れたときに #Shorts",
-              "大丈夫。焦らなくていい #Shorts",
-              "あなたのペースでいい #Shorts",
-              "無理して笑わなくていい #Shorts",
-              "もう少しだけ休もう #Shorts",
-              "今日何もできなかった人へ #Shorts",
-              "人と比べてしまうあなたへ #Shorts",
-              "夜に不安になったら #Shorts",
-              "一人で抱えないで #Shorts",
-              "明日でいいこともある #Shorts",
-              "休むことも大切です #Shorts",
-              "あなたには価値がある #Shorts",
-              "今日もお疲れさまでした #Shorts"
-          ]
-
-          descriptions = [
-              "疲れたときに思い出してほしい言葉です。無理せず自分のペースで。 #Shorts",
-              "今日を頑張ったあなたへ。少しでも心が軽くなりますように。 #Shorts",
-              "つらいときは一人で抱えなくても大丈夫です。 #Shorts",
-              "自分を責めすぎないでください。あなたのペースで大丈夫です。 #Shorts",
-              "今日も一日お疲れさまでした。明日はまた小さな一歩から。 #Shorts"
-          ]
-
-          if duration == 15:
-              title = titles_15[seed % len(titles_15)]
-          else:
-              title = titles_60[seed % len(titles_60)]
-
-          description = descriptions[seed % len(descriptions)]
 
           credentials = Credentials(
+
               token=None,
-              refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],
-              token_uri="https://oauth2.googleapis.com/token",
-              client_id=os.environ["YOUTUBE_CLIENT_ID"],
-              client_secret=os.environ["YOUTUBE_CLIENT_SECRET"],
-              scopes=["https://www.googleapis.com/auth/youtube.upload"],
+
+              refresh_token=os.environ[
+                  "YOUTUBE_REFRESH_TOKEN"
+              ],
+
+              token_uri=(
+                  "https://oauth2.googleapis.com/token"
+              ),
+
+              client_id=os.environ[
+                  "YOUTUBE_CLIENT_ID"
+              ],
+
+              client_secret=os.environ[
+                  "YOUTUBE_CLIENT_SECRET"
+              ],
+
+              scopes=[
+                  "https://www.googleapis.com/auth/youtube.upload"
+              ]
+
           )
+
 
           youtube = build(
               "youtube",
@@ -427,43 +880,107 @@ jobs:
               credentials=credentials
           )
 
+
+          title = os.environ.get(
+              "VIDEO_TITLE",
+              "知らないと驚く雑学 #Shorts"
+          )
+
+
+          description = (
+              "15秒で楽しめる雑学ショートです。\n"
+              "知っていると誰かに話したくなる豆知識を紹介します。\n"
+              "\n"
+              "#Shorts #雑学 #豆知識"
+          )
+
+
           body = {
+
               "snippet": {
+
                   "title": title,
+
                   "description": description,
+
                   "categoryId": "22"
+
               },
+
               "status": {
+
                   "privacyStatus": "public",
+
                   "selfDeclaredMadeForKids": False
+
               }
+
           }
 
+
           media = MediaFileUpload(
+
               "short.mp4",
+
               mimetype="video/mp4",
+
               resumable=True
+
           )
 
+
           request = youtube.videos().insert(
+
               part="snippet,status",
+
               body=body,
+
               media_body=media
+
           )
+
 
           response = request.execute()
 
-          print("YouTube upload completed!")
-          print("Duration:", duration)
-          print("Title:", title)
-          print("Video ID:", response["id"])
+
+          print("")
+          print("================================")
+          print("YOUTUBE UPLOAD SUCCESS")
+          print("================================")
+
+          print(
+              "VIDEO ID:",
+              response["id"]
+          )
+
+          print(
+              "TITLE:",
+              title
+          )
+
+          print(
+              "URL:",
+              "https://www.youtube.com/watch?v="
+              + response["id"]
+          )
+
+          print("================================")
+
+
           PY
 
-          python upload_youtube.py
+          python upload.py
 
-      - name: Upload video artifact
+      # ==========================================
+      # 12. 完成動画を保存
+      # ==========================================
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
+
         with:
+
           name: youtube-short
+
           path: short.mp4
+
           retention-days: 1
