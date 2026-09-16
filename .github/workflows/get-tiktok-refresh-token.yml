@@ -3,26 +3,28 @@ name: Get TikTok Refresh Token
 on:
   workflow_dispatch:
 
-permissions:
-  actions: write
-
 jobs:
   get-refresh-token:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Get TikTok refresh token and save it
+      - name: Get TikTok Refresh Token
         env:
           TIKTOK_AUTH_CODE: ${{ secrets.TIKTOK_AUTH_CODE_TEMP }}
           CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
           CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
           REDIRECT_URI: ${{ secrets.TIKTOK_REDIRECT_URI }}
-          GH_TOKEN: ${{ github.token }}
+          GH_ADMIN_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
         run: |
           set -e
 
           if [ -z "$TIKTOK_AUTH_CODE" ]; then
             echo "TIKTOK_AUTH_CODE_TEMP がありません"
+            exit 1
+          fi
+
+          if [ -z "$GH_ADMIN_TOKEN" ]; then
+            echo "GH_ADMIN_TOKEN がありません"
             exit 1
           fi
 
@@ -47,6 +49,9 @@ jobs:
           echo "::add-mask::$REFRESH_TOKEN"
 
           echo "$REFRESH_TOKEN" | gh secret set TIKTOK_REFRESH_TOKEN \
-            --repo "${{ github.repository }}"
+            --repo "${{ github.repository }}" \
+            --app actions \
+            --hostname github.com \
+            --insecure
 
           echo "TIKTOK_REFRESH_TOKEN の保存に成功しました"
