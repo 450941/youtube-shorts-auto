@@ -1,4 +1,4 @@
-name: Generate Long Trivia Video
+name: Generate Trivia Video
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
 
     steps:
 
@@ -40,7 +40,7 @@ jobs:
 
           python -m edge_tts \
             --voice ja-JP-NanamiNeural \
-            --rate=-5% \
+            --rate=5% \
             --file test_tts.txt \
             --write-media test_tts.mp3
 
@@ -60,8 +60,8 @@ jobs:
 
           echo "雑学件数: $COUNT"
 
-          if [ "$COUNT" -lt 120 ]; then
-            echo "ERROR: 120件未満です"
+          if [ "$COUNT" -lt 30 ]; then
+            echo "ERROR: 30件未満です"
             exit 1
           fi
 
@@ -76,7 +76,7 @@ jobs:
 
           random.shuffle(data)
 
-          selected = data[:120]
+          selected = data[:30]
 
           for i, item in enumerate(selected, 1):
               item["video_index"] = i
@@ -433,6 +433,28 @@ jobs:
 
               return candidates[0][1]
 
+          hooks = [
+              "これ、知ってたらちょっと得した気分になる話です。",
+              "ほとんどの人が知らない、意外な事実です。",
+              "ここで一つ、かなり意外な話。",
+              "これを知ると、いつもの景色が少し違って見えます。",
+              "一見普通ですが、実はとんでもない秘密があります。",
+              "思わず誰かに話したくなる雑学です。",
+              "知った瞬間に『え？』となる話です。",
+              "実はこれ、かなり不思議なんです。"
+          ]
+
+          endings = [
+              "知ってしまうと、もう気になってしまいますよね。",
+              "こういう雑学、意外と忘れられません。",
+              "身近なものほど、知らない秘密が隠れています。",
+              "次にこれを見たとき、きっと思い出すはずです。",
+              "こう考えると、ちょっと面白くありませんか？",
+              "まだまだ知らないことはたくさんあります。",
+              "そして次の雑学も、かなり意外です。",
+              "では、次の雑学です。"
+          ]
+
           for index, item in enumerate(
               data,
               1
@@ -452,24 +474,29 @@ jobs:
                   )
               ).lower().strip()
 
-              # narration text
+              hook = hooks[
+                  (index - 1) % len(hooks)
+              ]
+
+              ending = endings[
+                  (index - 1) % len(endings)
+              ]
+
               script = (
-                  "これ、知っていましたか？ "
+                  hook
+                  + " "
                   + fact
                   + "。 "
-                  + "でも、ここからが面白いところです。 "
-                  + "一見すると普通に思えますが、実はかなり意外です。 "
-                  + "こうした身近な事実を知ると、普段見ているものが少し違って見えてきます。"
+                  + ending
               )
 
-              # 長すぎる場合は短縮
-              if len(script) > 180:
+              if len(script) > 150:
+
                   script = (
-                      "これ、知っていましたか？ "
+                      hook
+                      + " "
                       + fact
-                      + "。 "
-                      + "でも、ここからが面白いところです。 "
-                      + "実は、この事実には意外なポイントがあります。"
+                      + "。"
                   )
 
               txt = f"audio/{index}.txt"
@@ -485,7 +512,7 @@ jobs:
               run(
                   f'python -m edge_tts '
                   f'--voice ja-JP-NanamiNeural '
-                  f'--rate=-5% '
+                  f'--rate=5% '
                   f'--file "{txt}" '
                   f'--write-media "{mp3}"'
               )
@@ -522,15 +549,14 @@ jobs:
                   if selected_url:
                       break
 
-              clip = (
-                  f"clips/{index}.mp4"
-              )
+              clip = f"clips/{index}.mp4"
 
               downloaded = False
 
               if selected_url:
 
                   try:
+
                       urllib.request.urlretrieve(
                           selected_url,
                           clip
@@ -568,12 +594,18 @@ jobs:
                   run(
                       f'ffmpeg -y '
                       f'-f lavfi '
-                      f'-i "testsrc2='
+                      f'-i "color=c=black:'
                       f'size=1920x1080:rate=30" '
                       f'-t {audio_duration} '
-                      f'-vf "eq='
-                      f'brightness=-0.05:'
-                      f'saturation=1.2" '
+                      f'-vf "drawtext='
+                      f'fontfile=/usr/share/fonts/'
+                      f'opentype/noto/NotoSansCJK-Regular.ttc:'
+                      f'text='
+                      f'"雑学 {index}":'
+                      f'fontcolor=white:'
+                      f'fontsize=80:'
+                      f'x=(w-text_w)/2:'
+                      f'y=(h-text_h)/2" '
                       f'-c:v libx264 '
                       f'-pix_fmt yuv420p '
                       f'"{clip}"'
@@ -591,7 +623,12 @@ jobs:
                   f'-t {audio_duration} '
                   f'-vf "scale=1920:1080:'
                   f'force_original_aspect_ratio=increase,'
-                  f'crop=1920:1080" '
+                  f'crop=1920:1080,'
+                  f'zoompan='
+                  f'z=1.02:'
+                  f'd=1:'
+                  f's=1920x1080:'
+                  f'fps=30" '
                   f'-map 0:v:0 '
                   f'-map 1:a:0 '
                   f'-c:v libx264 '
@@ -604,7 +641,6 @@ jobs:
                   f'"{segment}"'
               )
 
-              # scriptを保存
               with open(
                   f"subtitles/{index}.txt",
                   "w",
@@ -613,7 +649,7 @@ jobs:
                   f.write(script)
 
               print(
-                  f"{index}/120 完了"
+                  f"{index}/30 完了"
               )
 
               time.sleep(0.2)
@@ -623,9 +659,43 @@ jobs:
           )
           PY
 
+      - name: Create intro
+        run: |
+          cat > intro.txt <<'EOF'
+          この動画、最後まで見ると誰かに話したくなるかもしれません。
+          知っているようで知らない、意外な雑学を30個。
+          それでは、いきましょう。
+          EOF
+
+          python -m edge_tts \
+            --voice ja-JP-NanamiNeural \
+            --rate=8% \
+            --file intro.txt \
+            --write-media intro.mp3
+
+          INTRO_DURATION=$(ffprobe \
+            -v error \
+            -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 \
+            intro.mp3)
+
+          ffmpeg -y \
+            -f lavfi \
+            -i "color=c=black:size=1920x1080:rate=30" \
+            -i intro.mp3 \
+            -t "$INTRO_DURATION" \
+            -vf "drawtext=fontfile=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc:text='最後まで見ると誰かに話したくなる雑学30選':fontcolor=white:fontsize=70:x=(w-text_w)/2:y=(h-text_h)/2" \
+            -c:v libx264 \
+            -pix_fmt yuv420p \
+            -c:a aac \
+            -b:a 128k \
+            intro.mp4
+
       - name: Create concat list
         run: |
           rm -f concat.txt
+
+          echo "file '$PWD/intro.mp4'" >> concat.txt
 
           for file in segments/*.mp4
           do
@@ -680,12 +750,8 @@ jobs:
               ms = int(sec * 1000)
 
               h = ms // 3600000
-              m = (
-                  ms % 3600000
-              ) // 60000
-              s = (
-                  ms % 60000
-              ) // 1000
+              m = (ms % 3600000) // 60000
+              s = (ms % 60000) // 1000
               ms = ms % 1000
 
               return (
@@ -723,9 +789,7 @@ jobs:
                       cut = 21
 
                   chunks.append(
-                      text[
-                          :cut + 1
-                      ].strip()
+                      text[:cut + 1].strip()
                   )
 
                   text = text[
@@ -746,22 +810,64 @@ jobs:
               encoding="utf-8"
           ) as srt:
 
+              intro_duration = get_duration(
+                  "intro.mp3"
+              )
+
+              intro_text = (
+                  "この動画、最後まで見ると誰かに話したくなるかもしれません。"
+                  "知っているようで知らない、意外な雑学を30個。"
+                  "それでは、いきましょう。"
+              )
+
+              intro_chunks = split_text(
+                  intro_text
+              )
+
+              total_chars = sum(
+                  len(x)
+                  for x in intro_chunks
+              )
+
+              offset = 0
+
+              for chunk in intro_chunks:
+
+                  chunk_time = (
+                      intro_duration
+                      * len(chunk)
+                      / total_chars
+                  )
+
+                  srt.write(
+                      f"{subtitle_id}\n"
+                  )
+
+                  srt.write(
+                      f"{timestamp(offset)} --> "
+                      f"{timestamp(offset + chunk_time)}\n"
+                  )
+
+                  srt.write(
+                      chunk + "\n\n"
+                  )
+
+                  subtitle_id += 1
+                  offset += chunk_time
+
+              current = intro_duration
+
               for index in range(
                   1,
                   len(data) + 1
               ):
 
-                  path = (
-                      f"audio/{index}.mp3"
-                  )
-
+                  path = f"audio/{index}.mp3"
                   text_path = (
                       f"subtitles/{index}.txt"
                   )
 
-                  if not os.path.exists(
-                      path
-                  ):
+                  if not os.path.exists(path):
                       continue
 
                   with open(
@@ -770,13 +876,9 @@ jobs:
                   ) as f:
                       text = f.read().strip()
 
-                  d = get_duration(
-                      path
-                  )
+                  d = get_duration(path)
 
-                  chunks = split_text(
-                      text
-                  )
+                  chunks = split_text(text)
 
                   if not chunks:
                       continue
@@ -796,15 +898,8 @@ jobs:
                           / total_chars
                       )
 
-                      start = (
-                          current
-                          + offset
-                      )
-
-                      end = (
-                          start
-                          + chunk_time
-                      )
+                      start = current + offset
+                      end = start + chunk_time
 
                       srt.write(
                           f"{subtitle_id}\n"
@@ -816,19 +911,15 @@ jobs:
                       )
 
                       srt.write(
-                          chunk
-                          + "\n\n"
+                          chunk + "\n\n"
                       )
 
                       subtitle_id += 1
-
                       offset += chunk_time
 
                   current += d
 
-          print(
-              "字幕生成完了"
-          )
+          print("字幕生成完了")
           PY
 
       - name: Render subtitles
@@ -851,18 +942,13 @@ jobs:
           import json
           import random
 
-          with open(
-              "selected_trivia.json",
-              encoding="utf-8"
-          ) as f:
-              data = json.load(f)
-
           title_list = [
-              "最後まで見ると誰かに話したくなる雑学120選",
-              "「え、そうなの？」知った瞬間に驚く雑学120選",
-              "実は知らない人が多い雑学120選",
-              "ほとんどの人が知らない意外な雑学120選",
-              "次々と予想を裏切ってくる雑学120選"
+              "最後まで見ると誰かに話したくなる雑学30選",
+              "「え、そうなの？」知った瞬間に驚く雑学30選",
+              "ほとんどの人が知らない意外な雑学30選",
+              "次々と予想を裏切ってくる雑学30選",
+              "知らないと損する？意外すぎる雑学30選",
+              "友達に話したくなる面白い雑学30選"
           ]
 
           title = random.choice(
@@ -872,12 +958,16 @@ jobs:
           description = (
               "知っているようで知らない。"
               "一見普通に見えるものの裏側には、"
-              "意外な事実が隠れています。\n\n"
+              "意外な事実が隠れています。"
+              "\n\n"
               "今回は、動物、人体、宇宙、科学、"
               "食べ物、自然などから、"
               "思わず誰かに話したくなる雑学を"
-              "テンポよく120個紹介します。\n\n"
-              "#雑学 #豆知識 #トリビア"
+              "テンポよく30個紹介します。"
+              "\n\n"
+              "あなたはいくつ知っていましたか？"
+              "\n\n"
+              "#雑学 #豆知識 #トリビア #面白い雑学"
           )
 
           metadata = {
@@ -890,7 +980,9 @@ jobs:
                   "雑学まとめ",
                   "面白い雑学",
                   "意外な事実",
-                  "知らない雑学"
+                  "知らない雑学",
+                  "暇つぶし",
+                  "面白い話"
               ]
           }
 
@@ -1011,6 +1103,7 @@ jobs:
               status, response = request.next_chunk()
 
               if status:
+
                   print(
                       "アップロード:",
                       int(
@@ -1035,7 +1128,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: long-video-output
+          name: trivia-video-output
           path: |
             long_video.mp4
             thumbnail.jpg
