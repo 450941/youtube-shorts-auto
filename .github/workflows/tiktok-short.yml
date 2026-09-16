@@ -57,11 +57,6 @@ jobs:
 
       # =========================================================
       # 4. Generate 300,000+ combinations
-      #
-      # 30 contents
-      # × 100 hooks
-      # × 100 endings
-      # = 300,000 combinations
       # =========================================================
       - name: Generate 300000+ content patterns
         run: |
@@ -72,10 +67,6 @@ jobs:
 
           seed = int(os.environ["SEED"])
 
-          # -----------------------------------------------------
-          # 30 core contents
-          # -----------------------------------------------------
-
           contents = [
 
               {
@@ -83,175 +74,146 @@ jobs:
                   "query": "person thinking",
                   "text": "AとB、直感で選んで。考える時間は3秒。Aだと思った？それともB？"
               },
-
               {
                   "type": "3択クイズ",
                   "query": "friends talking",
                   "text": "3択から直感で1つ選んで。1、2、3。最初に浮かんだ数字を信じて。"
               },
-
               {
                   "type": "心理ゲーム",
                   "query": "person thinking",
                   "text": "今から心理ゲーム。最初に思い浮かんだ色を覚えて。赤、青、黄色のどれ？"
               },
-
               {
                   "type": "予想ゲーム",
                   "query": "ball game",
                   "text": "このあと何が起きるか予想して。A、B、Cのどれだと思う？"
               },
-
               {
                   "type": "視覚チャレンジ",
                   "query": "optical illusion",
                   "text": "この映像を3秒だけ見て。何か変だと思ったら、もう一度見てみて。"
               },
-
               {
                   "type": "反射チャレンジ",
                   "query": "reaction challenge",
                   "text": "反射神経チャレンジ。画面が変わった瞬間に気づける？まだ。まだ。今！"
               },
-
               {
                   "type": "ミニ謎解き",
                   "query": "puzzle thinking",
                   "text": "これを5秒で考えて。答えは簡単そうで、意外と引っかかる。"
               },
-
               {
                   "type": "記憶チャレンジ",
                   "query": "memory game",
                   "text": "今から3つの言葉を覚えて。りんご、時計、猫。覚えた？"
               },
-
               {
                   "type": "直感チャレンジ",
                   "query": "person choosing",
                   "text": "深く考えずに選んで。左か右。最初に目が行った方を選んで。"
               },
-
               {
                   "type": "コメント参加",
                   "query": "friends talking",
                   "text": "あなたならどっち？朝型ならA、夜型ならB。直感で決めて。"
               },
-
               {
                   "type": "小さな挑戦",
                   "query": "person walking",
                   "text": "今日の小さな挑戦。スマホを10秒だけ置いて、ゆっくり深呼吸してみて。"
               },
-
               {
                   "type": "夜メッセージ",
                   "query": "night city person",
                   "text": "夜になると色々考えすぎるよね。でも今すぐ答えを出さなくても大丈夫。"
               },
-
               {
                   "type": "応援",
                   "query": "sunrise person",
                   "text": "今日は何もできなかったと思っているなら、明日は一つだけやってみよう。"
               },
-
               {
                   "type": "集中チャレンジ",
                   "query": "focused person",
                   "text": "画面の中央を3秒だけ見て。周りを見ないで、中央だけに集中して。"
               },
-
               {
                   "type": "観察チャレンジ",
                   "query": "city walking",
                   "text": "この映像の中で、最初に目に入ったものを覚えて。あなたは何を見つけた？"
               },
-
               {
                   "type": "選択ゲーム",
                   "query": "person choosing",
                   "text": "今の気分で選んで。静かな場所とにぎやかな場所、どっちに行きたい？"
               },
-
               {
                   "type": "タイミングゲーム",
                   "query": "running person",
                   "text": "ちょうどいいタイミングで画面を見られるか挑戦。まだ。まだ。今。"
               },
-
               {
                   "type": "予測チャレンジ",
                   "query": "sports prediction",
                   "text": "次に動く方向を予想して。左、右、それとも中央？決めた？"
               },
-
               {
                   "type": "数字ゲーム",
                   "query": "number game",
                   "text": "1から9までで、最初に浮かんだ数字を覚えて。あとで確認してみて。"
               },
-
               {
                   "type": "色ゲーム",
                   "query": "color background",
                   "text": "今一番気になる色を一つ選んで。赤、青、緑、黄色。直感で。"
               },
-
               {
                   "type": "気分チェック",
                   "query": "person relaxing",
                   "text": "今の気分を一言で表すなら、元気、普通、それとも疲れた？"
               },
-
               {
                   "type": "10秒チャレンジ",
                   "query": "person relaxing",
                   "text": "10秒だけ何も考えない時間を作ってみよう。画面を見ながらゆっくり呼吸して。"
               },
-
               {
                   "type": "勇気チャレンジ",
                   "query": "person mountain",
                   "text": "今日一つだけ先延ばししていることをやってみない？本当に小さなことでいい。"
               },
-
               {
                   "type": "リセット",
                   "query": "sunrise person",
                   "text": "ちょっと疲れたら一回リセット。深呼吸して、肩の力を抜いてみよう。"
               },
-
               {
                   "type": "自分時間",
                   "query": "person nature",
                   "text": "今日は誰かと比べなくていい。昨日の自分より少し楽なら、それで十分。"
               },
-
               {
                   "type": "再スタート",
                   "query": "person walking sunrise",
                   "text": "何回止まっても、また始めればいい。今日できる一番小さな一歩を選ぼう。"
               },
-
               {
                   "type": "夜の安心",
                   "query": "night person",
                   "text": "眠る前に今日のことを全部解決しなくていい。続きは明日の自分に任せよう。"
               },
-
               {
                   "type": "朝チャレンジ",
                   "query": "morning person",
                   "text": "朝起きたら、最初の10秒だけゆっくり動いてみよう。今日を急がなくていい。"
               },
-
               {
                   "type": "一歩チャレンジ",
                   "query": "person walking road",
                   "text": "大きな目標じゃなくていい。今日は一歩だけ進む。これを今日のミッションにしよう。"
               },
-
               {
                   "type": "自己肯定",
                   "query": "person peaceful",
@@ -259,10 +221,6 @@ jobs:
               }
 
           ]
-
-          # -----------------------------------------------------
-          # 100 hooks
-          # -----------------------------------------------------
 
           hook_bases = [
               "ちょっと待って。",
@@ -303,10 +261,6 @@ jobs:
 
           hooks = hooks[:100]
 
-          # -----------------------------------------------------
-          # 100 endings
-          # -----------------------------------------------------
-
           ending_bases = [
               "どうだった？",
               "当たった？",
@@ -346,18 +300,10 @@ jobs:
 
           endings = endings[:100]
 
-          # -----------------------------------------------------
-          # 300,000 combinations
-          # -----------------------------------------------------
-
           content_index = seed % len(contents)
-
           remaining = seed // len(contents)
-
           hook_index = remaining % len(hooks)
-
           remaining = remaining // len(hooks)
-
           ending_index = remaining % len(endings)
 
           item = contents[content_index]
@@ -372,7 +318,6 @@ jobs:
               + ending
           )
 
-          # 30 x 100 x 100 = 300,000
           total_patterns = (
               len(contents)
               * len(hooks)
@@ -384,37 +329,18 @@ jobs:
           print("HOOK:", hook_index)
           print("ENDING:", ending_index)
 
-          with open(
-              "script.txt",
-              "w",
-              encoding="utf-8"
-          ) as f:
+          with open("script.txt", "w", encoding="utf-8") as f:
               f.write(script)
 
-          with open(
-              "pexels_query.txt",
-              "w",
-              encoding="utf-8"
-          ) as f:
+          with open("pexels_query.txt", "w", encoding="utf-8") as f:
               f.write(item["query"])
 
-          with open(
-              "video_type.txt",
-              "w",
-              encoding="utf-8"
-          ) as f:
+          with open("video_type.txt", "w", encoding="utf-8") as f:
               f.write(item["type"])
 
-          title = (
-              item["type"]
-              + "｜15秒チャレンジ"
-          )
+          title = item["type"] + "｜15秒チャレンジ"
 
-          with open(
-              "video_title.txt",
-              "w",
-              encoding="utf-8"
-          ) as f:
+          with open("video_title.txt", "w", encoding="utf-8") as f:
               f.write(title)
 
           PY
@@ -444,11 +370,7 @@ jobs:
           import sys
           import urllib.parse
 
-          print(
-              urllib.parse.quote(
-                  sys.argv[1]
-              )
-          )
+          print(urllib.parse.quote(sys.argv[1]))
 
           PY
 
@@ -475,10 +397,6 @@ jobs:
               empty
             end
           ' pexels.json)
-
-          # -----------------------------------------------------
-          # Fallback
-          # -----------------------------------------------------
 
           if [ -z "$VIDEO_URL" ] || [ "$VIDEO_URL" = "null" ]; then
 
@@ -514,9 +432,7 @@ jobs:
 
           echo "Pexels video URL found."
 
-          curl -fL \
-            "$VIDEO_URL" \
-            -o source.mp4
+          curl -fL "$VIDEO_URL" -o source.mp4
 
           test -s source.mp4
 
@@ -555,9 +471,7 @@ jobs:
 
           import sys
 
-          duration = float(
-              sys.argv[1]
-          )
+          duration = float(sys.argv[1])
 
           if duration <= 14.5:
               print("1.0")
@@ -567,9 +481,7 @@ jobs:
               if speed > 1.95:
                   speed = 1.95
 
-              print(
-                  f"{speed:.3f}"
-              )
+              print(f"{speed:.3f}")
 
           PY
           )
@@ -579,9 +491,7 @@ jobs:
 
           if [ "$SPEED" = "1.0" ]; then
 
-            cp \
-              narration.mp3 \
-              narration_fit.mp3
+            cp narration.mp3 narration_fit.mp3
 
           else
 
@@ -624,14 +534,7 @@ jobs:
               ]).decode().strip()
           )
 
-          duration = min(
-              duration,
-              14.5
-          )
-
-          # ---------------------------------------------------
-          # Split using punctuation and existing line breaks
-          # ---------------------------------------------------
+          duration = min(duration, 14.5)
 
           raw_parts = re.split(
               r'[\n。！？!?]+',
@@ -646,10 +549,6 @@ jobs:
 
           if not parts:
               parts = [script]
-
-          # ---------------------------------------------------
-          # Avoid excessively long subtitle blocks
-          # ---------------------------------------------------
 
           final_parts = []
 
@@ -671,42 +570,23 @@ jobs:
               final_parts.extend(words)
 
           parts = final_parts
-
           count = len(parts)
-
-          # ---------------------------------------------------
-          # Timestamp
-          # ---------------------------------------------------
 
           def timestamp(seconds):
 
-              total_ms = int(
-                  seconds * 1000
-              )
+              total_ms = int(seconds * 1000)
 
-              hours = (
-                  total_ms
-                  // 3600000
-              )
+              hours = total_ms // 3600000
 
               total_ms %= 3600000
 
-              minutes = (
-                  total_ms
-                  // 60000
-              )
+              minutes = total_ms // 60000
 
               total_ms %= 60000
 
-              seconds_int = (
-                  total_ms
-                  // 1000
-              )
+              seconds_int = total_ms // 1000
 
-              milliseconds = (
-                  total_ms
-                  % 1000
-              )
+              milliseconds = total_ms % 1000
 
               return (
                   f"{hours:02}:"
@@ -714,10 +594,6 @@ jobs:
                   f"{seconds_int:02},"
                   f"{milliseconds:03}"
               )
-
-          # ---------------------------------------------------
-          # Generate SRT
-          # ---------------------------------------------------
 
           with open(
               "captions.srt",
@@ -727,17 +603,9 @@ jobs:
 
               for i, text in enumerate(parts):
 
-                  start = (
-                      duration
-                      * i
-                      / count
-                  )
+                  start = duration * i / count
 
-                  end = (
-                      duration
-                      * (i + 1)
-                      / count
-                  )
+                  end = duration * (i + 1) / count
 
                   f.write(
                       f"{i+1}\n"
@@ -765,7 +633,7 @@ jobs:
             -stream_loop -1 \
             -i source.mp4 \
             -i narration_fit.mp3 \
-            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=captions.srt:force_style='FontName=Noto Sans CJK JP,FontSize=52,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=4,Shadow=1,Alignment=2,MarginV=260'" \
+            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=captions.srt:force_style='FontName=Noto Sans CJK JP,FontSize=52,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=4,Shadow=1,Alignment=2,MarginV=520'" \
             -t 15 \
             -map 0:v:0 \
             -map 1:a:0 \
@@ -901,10 +769,6 @@ jobs:
 
           FILE_SIZE=$(stat -c%s output.mp4)
           TITLE=$(cat video_title.txt)
-
-          # ---------------------------------------------------
-          # Use SELF_ONLY for unaudited Direct Post clients.
-          # ---------------------------------------------------
 
           python - "$TITLE" "$FILE_SIZE" <<'PY' > init.json
 
@@ -1062,7 +926,7 @@ jobs:
           echo "The workflow itself completed."
 
       # =========================================================
-      # 15. Save generated video
+      # 15. Save generated video artifact
       # =========================================================
       - name: Upload generated video artifact
         uses: actions/upload-artifact@v4
