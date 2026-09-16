@@ -14,16 +14,19 @@ jobs:
           CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
           CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
           REDIRECT_URI: ${{ secrets.TIKTOK_REDIRECT_URI }}
-          GH_ADMIN_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
+
         run: |
           set -e
+
+          echo "TikTok Refresh Tokenを取得しています..."
 
           if [ -z "$TIKTOK_AUTH_CODE" ]; then
             echo "TIKTOK_AUTH_CODE_TEMP がありません"
             exit 1
           fi
 
-          if [ -z "$GH_ADMIN_TOKEN" ]; then
+          if [ -z "$GH_TOKEN" ]; then
             echo "GH_ADMIN_TOKEN がありません"
             exit 1
           fi
@@ -37,12 +40,14 @@ jobs:
             --data-urlencode "grant_type=authorization_code" \
             --data-urlencode "redirect_uri=$REDIRECT_URI")
 
+          echo "TikTokからの応答:"
           echo "$RESPONSE" | jq 'del(.data.access_token, .data.refresh_token, .access_token, .refresh_token)'
 
           REFRESH_TOKEN=$(echo "$RESPONSE" | jq -r '.data.refresh_token // .refresh_token // empty')
 
           if [ -z "$REFRESH_TOKEN" ]; then
             echo "Refresh Tokenを取得できませんでした"
+            echo "TikTokの認証コードが無効、または期限切れの可能性があります"
             exit 1
           fi
 
@@ -50,8 +55,6 @@ jobs:
 
           echo "$REFRESH_TOKEN" | gh secret set TIKTOK_REFRESH_TOKEN \
             --repo "${{ github.repository }}" \
-            --app actions \
-            --hostname github.com \
-            --insecure
+            --app actions
 
           echo "TIKTOK_REFRESH_TOKEN の保存に成功しました"
