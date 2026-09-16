@@ -1,1 +1,346 @@
+name: Generate TikTok Shorts
 
+on:
+  workflow_dispatch:
+  schedule:
+    # 12:00 JST
+    - cron: "0 3 * * *"
+    # 18:00 JST
+    - cron: "0 9 * * *"
+    # 21:00 JST
+    - cron: "0 12 * * *"
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-cjk jq curl
+          python -m pip install --upgrade pip
+          pip install edge-tts
+
+      - name: Create video information
+        env:
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: |
+          set -e
+
+          DAY=$(($(date -u +%s) / 86400))
+          HOUR=$(date -u +%H)
+          HOUR=$((10#$HOUR))
+
+          case "$HOUR" in
+            3)  SLOT=0 ;;
+            9)  SLOT=1 ;;
+            12) SLOT=2 ;;
+            *)  SLOT=0 ;;
+          esac
+
+          SEED=$((DAY * 3 + SLOT))
+
+          python - "$SEED" <<'PY'
+          import sys
+          import random
+
+          seed = int(sys.argv[1])
+          random.seed(seed)
+
+          contents = [
+              ("雑学", "実は、人は朝起きてすぐより、少し時間が経ってからのほうが集中しやすいと言われています。"),
+              ("雑学", "人間の脳は、何もしない時間にも情報を整理しています。ぼーっとする時間も無駄ではありません。"),
+              ("雑学", "笑うだけでも、脳はストレスに関係する反応を変えることがあります。"),
+              ("雑学", "好きな音楽を聴くと、気分が変わることがあります。音楽は脳への刺激になるからです。"),
+              ("雑学", "新しいことを覚えるとき、短時間で何度も復習するより、間隔を空けて復習するほうが記憶に残りやすいです。"),
+              ("雑学", "人は『あと少しだけ』と思ってスマホを見ると、気づかないうちに長時間見てしまうことがあります。"),
+              ("雑学", "眠っている間も脳は完全に休んでいるわけではなく、記憶の整理などをしています。"),
+              ("雑学", "水分が足りないだけでも、だるさや集中しづらさを感じることがあります。"),
+              ("雑学", "人は同じ言葉でも、言われたタイミングによって印象が大きく変わることがあります。"),
+              ("雑学", "小さな達成感を積み重ねると、次の行動を始めやすくなります。"),
+
+              ("人生", "人生で意外と大切なのは、頑張ることだけじゃなく、頑張らない時間を作ることです。"),
+              ("人生", "うまくいかない日は、人生が失敗した日ではなく、ただの一日です。"),
+              ("人生", "誰かと比べて遅れているように感じても、その人とあなたではスタート地点が違います。"),
+              ("人生", "何歳からでも始められることは、思っているよりたくさんあります。"),
+              ("人生", "昨日の自分より少し前に進めたら、それだけで十分です。"),
+              ("人生", "人生は一気に変わるより、小さな習慣が積み重なって変わることのほうが多いです。"),
+              ("人生", "失敗した経験は、その瞬間には意味がなくても、後から役に立つことがあります。"),
+              ("人生", "自分を責め続けても、過去の日には戻れません。だから次の一歩に使える力を残しておくことが大切です。"),
+              ("人生", "周りから見れば普通の日でも、自分にとって大切な一日になることがあります。"),
+              ("人生", "焦って答えを出さなくてもいいことは、意外とたくさんあります。"),
+
+              ("やる気", "今日は何もしたくない。そんな日は、全部やろうとせず、一つだけ終わらせてみてください。"),
+              ("やる気", "やる気が出てから動くのではなく、少し動くことでやる気が出てくることがあります。"),
+              ("やる気", "完璧じゃなくても、始めた時点で昨日の自分とは違います。"),
+              ("やる気", "たった5分でも始めれば、ゼロではなくなります。"),
+              ("やる気", "うまくいかないときは、才能ではなく方法を変えるだけで結果が変わることがあります。"),
+              ("やる気", "今日できることを一つだけやって、それで終わりにしてもいい日があります。"),
+              ("やる気", "自信は、最初から持っているものではなく、行動の後についてくることがあります。"),
+              ("やる気", "小さな一歩でも、止まっている状態から動き出したなら、それは前進です。"),
+              ("やる気", "やることが多すぎるなら、一番小さい作業から始めてください。"),
+              ("やる気", "明日の自分を助けるために、今日一つだけ片付けておく。それだけでも十分です。"),
+          ]
+
+          hooks = [
+              "これ、意外と知られてません。",
+              "実はこれ、かなり大事です。",
+              "知っておくとちょっと得する話。",
+              "たった15秒だけ聞いてください。",
+              "これを知ったら少し見方が変わるかも。",
+              "意外すぎる話なんですが、",
+              "知らないままだと損かもしれません。",
+              "実は、ほとんどの人が勘違いしています。",
+              "これ、今日から使えます。",
+              "最後まで聞いてみてください。",
+          ]
+
+          endings = [
+              "覚えておいてください。",
+              "これだけでも覚えておくと便利です。",
+              "今日から少し意識してみてください。",
+              "もし知らなかったら保存しておいてください。",
+              "あなたはどう思いますか？",
+              "明日の自分のために覚えておいてください。",
+              "意外だったらコメントで教えてください。",
+              "こういう話、知っておくと面白いですよ。",
+              "忘れそうなら保存しておきましょう。",
+              "また次の動画で。",
+          ]
+
+          category, content = contents[seed % len(contents)]
+          hook = hooks[(seed // len(contents)) % len(hooks)]
+          ending = endings[(seed // (len(contents) * len(hooks))) % len(endings)]
+
+          script = f"{hook} {content} {ending}"
+
+          queries = {
+              "雑学": ["nature", "city", "people", "technology", "ocean"],
+              "人生": ["sunrise", "walking", "city", "nature", "people"],
+              "やる気": ["running", "success", "walking", "sunrise", "work"],
+          }
+
+          query = queries[category][seed % len(queries[category])]
+
+          with open("script.txt", "w", encoding="utf-8") as f:
+              f.write(script)
+
+          with open("category.txt", "w", encoding="utf-8") as f:
+              f.write(category)
+
+          with open("pexels_query.txt", "w", encoding="utf-8") as f:
+              f.write(query)
+
+          title = f"{category}｜{hook}"
+
+          with open("video_title.txt", "w", encoding="utf-8") as f:
+              f.write(title)
+
+          print("SEED:", seed)
+          print("CATEGORY:", category)
+          print("QUERY:", query)
+          print("SCRIPT:", script)
+          PY
+
+      - name: Download Pexels video
+        env:
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: |
+          set -e
+
+          QUERY=$(cat pexels_query.txt)
+          ENCODED_QUERY=$(python -c "import urllib.parse; print(urllib.parse.quote('''$QUERY'''))")
+
+          curl -L \
+            -H "Authorization: $PEXELS_API_KEY" \
+            "https://api.pexels.com/videos/search?query=${ENCODED_QUERY}&orientation=portrait&size=medium&per_page=20" \
+            -o pexels.json
+
+          VIDEO_URL=$(jq -r '
+            .videos
+            | map(.video_files[])
+            | map(select(.width >= 720 and .height > .width))
+            | sort_by(.width)
+            | reverse
+            | .[0].link
+          ' pexels.json)
+
+          if [ "$VIDEO_URL" = "null" ] || [ -z "$VIDEO_URL" ]; then
+            echo "Fallback: sunrise"
+            curl -L \
+              -H "Authorization: $PEXELS_API_KEY" \
+              "https://api.pexels.com/videos/search?query=sunrise&orientation=portrait&size=medium&per_page=20" \
+              -o pexels.json
+
+            VIDEO_URL=$(jq -r '
+              .videos
+              | map(.video_files[])
+              | map(select(.width >= 720 and .height > .width))
+              | sort_by(.width)
+              | reverse
+              | .[0].link
+            ' pexels.json)
+          fi
+
+          curl -L "$VIDEO_URL" -o source.mp4
+
+          test -s source.mp4
+
+      - name: Generate narration
+        run: |
+          set -e
+
+          edge-tts \
+            --voice ja-JP-NanamiNeural \
+            --rate="+8%" \
+            --text "$(cat script.txt)" \
+            --write-media voice.mp3
+
+          test -s voice.mp3
+
+      - name: Fit narration
+        run: |
+          set -e
+
+          DURATION=$(ffprobe -v error \
+            -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 \
+            voice.mp3)
+
+          SPEED=$(python - "$DURATION" <<'PY'
+          import sys
+          d=float(sys.argv[1])
+          target=14.2
+          print(max(1.0, min(1.95, d/target)))
+          PY
+          )
+
+          ffmpeg -y \
+            -i voice.mp3 \
+            -filter:a "atempo=${SPEED}" \
+            voice_fit.mp3
+
+          mv voice_fit.mp3 voice.mp3
+
+      - name: Create subtitles
+        run: |
+          python - <<'PY'
+          import re
+
+          text=open("script.txt",encoding="utf-8").read().strip()
+
+          parts=re.split(r'(?<=[。！？!?])',text)
+          parts=[x.strip() for x in parts if x.strip()]
+
+          chunks=[]
+          for p in parts:
+              while len(p)>18:
+                  chunks.append(p[:18])
+                  p=p[18:]
+              if p:
+                  chunks.append(p)
+
+          duration=float(__import__("subprocess").check_output([
+              "ffprobe","-v","error",
+              "-show_entries","format=duration",
+              "-of","default=noprint_wrappers=1:nokey=1",
+              "voice.mp3"
+          ]).decode().strip())
+
+          total_chars=sum(len(x) for x in chunks)
+
+          def ass_time(sec):
+              h=int(sec//3600)
+              m=int((sec%3600)//60)
+              s=int(sec%60)
+              cs=int((sec-int(sec))*100)
+              return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+          with open("captions.ass","w",encoding="utf-8") as f:
+              f.write("""[Script Info]
+          ScriptType: v4.00+
+          PlayResX: 1080
+          PlayResY: 1920
+
+          [V4+ Styles]
+          Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+          Style: Default,Noto Sans CJK JP,72,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,6,3,5,60,60,0,1
+
+          [Events]
+          Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+          """)
+
+              current=0
+
+              for chunk in chunks:
+                  share=len(chunk)/max(total_chars,1)
+                  length=duration*share
+
+                  start=current
+                  end=min(duration,current+length)
+
+                  safe=chunk.replace("{","\\{").replace("}","\\}")
+
+                  f.write(
+                      f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Default,,0,0,0,,{safe}\n"
+                  )
+
+                  current=end
+          PY
+
+      - name: Render 15 second video
+        run: |
+          set -e
+
+          ffmpeg -y \
+            -stream_loop -1 \
+            -i source.mp4 \
+            -i voice.mp3 \
+            -t 15 \
+            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,ass=captions.ass" \
+            -map 0:v:0 \
+            -map 1:a:0 \
+            -c:v libx264 \
+            -preset veryfast \
+            -crf 23 \
+            -pix_fmt yuv420p \
+            -r 30 \
+            -c:a aac \
+            -b:a 128k \
+            -ar 44100 \
+            -af "apad=pad_dur=15,atrim=0:15" \
+            -t 15 \
+            -movflags +faststart \
+            tiktok-short.mp4
+
+          DURATION=$(ffprobe -v error \
+            -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 \
+            tiktok-short.mp4)
+
+          echo "Final duration: $DURATION"
+
+          python - "$DURATION" <<'PY'
+          import sys
+          d=float(sys.argv[1])
+          if not 14.5 <= d <= 15.5:
+              raise SystemExit("Video duration is outside 15-second range")
+          PY
+
+      - name: Save generated video
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiktok-short-${{ github.run_number }}
+          path: |
+            tiktok-short.mp4
+            script.txt
+            captions.ass
+            category.txt
+            video_title.txt
+            pexels_query.txt
+          retention-days: 7
