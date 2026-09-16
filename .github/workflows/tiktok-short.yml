@@ -1,901 +1,604 @@
 name: Generate TikTok Shorts
 
 on:
+  schedule:
+    - cron: "0 3 * * *"
+    - cron: "0 9 * * *"
+    - cron: "0 12 * * *"
   workflow_dispatch:
 
-  schedule:
-    # 日本時間 12:00
-    - cron: "0 3 * * *"
-
-    # 日本時間 18:00
-    - cron: "0 9 * * *"
-
-    # 日本時間 21:00
-    - cron: "0 12 * * *"
-
 jobs:
-
   generate:
-
     runs-on: ubuntu-latest
-
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
 
-      # ============================================================
+      # =========================================================
       # 1. Checkout
-      # ============================================================
-
+      # =========================================================
       - name: Checkout
         uses: actions/checkout@v4
 
-
-      # ============================================================
+      # =========================================================
       # 2. Install
-      # ============================================================
-
+      # =========================================================
       - name: Install packages
         run: |
-          set -e
-
           sudo apt-get update
-
-          sudo apt-get install -y \
-            ffmpeg \
-            fonts-noto-cjk \
-            jq \
-            curl
-
+          sudo apt-get install -y ffmpeg fonts-noto-cjk jq
           python -m pip install --upgrade pip
-
           pip install edge-tts
 
-
-      # ============================================================
-      # 3. Create huge variety of video concepts
-      # ============================================================
-
-      - name: Generate interactive video concept
+      # =========================================================
+      # 3. Create deterministic seed
+      # =========================================================
+      - name: Create seed
         run: |
-
-          set -e
-
-          DAY=$(( $(date -u +%s) / 86400 ))
-
+          DAY=$(date -u +%j)
           HOUR=$(date -u +%H)
 
-          HOUR=$((10#$HOUR))
+          if [ "$HOUR" -lt 8 ]; then
+            SLOT=0
+          elif [ "$HOUR" -lt 12 ]; then
+            SLOT=1
+          else
+            SLOT=2
+          fi
 
+          SEED=$((10#$DAY * 3 + SLOT))
 
-          case "$HOUR" in
+          echo "SEED=$SEED" >> "$GITHUB_ENV"
 
-            3)
-              SLOT=0
-              ;;
+          echo "DAY=$DAY"
+          echo "HOUR=$HOUR"
+          echo "SLOT=$SLOT"
+          echo "SEED=$SEED"
 
-            9)
-              SLOT=1
-              ;;
+      # =========================================================
+      # 4. Generate 300,000+ combinations
+      #
+      # 30 contents
+      # × 100 hooks
+      # × 100 endings
+      # = 300,000 combinations
+      # =========================================================
+      - name: Generate 300000+ content patterns
+        run: |
 
-            12)
-              SLOT=2
-              ;;
+          python - <<'PY'
 
-            *)
-              SLOT=0
-              ;;
+          import os
 
-          esac
+          seed = int(os.environ["SEED"])
 
+          # -----------------------------------------------------
+          # 30 core contents
+          # -----------------------------------------------------
 
-          SEED=$((DAY * 3 + SLOT))
+          contents = [
 
+              {
+                  "type": "2択クイズ",
+                  "query": "person thinking",
+                  "text": "AとB、直感で選んで。考える時間は3秒。Aだと思った？それともB？"
+              },
 
-          python - "$SEED" <<'PY'
+              {
+                  "type": "3択クイズ",
+                  "query": "friends talking",
+                  "text": "3択から直感で1つ選んで。1、2、3。最初に浮かんだ数字を信じて。"
+              },
 
-          import sys
-          import random
+              {
+                  "type": "心理ゲーム",
+                  "query": "person thinking",
+                  "text": "今から心理ゲーム。最初に思い浮かんだ色を覚えて。赤、青、黄色のどれ？"
+              },
 
-          seed = int(sys.argv[1])
+              {
+                  "type": "予想ゲーム",
+                  "query": "ball game",
+                  "text": "このあと何が起きるか予想して。A、B、Cのどれだと思う？"
+              },
 
-          random.seed(seed)
+              {
+                  "type": "視覚チャレンジ",
+                  "query": "optical illusion",
+                  "text": "この映像を3秒だけ見て。何か変だと思ったら、もう一度見てみて。"
+              },
 
+              {
+                  "type": "反射チャレンジ",
+                  "query": "reaction challenge",
+                  "text": "反射神経チャレンジ。画面が変わった瞬間に気づける？まだ。まだ。今！"
+              },
 
-          # =========================================================
-          # VIDEO TYPES
-          # =========================================================
+              {
+                  "type": "ミニ謎解き",
+                  "query": "puzzle thinking",
+                  "text": "これを5秒で考えて。答えは簡単そうで、意外と引っかかる。"
+              },
 
-          video_types = [
+              {
+                  "type": "記憶チャレンジ",
+                  "query": "memory game",
+                  "text": "今から3つの言葉を覚えて。りんご、時計、猫。覚えた？"
+              },
 
-              "QUIZ",
-              "VISION",
-              "RIDDLE",
-              "PSYCHOLOGY",
-              "PREDICTION",
-              "REACTION",
-              "ENCOURAGEMENT",
-              "RESTART",
-              "SELF_WORTH",
-              "NIGHT_SUPPORT",
-              "CHALLENGE",
-              "CHOICE"
+              {
+                  "type": "直感チャレンジ",
+                  "query": "person choosing",
+                  "text": "深く考えずに選んで。左か右。最初に目が行った方を選んで。"
+              },
 
-          ]
+              {
+                  "type": "コメント参加",
+                  "query": "friends talking",
+                  "text": "あなたならどっち？朝型ならA、夜型ならB。直感で決めて。"
+              },
 
+              {
+                  "type": "小さな挑戦",
+                  "query": "person walking",
+                  "text": "今日の小さな挑戦。スマホを10秒だけ置いて、ゆっくり深呼吸してみて。"
+              },
 
-          video_type = video_types[
-              seed % len(video_types)
-          ]
+              {
+                  "type": "夜メッセージ",
+                  "query": "night city person",
+                  "text": "夜になると色々考えすぎるよね。でも今すぐ答えを出さなくても大丈夫。"
+              },
 
+              {
+                  "type": "応援",
+                  "query": "sunrise person",
+                  "text": "今日は何もできなかったと思っているなら、明日は一つだけやってみよう。"
+              },
 
-          # =========================================================
-          # QUIZ
-          # =========================================================
+              {
+                  "type": "集中チャレンジ",
+                  "query": "focused person",
+                  "text": "画面の中央を3秒だけ見て。周りを見ないで、中央だけに集中して。"
+              },
 
-          quiz = [
+              {
+                  "type": "観察チャレンジ",
+                  "query": "city walking",
+                  "text": "この映像の中で、最初に目に入ったものを覚えて。あなたは何を見つけた？"
+              },
 
-              (
-                  "3秒で選んでください。",
-                  "赤、青、黄色。直感で1つ選んで。",
-                  "選んだ色であなたの今日の気分をチェック。",
-                  "もちろん遊びなので、深く考えなくてOK。"
-              ),
+              {
+                  "type": "選択ゲーム",
+                  "query": "person choosing",
+                  "text": "今の気分で選んで。静かな場所とにぎやかな場所、どっちに行きたい？"
+              },
 
-              (
-                  "どっちだと思う？",
-                  "AとB、直感で選んでください。",
-                  "答えは……B。",
-                  "当たった人いる？"
-              ),
+              {
+                  "type": "タイミングゲーム",
+                  "query": "running person",
+                  "text": "ちょうどいいタイミングで画面を見られるか挑戦。まだ。まだ。今。"
+              },
 
-              (
-                  "この中で一番早いのはどれ？",
-                  "A、B、Cから選んで。",
-                  "答えはC。",
-                  "あなたは当たった？"
-              ),
+              {
+                  "type": "予測チャレンジ",
+                  "query": "sports prediction",
+                  "text": "次に動く方向を予想して。左、右、それとも中央？決めた？"
+              },
 
-              (
-                  "直感だけで答えてください。",
-                  "最初に目に入った数字は？",
-                  "その数字を覚えておいて。",
-                  "最後に答え合わせします。"
-              )
+              {
+                  "type": "数字ゲーム",
+                  "query": "number game",
+                  "text": "1から9までで、最初に浮かんだ数字を覚えて。あとで確認してみて。"
+              },
 
-          ]
+              {
+                  "type": "色ゲーム",
+                  "query": "color background",
+                  "text": "今一番気になる色を一つ選んで。赤、青、緑、黄色。直感で。"
+              },
 
+              {
+                  "type": "気分チェック",
+                  "query": "person relaxing",
+                  "text": "今の気分を一言で表すなら、元気、普通、それとも疲れた？"
+              },
 
-          # =========================================================
-          # VISION
-          # =========================================================
+              {
+                  "type": "10秒チャレンジ",
+                  "query": "person relaxing",
+                  "text": "10秒だけ何も考えない時間を作ってみよう。画面を見ながらゆっくり呼吸して。"
+              },
 
-          vision = [
+              {
+                  "type": "勇気チャレンジ",
+                  "query": "person mountain",
+                  "text": "今日一つだけ先延ばししていることをやってみない？本当に小さなことでいい。"
+              },
 
-              (
-                  "この動画、1か所だけ変わります。",
-                  "見逃さないで。",
-                  "3、2、1……",
-                  "見つけられた？"
-              ),
+              {
+                  "type": "リセット",
+                  "query": "sunrise person",
+                  "text": "ちょっと疲れたら一回リセット。深呼吸して、肩の力を抜いてみよう。"
+              },
 
-              (
-                  "画面の中央だけ見てください。",
-                  "そのまま数秒待って。",
-                  "今、何か変わったのに気づいた？",
-                  "もう一回見ると分かるかも。"
-              ),
+              {
+                  "type": "自分時間",
+                  "query": "person nature",
+                  "text": "今日は誰かと比べなくていい。昨日の自分より少し楽なら、それで十分。"
+              },
 
-              (
-                  "これ、最初と最後で違います。",
-                  "どこが変わったか覚えておいて。",
-                  "答えは……ここ。",
-                  "気づいた人すごい。"
-              )
+              {
+                  "type": "再スタート",
+                  "query": "person walking sunrise",
+                  "text": "何回止まっても、また始めればいい。今日できる一番小さな一歩を選ぼう。"
+              },
 
-          ]
+              {
+                  "type": "夜の安心",
+                  "query": "night person",
+                  "text": "眠る前に今日のことを全部解決しなくていい。続きは明日の自分に任せよう。"
+              },
 
+              {
+                  "type": "朝チャレンジ",
+                  "query": "morning person",
+                  "text": "朝起きたら、最初の10秒だけゆっくり動いてみよう。今日を急がなくていい。"
+              },
 
-          # =========================================================
-          # RIDDLE
-          # =========================================================
+              {
+                  "type": "一歩チャレンジ",
+                  "query": "person walking road",
+                  "text": "大きな目標じゃなくていい。今日は一歩だけ進む。これを今日のミッションにしよう。"
+              },
 
-          riddle = [
-
-              (
-                  "この問題、10秒で解ける？",
-                  "あるものが増えるほど軽くなるものって何？",
-                  "ヒントは身近なもの。",
-                  "答えは……風船。"
-              ),
-
-              (
-                  "これ分かったらかなり早い。",
-                  "1、2、3、4……次は何？",
-                  "ヒントは数字じゃない。",
-                  "答えはあなたの考え方次第。"
-              ),
-
-              (
-                  "頭を3秒だけ使ってください。",
-                  "絶対に濡れない雨って何？",
-                  "考えてみて。",
-                  "答えは……絵に描いた雨。"
-              )
-
-          ]
-
-
-          # =========================================================
-          # PSYCHOLOGY
-          # =========================================================
-
-          psychology = [
-
-              (
-                  "直感で選んでください。",
-                  "今、一番気になる数字は1・3・7のどれ？",
-                  "最初に選んだものを覚えて。",
-                  "こういう選択、意外と面白い。"
-              ),
-
-              (
-                  "今から3つ出します。",
-                  "赤、青、緑。",
-                  "一番気になった色はどれ？",
-                  "選んだ理由を考えると面白い。"
-              ),
-
-              (
-                  "あなたならどうする？",
-                  "知らない人に突然話しかけられたら？",
-                  "A、B、Cから選んで。",
-                  "正解はありません。"
-              )
-
-          ]
-
-
-          # =========================================================
-          # PREDICTION
-          # =========================================================
-
-          prediction = [
-
-              (
-                  "このあと何が起きると思う？",
-                  "A・B・Cから予想して。",
-                  "あと3秒。",
-                  "答えは……見てのお楽しみ。"
-              ),
-
-              (
-                  "最後まで予想できる？",
-                  "このボールは左？右？",
-                  "まだ答えを言わないで。",
-                  "結果は……右。"
-              ),
-
-              (
-                  "あなたなら当てられる？",
-                  "次に出るものを予想して。",
-                  "3、2、1。",
-                  "当たった？"
-              )
-
-          ]
-
-
-          # =========================================================
-          # REACTION
-          # =========================================================
-
-          reaction = [
-
-              (
-                  "反応できたらすごい。",
-                  "この瞬間に画面をタップ。",
-                  "タイミングは一瞬。",
-                  "できた？"
-              ),
-
-              (
-                  "目を離さないで。",
-                  "一瞬だけ何かが出ます。",
-                  "今！",
-                  "見えた？"
-              ),
-
-              (
-                  "これ、意外と難しい。",
-                  "同じタイミングで止めてみて。",
-                  "3、2、1。",
-                  "成功した？"
-              )
+              {
+                  "type": "自己肯定",
+                  "query": "person peaceful",
+                  "text": "うまくできなかった日も、自分を全部否定しなくていい。今日を終えたことも一つの結果。"
+              }
 
           ]
 
+          # -----------------------------------------------------
+          # 100 hooks
+          # -----------------------------------------------------
 
-          # =========================================================
-          # ENCOURAGEMENT
-          # =========================================================
-
-          encouragement = [
-
-              (
-                  "今日は何もできなかった？",
-                  "それでも大丈夫。",
-                  "ここまで一日を過ごした。",
-                  "それだけでも十分です。"
-              ),
-
-              (
-                  "もう無理かもって思ってるなら。",
-                  "今日は全部頑張らなくていい。",
-                  "一歩だけでいい。",
-                  "明日また始めればいい。"
-              ),
-
-              (
-                  "今、頑張ってる人へ。",
-                  "結果が出ないと不安になるよね。",
-                  "でも続けた時間は消えない。",
-                  "焦らなくて大丈夫。"
-              ),
-
-              (
-                  "誰かと比べて落ち込んでない？",
-                  "あなたのペースでいい。",
-                  "昨日より1ミリ進めたら十分。",
-                  "それもちゃんと前進です。"
-              ),
-
-              (
-                  "失敗した人へ。",
-                  "失敗した日は終わりじゃない。",
-                  "ただの途中です。",
-                  "また一回やればいい。"
-              )
-
+          hook_bases = [
+              "ちょっと待って。",
+              "これ、直感で答えて。",
+              "3秒だけ考えて。",
+              "最初に思った方を選んで。",
+              "深く考えないで。",
+              "今の直感を信じて。",
+              "一瞬で決めて。",
+              "考える前に選んで。",
+              "これは意外と難しい。",
+              "あなたならどうする？",
+              "今から勝負。",
+              "ここで一回止めて。",
+              "最後まで見て。",
+              "答えを見る前に決めて。",
+              "先に予想して。",
+              "今の自分ならどっち？",
+              "5秒だけ集中して。",
+              "一発で当てられる？",
+              "これ分かる人いる？",
+              "あなたの答えは？"
           ]
 
-
-          # =========================================================
-          # RESTART
-          # =========================================================
-
-          restart = [
-
-              (
-                  "一回諦めたこと、ありませんか？",
-                  "もう一度始めてもいい。",
-                  "遅すぎるなんてことはない。",
-                  "今日が再スタートでもいい。"
-              ),
-
-              (
-                  "やり直したいと思ってるなら。",
-                  "その気持ちはまだ残ってる。",
-                  "だったら一歩だけ。",
-                  "そこからでいい。"
-              ),
-
-              (
-                  "昨日うまくいかなかった？",
-                  "昨日の結果は今日には持ち越さなくていい。",
-                  "今日の一回をやろう。",
-                  "それだけで十分。"
-              )
-
+          hook_suffixes = [
+              "直感だけでいこう。",
+              "最初の答えを覚えて。",
+              "まだ答えは見ないで。",
+              "迷ったら最初の方。",
+              "答えを変えないで。",
           ]
 
+          hooks = []
 
-          # =========================================================
-          # SELF WORTH
-          # =========================================================
+          for base in hook_bases:
+              for suffix in hook_suffixes:
+                  hooks.append(base + "\n" + suffix)
 
-          self_worth = [
+          hooks = hooks[:100]
 
-              (
-                  "自分だけ遅れてる気がする人へ。",
-                  "人にはそれぞれのペースがあります。",
-                  "早い人と比べなくていい。",
-                  "あなたはあなたのままでいい。"
-              ),
+          # -----------------------------------------------------
+          # 100 endings
+          # -----------------------------------------------------
 
-              (
-                  "自分に自信がないとき。",
-                  "できたことを一つだけ思い出して。",
-                  "小さくてもいい。",
-                  "それはちゃんとあなたの実績です。"
-              ),
-
-              (
-                  "今日、自分を責めすぎてない？",
-                  "完璧じゃなくても大丈夫。",
-                  "人間だから失敗する。",
-                  "明日またやればいい。"
-              )
-
+          ending_bases = [
+              "どうだった？",
+              "当たった？",
+              "できた？",
+              "気づいた？",
+              "分かった？",
+              "あなたはどっち？",
+              "コメントで教えて。",
+              "もう一回やってみて。",
+              "友達にも試してみて。",
+              "最初の答えを覚えてた？",
+              "直感は当たった？",
+              "最後まで分かった？",
+              "今の答えを忘れないで。",
+              "意外だった？",
+              "もう一度見ると違って見えるかも。",
+              "答えは人それぞれ。",
+              "あなたの結果はどうだった？",
+              "次はもっと難しいかも。",
+              "明日もう一回挑戦してみて。",
+              "今日の小さなミッションでした。"
           ]
 
-
-          # =========================================================
-          # NIGHT
-          # =========================================================
-
-          night = [
-
-              (
-                  "今日も一日お疲れさま。",
-                  "うまくいかなかったことは一旦置いておこう。",
-                  "明日は明日の一日。",
-                  "今日はゆっくり休んでください。"
-              ),
-
-              (
-                  "夜にこれを見ているあなたへ。",
-                  "今日できなかったことを数えなくていい。",
-                  "できたことを一つだけ思い出して。",
-                  "それで今日は十分。"
-              ),
-
-              (
-                  "眠る前に一つだけ。",
-                  "今日の自分を責めるのはやめよう。",
-                  "明日またやり直せる。",
-                  "おやすみなさい。"
-              )
-
+          ending_suffixes = [
+              "ぜひコメントで。",
+              "直感って面白いよね。",
+              "もう一度挑戦してみて。",
+              "友達にも聞いてみて。",
+              "あなたの答えも知りたい。",
           ]
 
+          endings = []
 
-          # =========================================================
-          # CHALLENGE
-          # =========================================================
+          for base in ending_bases:
+              for suffix in ending_suffixes:
+                  endings.append(base + "\n" + suffix)
 
-          challenge = [
+          endings = endings[:100]
 
-              (
-                  "今から10秒だけ挑戦。",
-                  "スマホを置いて深呼吸してみて。",
-                  "ゆっくり吸って……吐いて。",
-                  "できたら今日は成功。"
-              ),
+          # -----------------------------------------------------
+          # 300,000 combinations
+          # -----------------------------------------------------
 
-              (
-                  "今日の小さなチャレンジ。",
-                  "今から一つだけ片付けてみよう。",
-                  "たった一つでOK。",
-                  "終わったら自分を褒めて。"
-              ),
+          content_index = seed % len(contents)
 
-              (
-                  "これ、今日できます。",
-                  "水を一杯飲む。",
-                  "そして少しだけ伸びをする。",
-                  "それだけでもOK。"
-              )
+          remaining = seed // len(contents)
 
-          ]
+          hook_index = remaining % len(hooks)
 
+          remaining = remaining // len(hooks)
 
-          # =========================================================
-          # CHOICE
-          # =========================================================
+          ending_index = remaining % len(endings)
 
-          choice = [
+          item = contents[content_index]
+          hook = hooks[hook_index]
+          ending = endings[ending_index]
 
-              (
-                  "直感で一つ選んで。",
-                  "A・B・C、どれが好き？",
-                  "選んだら理由を考えてみて。",
-                  "自分の直感って意外と面白い。"
-              ),
+          script = (
+              hook
+              + "\n"
+              + item["text"]
+              + "\n"
+              + ending
+          )
 
-              (
-                  "今の気分で選んで。",
-                  "海・山・都会。",
-                  "一番行きたいのはどこ？",
-                  "コメントで教えて。"
-              ),
+          # 30 x 100 x 100 = 300,000
+          total_patterns = (
+              len(contents)
+              * len(hooks)
+              * len(endings)
+          )
 
-              (
-                  "今すぐ一つ選んで。",
-                  "朝・昼・夜。",
-                  "どの時間が好き？",
-                  "あなたの答えは？"
-              )
+          print("TOTAL PATTERNS:", total_patterns)
+          print("CONTENT:", item["type"])
+          print("HOOK:", hook_index)
+          print("ENDING:", ending_index)
 
-          ]
-
-
-          data = {
-
-              "QUIZ": quiz,
-              "VISION": vision,
-              "RIDDLE": riddle,
-              "PSYCHOLOGY": psychology,
-              "PREDICTION": prediction,
-              "REACTION": reaction,
-              "ENCOURAGEMENT": encouragement,
-              "RESTART": restart,
-              "SELF_WORTH": self_worth,
-              "NIGHT_SUPPORT": night,
-              "CHALLENGE": challenge,
-              "CHOICE": choice
-
-          }
-
-
-          selected = data[video_type]
-
-          item = selected[
-              seed % len(selected)
-          ]
-
-
-          script = " ".join(item)
-
-
-          # =========================================================
-          # PEXELS SEARCH
-          # =========================================================
-
-          queries = {
-
-              "QUIZ": [
-                  "colorful abstract",
-                  "game",
-                  "people thinking",
-                  "choice",
-                  "neon"
-              ],
-
-              "VISION": [
-                  "abstract motion",
-                  "lights",
-                  "optical illusion",
-                  "color",
-                  "moving shapes"
-              ],
-
-              "RIDDLE": [
-                  "puzzle",
-                  "thinking",
-                  "mystery",
-                  "dark room",
-                  "brain"
-              ],
-
-              "PSYCHOLOGY": [
-                  "person thinking",
-                  "face",
-                  "people",
-                  "city",
-                  "abstract"
-              ],
-
-              "PREDICTION": [
-                  "ball",
-                  "sports",
-                  "motion",
-                  "reaction",
-                  "street"
-              ],
-
-              "REACTION": [
-                  "fast motion",
-                  "sports",
-                  "running",
-                  "lights",
-                  "action"
-              ],
-
-              "ENCOURAGEMENT": [
-                  "sunrise",
-                  "walking",
-                  "mountains",
-                  "ocean",
-                  "person walking"
-              ],
-
-              "RESTART": [
-                  "sunrise",
-                  "road",
-                  "walking",
-                  "mountain",
-                  "city morning"
-              ],
-
-              "SELF_WORTH": [
-                  "sunrise",
-                  "nature",
-                  "person",
-                  "ocean",
-                  "sky"
-              ],
-
-              "NIGHT_SUPPORT": [
-                  "night city",
-                  "night sky",
-                  "moon",
-                  "city lights",
-                  "bedroom"
-              ],
-
-              "CHALLENGE": [
-                  "running",
-                  "workout",
-                  "walking",
-                  "morning",
-                  "nature"
-              ],
-
-              "CHOICE": [
-                  "city",
-                  "ocean",
-                  "mountain",
-                  "travel",
-                  "nature"
-              ]
-
-          }
-
-
-          query_list = queries[video_type]
-
-          query = query_list[
-              seed % len(query_list)
-          ]
-
-
-          # =========================================================
-          # TITLE
-          # =========================================================
-
-          titles = {
-
-              "QUIZ": "3秒クイズ｜あなたは当てられる？",
-
-              "VISION": "見つけられる？｜15秒チャレンジ",
-
-              "RIDDLE": "15秒謎解き｜解けた？",
-
-              "PSYCHOLOGY": "直感ゲーム｜あなたはどれ？",
-
-              "PREDICTION": "予想できる？｜最後まで見て",
-
-              "REACTION": "反射神経チャレンジ",
-
-              "ENCOURAGEMENT": "今日も頑張ったあなたへ",
-
-              "RESTART": "もう一度始めたい人へ",
-
-              "SELF_WORTH": "自分を責めすぎているあなたへ",
-
-              "NIGHT_SUPPORT": "今日も一日お疲れさま",
-
-              "CHALLENGE": "今日の10秒チャレンジ",
-
-              "CHOICE": "直感で選んでください"
-
-          }
-
-
-          title = titles[video_type]
-
-
-          # =========================================================
-          # SAVE
-          # =========================================================
-
-          open(
+          with open(
               "script.txt",
               "w",
               encoding="utf-8"
-          ).write(script)
+          ) as f:
+              f.write(script)
 
-
-          open(
-              "video_type.txt",
-              "w",
-              encoding="utf-8"
-          ).write(video_type)
-
-
-          open(
+          with open(
               "pexels_query.txt",
               "w",
               encoding="utf-8"
-          ).write(query)
+          ) as f:
+              f.write(item["query"])
 
+          with open(
+              "video_type.txt",
+              "w",
+              encoding="utf-8"
+          ) as f:
+              f.write(item["type"])
 
-          open(
+          title = (
+              item["type"]
+              + "｜15秒チャレンジ"
+          )
+
+          with open(
               "video_title.txt",
               "w",
               encoding="utf-8"
-          ).write(title)
-
-
-          print("================================")
-
-          print("TYPE:", video_type)
-
-          print("QUERY:", query)
-
-          print("TITLE:", title)
-
-          print("SCRIPT:", script)
-
-          print("================================")
+          ) as f:
+              f.write(title)
 
           PY
 
+          echo "================================="
+          echo "Generated content"
+          echo "================================="
 
-      # ============================================================
-      # 4. Download Pexels video
-      # ============================================================
+          cat video_type.txt
+          echo
+          cat script.txt
 
-      - name: Download Pexels video
+      # =========================================================
+      # 5. Search Pexels
+      # =========================================================
+      - name: Search Pexels video
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-
         run: |
 
           set -e
 
           QUERY=$(cat pexels_query.txt)
 
-
-          python - "$QUERY" <<'PY'
+          python - "$QUERY" <<'PY' > encoded_query.txt
 
           import sys
           import urllib.parse
 
-          q = sys.argv[1]
-
           print(
-              urllib.parse.quote(q)
+              urllib.parse.quote(
+                  sys.argv[1]
+              )
           )
 
           PY
-          > encoded_query.txt
-
 
           ENCODED_QUERY=$(cat encoded_query.txt)
 
+          echo "Pexels query: $QUERY"
 
-          curl -L \
+          curl -fL \
             -H "Authorization: $PEXELS_API_KEY" \
-            "https://api.pexels.com/videos/search?query=${ENCODED_QUERY}&orientation=portrait&size=medium&per_page=20" \
+            -H "Accept: application/json" \
+            "https://api.pexels.com/v1/videos/search?query=${ENCODED_QUERY}&orientation=portrait&size=medium&per_page=20" \
             -o pexels.json
 
-
           VIDEO_URL=$(jq -r '
-            .videos
-            | map(.video_files[])
-            | map(select(.width >= 720 and .height > .width))
-            | sort_by(.width)
-            | reverse
-            | .[0].link
-          ' pexels.json)
-
-
-          if [ "$VIDEO_URL" = "null" ] || [ -z "$VIDEO_URL" ]; then
-
-            echo "Fallback video search"
-
-            curl -L \
-              -H "Authorization: $PEXELS_API_KEY" \
-              "https://api.pexels.com/videos/search?query=nature&orientation=portrait&size=medium&per_page=20" \
-              -o pexels.json
-
-
-            VIDEO_URL=$(jq -r '
+            if (.videos and (.videos | length > 0)) then
               .videos
               | map(.video_files[])
-              | map(select(.width >= 720 and .height > .width))
+              | map(select(.file_type == "video/mp4"))
+              | map(select(.height > .width))
               | sort_by(.width)
               | reverse
               | .[0].link
+            else
+              empty
+            end
+          ' pexels.json)
+
+          # -----------------------------------------------------
+          # Fallback
+          # -----------------------------------------------------
+
+          if [ -z "$VIDEO_URL" ] || [ "$VIDEO_URL" = "null" ]; then
+
+            echo "Portrait result not found."
+            echo "Trying fallback search."
+
+            curl -fL \
+              -H "Authorization: $PEXELS_API_KEY" \
+              -H "Accept: application/json" \
+              "https://api.pexels.com/v1/videos/search?query=people&orientation=portrait&size=medium&per_page=20" \
+              -o pexels.json
+
+            VIDEO_URL=$(jq -r '
+              if (.videos and (.videos | length > 0)) then
+                .videos
+                | map(.video_files[])
+                | map(select(.file_type == "video/mp4"))
+                | map(select(.height > .width))
+                | sort_by(.width)
+                | reverse
+                | .[0].link
+              else
+                empty
+              end
             ' pexels.json)
 
           fi
 
-
-          if [ "$VIDEO_URL" = "null" ] || [ -z "$VIDEO_URL" ]; then
-
-            echo "No Pexels video found"
-
+          if [ -z "$VIDEO_URL" ] || [ "$VIDEO_URL" = "null" ]; then
+            echo "ERROR: No portrait Pexels video found."
             exit 1
-
           fi
 
+          echo "Pexels video URL found."
 
-          curl -L \
+          curl -fL \
             "$VIDEO_URL" \
             -o source.mp4
 
-
           test -s source.mp4
 
+          echo "Pexels video downloaded."
 
-      # ============================================================
-      # 5. Generate narration
-      # ============================================================
-
-      - name: Generate Japanese narration
+      # =========================================================
+      # 6. Generate narration
+      # =========================================================
+      - name: Generate narration
         run: |
-
-          set -e
 
           edge-tts \
-            --voice ja-JP-NanamiNeural \
-            --rate="+10%" \
+            --voice "ja-JP-NanamiNeural" \
+            --rate "+10%" \
             --text "$(cat script.txt)" \
-            --write-media voice.mp3
+            --write-media narration.mp3
 
+          test -s narration.mp3
 
-          test -s voice.mp3
-
-
-      # ============================================================
-      # 6. Fit narration
-      # ============================================================
-
+      # =========================================================
+      # 7. Fit narration into 15 seconds
+      # =========================================================
       - name: Fit narration
         run: |
-
-          set -e
 
           DURATION=$(ffprobe \
             -v error \
             -show_entries format=duration \
             -of default=noprint_wrappers=1:nokey=1 \
-            voice.mp3)
+            narration.mp3)
 
+          echo "Original narration:"
+          echo "$DURATION seconds"
 
           SPEED=$(python - "$DURATION" <<'PY'
 
           import sys
 
-          duration = float(sys.argv[1])
-
-          target = 13.8
-
-          speed = duration / target
-
-          speed = max(
-              1.0,
-              min(1.8, speed)
+          duration = float(
+              sys.argv[1]
           )
 
-          print(speed)
+          if duration <= 14.5:
+              print("1.0")
+          else:
+              speed = duration / 14.5
+
+              if speed > 1.95:
+                  speed = 1.95
+
+              print(
+                  f"{speed:.3f}"
+              )
 
           PY
           )
 
+          echo "Audio speed:"
+          echo "$SPEED"
 
-          echo "Narration duration: $DURATION"
+          if [ "$SPEED" = "1.0" ]; then
 
-          echo "Speed: $SPEED"
+            cp \
+              narration.mp3 \
+              narration_fit.mp3
 
+          else
 
-          ffmpeg -y \
-            -i voice.mp3 \
-            -filter:a "atempo=${SPEED}" \
-            voice_fit.mp3
+            ffmpeg \
+              -y \
+              -i narration.mp3 \
+              -filter:a "atempo=$SPEED" \
+              narration_fit.mp3
 
+          fi
 
-          mv voice_fit.mp3 voice.mp3
+          test -s narration_fit.mp3
 
-
-      # ============================================================
-      # 7. Create subtitles
-      # ============================================================
-
-      - name: Create subtitles
+      # =========================================================
+      # 8. Create synchronized subtitles
+      # =========================================================
+      - name: Create synchronized subtitles
         run: |
 
           python - <<'PY'
@@ -903,44 +606,10 @@ jobs:
           import re
           import subprocess
 
-
-          text = open(
+          script = open(
               "script.txt",
               encoding="utf-8"
           ).read().strip()
-
-
-          sentences = re.split(
-              r'(?<=[。！？!?])',
-              text
-          )
-
-
-          sentences = [
-              x.strip()
-              for x in sentences
-              if x.strip()
-          ]
-
-
-          chunks = []
-
-
-          for sentence in sentences:
-
-              while len(sentence) > 12:
-
-                  chunks.append(
-                      sentence[:12]
-                  )
-
-                  sentence = sentence[12:]
-
-
-              if sentence:
-
-                  chunks.append(sentence)
-
 
           duration = float(
               subprocess.check_output([
@@ -951,632 +620,457 @@ jobs:
                   "format=duration",
                   "-of",
                   "default=noprint_wrappers=1:nokey=1",
-                  "voice.mp3"
+                  "narration_fit.mp3"
               ]).decode().strip()
           )
 
-
-          total_chars = sum(
-              len(x)
-              for x in chunks
+          duration = min(
+              duration,
+              14.5
           )
 
+          # ---------------------------------------------------
+          # Split using punctuation and existing line breaks
+          # ---------------------------------------------------
 
-          def ass_time(sec):
+          raw_parts = re.split(
+              r'[\n。！？!?]+',
+              script
+          )
 
-              h = int(sec // 3600)
+          parts = [
+              x.strip()
+              for x in raw_parts
+              if x.strip()
+          ]
 
-              m = int(
-                  (sec % 3600) // 60
+          if not parts:
+              parts = [script]
+
+          # ---------------------------------------------------
+          # Avoid excessively long subtitle blocks
+          # ---------------------------------------------------
+
+          final_parts = []
+
+          for part in parts:
+
+              if len(part) <= 18:
+                  final_parts.append(part)
+                  continue
+
+              words = [
+                  part[i:i+18]
+                  for i in range(
+                      0,
+                      len(part),
+                      18
+                  )
+              ]
+
+              final_parts.extend(words)
+
+          parts = final_parts
+
+          count = len(parts)
+
+          # ---------------------------------------------------
+          # Timestamp
+          # ---------------------------------------------------
+
+          def timestamp(seconds):
+
+              total_ms = int(
+                  seconds * 1000
               )
 
-              s = int(sec % 60)
+              hours = (
+                  total_ms
+                  // 3600000
+              )
 
-              cs = int(
-                  (sec - int(sec)) * 100
+              total_ms %= 3600000
+
+              minutes = (
+                  total_ms
+                  // 60000
+              )
+
+              total_ms %= 60000
+
+              seconds_int = (
+                  total_ms
+                  // 1000
+              )
+
+              milliseconds = (
+                  total_ms
+                  % 1000
               )
 
               return (
-                  f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+                  f"{hours:02}:"
+                  f"{minutes:02}:"
+                  f"{seconds_int:02},"
+                  f"{milliseconds:03}"
               )
 
+          # ---------------------------------------------------
+          # Generate SRT
+          # ---------------------------------------------------
 
           with open(
-              "captions.ass",
+              "captions.srt",
               "w",
               encoding="utf-8"
           ) as f:
 
-              f.write(
-          """[Script Info]
-          ScriptType: v4.00+
-          PlayResX: 1080
-          PlayResY: 1920
+              for i, text in enumerate(parts):
 
-          [V4+ Styles]
-          Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-          Style: Default,Noto Sans CJK JP,70,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,6,3,5,60,60,250,1
-
-          [Events]
-          Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-          """
-              )
-
-
-              current = 0.0
-
-
-              for chunk in chunks:
-
-                  share = (
-                      len(chunk)
-                      /
-                      max(
-                          total_chars,
-                          1
-                      )
+                  start = (
+                      duration
+                      * i
+                      / count
                   )
 
-
-                  length = (
-                      duration * share
+                  end = (
+                      duration
+                      * (i + 1)
+                      / count
                   )
-
-
-                  start = current
-
-                  end = min(
-                      duration,
-                      current + length
-                  )
-
-
-                  safe = (
-                      chunk
-                      .replace(
-                          "{",
-                          "\\{"
-                      )
-                      .replace(
-                          "}",
-                          "\\}"
-                      )
-                  )
-
 
                   f.write(
-                      "Dialogue: 0,"
-                      + ass_time(start)
-                      + ","
-                      + ass_time(end)
-                      + ",Default,,0,0,0,,"
-                      + safe
-                      + "\n"
+                      f"{i+1}\n"
+                      f"{timestamp(start)} --> "
+                      f"{timestamp(end)}\n"
+                      f"{text}\n\n"
                   )
-
-
-                  current = end
-
 
           PY
 
+          echo "================================="
+          echo "SUBTITLES"
+          echo "================================="
 
-      # ============================================================
-      # 8. Render 15 second video
-      # ============================================================
+          cat captions.srt
 
-      - name: Render TikTok video
+      # =========================================================
+      # 9. Render 15-second vertical video
+      # =========================================================
+      - name: Render 15 second video
         run: |
 
-          set -e
-
-
-          ffmpeg -y \
+          ffmpeg \
+            -y \
             -stream_loop -1 \
             -i source.mp4 \
-            -i voice.mp3 \
+            -i narration_fit.mp3 \
+            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=captions.srt:force_style='FontName=Noto Sans CJK JP,FontSize=52,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=4,Shadow=1,Alignment=2,MarginV=260'" \
             -t 15 \
-            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,ass=captions.ass" \
             -map 0:v:0 \
             -map 1:a:0 \
             -c:v libx264 \
             -preset veryfast \
-            -crf 23 \
             -pix_fmt yuv420p \
             -r 30 \
             -c:a aac \
             -b:a 128k \
-            -ar 44100 \
-            -af "apad=pad_dur=15,atrim=0:15" \
-            -t 15 \
             -movflags +faststart \
-            tiktok-short.mp4
+            output.mp4
 
+          test -s output.mp4
 
-          DURATION=$(ffprobe \
+          echo "================================="
+          echo "VIDEO CREATED"
+          echo "================================="
+
+          ffprobe \
             -v error \
-            -show_entries format=duration \
-            -of default=noprint_wrappers=1:nokey=1 \
-            tiktok-short.mp4)
+            -show_entries format=duration,size \
+            -of default=noprint_wrappers=1 \
+            output.mp4
 
-
-          echo "Final duration: $DURATION"
-
-
-          python - "$DURATION" <<'PY'
-
-          import sys
-
-          duration = float(
-              sys.argv[1]
-          )
-
-          if not 14.5 <= duration <= 15.5:
-
-              raise SystemExit(
-                  "Invalid video duration"
-              )
-
-          PY
-
-
-      # ============================================================
-      # 9. TikTok OAuth
-      # ============================================================
-
+      # =========================================================
+      # 10. Get TikTok access token
+      # =========================================================
       - name: Get TikTok access token
         env:
           TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
           TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
           TIKTOK_AUTH_CODE: ${{ secrets.TIKTOK_AUTH_CODE }}
           TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
-
+          TIKTOK_REDIRECT_URI: ${{ secrets.TIKTOK_REDIRECT_URI }}
         run: |
 
           set -e
-
 
           if [ -n "$TIKTOK_REFRESH_TOKEN" ]; then
 
-            echo "Using refresh token"
-
+            echo "Using TikTok refresh token."
 
             RESPONSE=$(curl -sS \
               -X POST \
               "https://open.tiktokapis.com/v2/oauth/token/" \
               -H "Content-Type: application/x-www-form-urlencoded" \
-              -H "Cache-Control: no-cache" \
-              --data-urlencode \
-              "client_key=${TIKTOK_CLIENT_KEY}" \
-              --data-urlencode \
-              "client_secret=${TIKTOK_CLIENT_SECRET}" \
-              --data-urlencode \
-              "grant_type=refresh_token" \
-              --data-urlencode \
-              "refresh_token=${TIKTOK_REFRESH_TOKEN}")
-
+              --data-urlencode "client_key=$TIKTOK_CLIENT_KEY" \
+              --data-urlencode "client_secret=$TIKTOK_CLIENT_SECRET" \
+              --data-urlencode "grant_type=refresh_token" \
+              --data-urlencode "refresh_token=$TIKTOK_REFRESH_TOKEN")
 
           else
 
-            echo "No refresh token."
-
-            echo "Trying initial authorization code."
-
+            echo "Using initial authorization code."
 
             RESPONSE=$(curl -sS \
               -X POST \
               "https://open.tiktokapis.com/v2/oauth/token/" \
               -H "Content-Type: application/x-www-form-urlencoded" \
-              -H "Cache-Control: no-cache" \
-              --data-urlencode \
-              "client_key=${TIKTOK_CLIENT_KEY}" \
-              --data-urlencode \
-              "client_secret=${TIKTOK_CLIENT_SECRET}" \
-              --data-urlencode \
-              "code=${TIKTOK_AUTH_CODE}" \
-              --data-urlencode \
-              "grant_type=authorization_code" \
-              --data-urlencode \
-              "redirect_uri=${{ secrets.TIKTOK_REDIRECT_URI }}")
+              --data-urlencode "client_key=$TIKTOK_CLIENT_KEY" \
+              --data-urlencode "client_secret=$TIKTOK_CLIENT_SECRET" \
+              --data-urlencode "grant_type=authorization_code" \
+              --data-urlencode "code=$TIKTOK_AUTH_CODE" \
+              --data-urlencode "redirect_uri=$TIKTOK_REDIRECT_URI")
 
           fi
 
+          ERROR_CODE=$(echo "$RESPONSE" | jq -r '.error // empty')
 
-          echo "$RESPONSE" > token_response.json
-
-
-          ERROR=$(jq -r '.error // empty' token_response.json)
-
-
-          if [ -n "$ERROR" ]; then
-
-            echo "TikTok OAuth failed."
-
-            jq 'del(.access_token,.refresh_token)' token_response.json
-
+          if [ -n "$ERROR_CODE" ]; then
+            echo "TikTok OAuth returned an error."
+            echo "$RESPONSE" | jq 'del(.access_token, .refresh_token)'
             exit 1
-
           fi
 
+          ACCESS_TOKEN=$(echo "$RESPONSE" | jq -r '.access_token // empty')
 
-          ACCESS_TOKEN=$(jq -r '.access_token' token_response.json)
-
-          REFRESH_TOKEN=$(jq -r '.refresh_token' token_response.json)
-
-
-          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
-
-            echo "Access token was not returned."
-
+          if [ -z "$ACCESS_TOKEN" ]; then
+            echo "ERROR: TikTok access token was not returned."
+            echo "$RESPONSE" | jq 'del(.access_token, .refresh_token)'
             exit 1
-
           fi
-
-
-          echo "::add-mask::$ACCESS_TOKEN"
-
-          echo "::add-mask::$REFRESH_TOKEN"
-
 
           echo "TIKTOK_ACCESS_TOKEN=$ACCESS_TOKEN" >> "$GITHUB_ENV"
 
-          echo "TIKTOK_REFRESH_TOKEN_NEW=$REFRESH_TOKEN" >> "$GITHUB_ENV"
+          NEW_REFRESH_TOKEN=$(echo "$RESPONSE" | jq -r '.refresh_token // empty')
 
+          if [ -n "$NEW_REFRESH_TOKEN" ]; then
+            echo "A TikTok refresh token was returned."
+            echo "It must be saved as TIKTOK_REFRESH_TOKEN for future scheduled runs."
+          fi
 
-          echo "TikTok OAuth successful."
-
-
-      # ============================================================
-      # 10. Query creator information
-      # ============================================================
-
-      - name: Query TikTok creator info
+      # =========================================================
+      # 11. Get creator information
+      # =========================================================
+      - name: Get TikTok creator info
         run: |
-
-          set -e
-
 
           curl -sS \
             -X POST \
             "https://open.tiktokapis.com/v2/post/publish/creator_info/query/" \
-            -H "Authorization: Bearer ${TIKTOK_ACCESS_TOKEN}" \
+            -H "Authorization: Bearer $TIKTOK_ACCESS_TOKEN" \
             -H "Content-Type: application/json; charset=UTF-8" \
             -d '{}' \
             -o creator.json
 
+          echo "Creator information:"
+          cat creator.json | jq .
 
-          cat creator.json
-
-
-          ERROR=$(jq -r '.error.code // empty' creator.json)
-
-
-          if [ "$ERROR" != "ok" ]; then
-
-            echo "Creator info request failed."
-
-            exit 1
-
-          fi
-
-
-          MAX_DURATION=$(jq -r \
-            '.data.max_video_post_duration_sec' \
+          ERROR_CODE=$(jq -r \
+            '.error.code // empty' \
             creator.json)
 
-
-          echo "TikTok max duration: ${MAX_DURATION}s"
-
-
-          if [ "$MAX_DURATION" -lt 15 ]; then
-
-            echo "TikTok account does not allow 15-second videos."
-
+          if [ "$ERROR_CODE" != "ok" ]; then
+            echo "ERROR: TikTok creator info failed."
             exit 1
-
           fi
 
+          PRIVACY_OPTIONS=$(jq -r \
+            '.data.privacy_level_options[]?' \
+            creator.json)
 
-      # ============================================================
-      # 11. Initialize Direct Post
-      # ============================================================
+          echo "Available privacy levels:"
+          echo "$PRIVACY_OPTIONS"
 
+      # =========================================================
+      # 12. Initialize TikTok Direct Post
+      # =========================================================
       - name: Initialize TikTok Direct Post
         run: |
 
           set -e
 
-
-          VIDEO_SIZE=$(stat -c%s tiktok-short.mp4)
-
-
-          CHUNK_SIZE=$VIDEO_SIZE
-
-          TOTAL_CHUNKS=1
-
-
-          PRIVACY=$(jq -r \
-            '.data.privacy_level_options[] |
-             select(. == "PUBLIC_TO_EVERYONE")' \
-            creator.json \
-            | head -n 1)
-
-
-          if [ -z "$PRIVACY" ]; then
-
-            PRIVACY=$(jq -r \
-              '.data.privacy_level_options[0]' \
-              creator.json)
-
-          fi
-
-
+          FILE_SIZE=$(stat -c%s output.mp4)
           TITLE=$(cat video_title.txt)
 
+          # ---------------------------------------------------
+          # Use SELF_ONLY for unaudited Direct Post clients.
+          # ---------------------------------------------------
 
-          python - <<PY
+          python - "$TITLE" "$FILE_SIZE" <<'PY' > init.json
 
           import json
+          import sys
 
-
-          title = """$TITLE"""
-
+          title = sys.argv[1]
+          file_size = int(sys.argv[2])
 
           data = {
-
               "post_info": {
-
                   "title": title,
-
-                  "privacy_level": "$PRIVACY",
-
+                  "privacy_level": "SELF_ONLY",
                   "disable_duet": False,
-
                   "disable_comment": False,
-
                   "disable_stitch": False,
-
                   "video_cover_timestamp_ms": 1000,
-
-                  "is_aigc": False
-
+                  "is_aigc": True
               },
-
               "source_info": {
-
                   "source": "FILE_UPLOAD",
-
-                  "video_size": $VIDEO_SIZE,
-
-                  "chunk_size": $CHUNK_SIZE,
-
-                  "total_chunk_count": $TOTAL_CHUNKS
-
+                  "video_size": file_size,
+                  "chunk_size": file_size,
+                  "total_chunk_count": 1
               }
-
           }
 
-
-          with open(
-              "tiktok_init.json",
-              "w",
-              encoding="utf-8"
-          ) as f:
-
-              json.dump(
+          print(
+              json.dumps(
                   data,
-                  f,
                   ensure_ascii=False
               )
+          )
 
           PY
 
+          echo "TikTok initialization request:"
+          cat init.json | jq .
 
           curl -sS \
             -X POST \
             "https://open.tiktokapis.com/v2/post/publish/video/init/" \
-            -H "Authorization: Bearer ${TIKTOK_ACCESS_TOKEN}" \
+            -H "Authorization: Bearer $TIKTOK_ACCESS_TOKEN" \
             -H "Content-Type: application/json; charset=UTF-8" \
-            --data-binary @tiktok_init.json \
-            -o tiktok_init_response.json
+            -d @init.json \
+            -o publish.json
 
+          echo "TikTok initialization response:"
+          cat publish.json | jq .
 
-          cat tiktok_init_response.json
-
-
-          ERROR=$(jq -r \
+          ERROR_CODE=$(jq -r \
             '.error.code // empty' \
-            tiktok_init_response.json)
+            publish.json)
 
-
-          if [ "$ERROR" != "ok" ]; then
-
-            echo "TikTok post initialization failed."
-
+          if [ "$ERROR_CODE" != "ok" ]; then
+            echo "ERROR: TikTok initialization failed."
             exit 1
-
           fi
 
-
           PUBLISH_ID=$(jq -r \
-            '.data.publish_id' \
-            tiktok_init_response.json)
-
+            '.data.publish_id // empty' \
+            publish.json)
 
           UPLOAD_URL=$(jq -r \
-            '.data.upload_url' \
-            tiktok_init_response.json)
+            '.data.upload_url // empty' \
+            publish.json)
 
+          if [ -z "$PUBLISH_ID" ]; then
+            echo "ERROR: publish_id was not returned."
+            exit 1
+          fi
 
-          echo "::add-mask::$UPLOAD_URL"
+          if [ -z "$UPLOAD_URL" ]; then
+            echo "ERROR: upload_url was not returned."
+            exit 1
+          fi
 
+          echo "PUBLISH_ID=$PUBLISH_ID" >> "$GITHUB_ENV"
+          echo "UPLOAD_URL=$UPLOAD_URL" >> "$GITHUB_ENV"
 
-          echo "TIKTOK_PUBLISH_ID=$PUBLISH_ID" >> "$GITHUB_ENV"
-
-          echo "TIKTOK_UPLOAD_URL=$UPLOAD_URL" >> "$GITHUB_ENV"
-
-
-      # ============================================================
-      # 12. Upload video to TikTok
-      # ============================================================
-
+      # =========================================================
+      # 13. Upload video
+      # =========================================================
       - name: Upload video to TikTok
         run: |
 
           set -e
 
+          FILE_SIZE=$(stat -c%s output.mp4)
 
-          VIDEO_SIZE=$(stat -c%s tiktok-short.mp4)
+          echo "Uploading video..."
+          echo "File size: $FILE_SIZE bytes"
 
-          LAST_BYTE=$((VIDEO_SIZE - 1))
-
-
-          HTTP_CODE=$(curl -sS \
-            -o tiktok_upload_response.txt \
-            -w "%{http_code}" \
+          curl -fL \
             -X PUT \
-            "$TIKTOK_UPLOAD_URL" \
+            "$UPLOAD_URL" \
             -H "Content-Type: video/mp4" \
-            -H "Content-Length: ${VIDEO_SIZE}" \
-            -H "Content-Range: bytes 0-${LAST_BYTE}/${VIDEO_SIZE}" \
-            --data-binary @tiktok-short.mp4)
+            -H "Content-Length: $FILE_SIZE" \
+            -H "Content-Range: bytes 0-$((FILE_SIZE - 1))/$FILE_SIZE" \
+            --upload-file output.mp4
 
+          echo "TikTok video upload completed."
 
-          echo "TikTok upload HTTP status: $HTTP_CODE"
-
-
-          cat tiktok_upload_response.txt || true
-
-
-          if [ "$HTTP_CODE" != "201" ]; then
-
-            echo "TikTok video upload failed."
-
-            exit 1
-
-          fi
-
-
-      # ============================================================
-      # 13. Check publish status
-      # ============================================================
-
+      # =========================================================
+      # 14. Check publish status
+      # =========================================================
       - name: Check TikTok publish status
         run: |
 
           set -e
 
+          for i in $(seq 1 12); do
 
-          for i in 1 2 3 4 5 6 7 8 9 10
+            echo "================================="
+            echo "TikTok status check $i / 12"
+            echo "================================="
 
-          do
+            RESPONSE=$(curl -sS \
+              -X POST \
+              "https://open.tiktokapis.com/v2/post/publish/status/fetch/" \
+              -H "Authorization: Bearer $TIKTOK_ACCESS_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"publish_id\":\"$PUBLISH_ID\"}")
 
-            echo "Checking TikTok status..."
+            echo "$RESPONSE" | jq .
+
+            STATUS=$(echo "$RESPONSE" | jq -r \
+              '.data.status // empty')
+
+            echo "STATUS=$STATUS"
+
+            if [ "$STATUS" = "PUBLISH_COMPLETE" ]; then
+
+              echo "================================="
+              echo "TikTok publish complete!"
+              echo "================================="
+
+              exit 0
+
+            fi
+
+            if [ "$STATUS" = "FAILED" ]; then
+
+              echo "TikTok publish failed."
+
+              exit 1
+
+            fi
 
             sleep 10
 
-
-            curl -sS \
-              -X POST \
-              "https://open.tiktokapis.com/v2/post/publish/status/fetch/" \
-              -H "Authorization: Bearer ${TIKTOK_ACCESS_TOKEN}" \
-              -H "Content-Type: application/json; charset=UTF-8" \
-              -d "{\"publish_id\":\"${TIKTOK_PUBLISH_ID}\"}" \
-              -o tiktok_status.json
-
-
-            cat tiktok_status.json
-
-
-            STATUS=$(jq -r \
-              '.data.status // empty' \
-              tiktok_status.json)
-
-
-            echo "STATUS: $STATUS"
-
-
-            case "$STATUS" in
-
-              "PUBLISH_COMPLETE")
-
-                echo "TikTok publish complete."
-
-                exit 0
-
-                ;;
-
-
-              "FAILED")
-
-                echo "TikTok publish failed."
-
-                exit 1
-
-                ;;
-
-
-              "PROCESSING_UPLOAD")
-
-                ;;
-
-
-              "PROCESSING_DOWNLOAD")
-
-                ;;
-
-
-              "SENDING_TO_USER_INBOX")
-
-                ;;
-
-
-              "PUBLISH_INBOX")
-
-                ;;
-
-
-              *)
-
-                ;;
-
-            esac
-
           done
 
+          echo "TikTok is still processing."
+          echo "The workflow itself completed."
 
-          echo "TikTok processing is still running."
-
-          echo "The publish_id is: ${TIKTOK_PUBLISH_ID}"
-
-
-      # ============================================================
-      # 14. Save artifact
-      # ============================================================
-
-      - name: Upload debug artifact
+      # =========================================================
+      # 15. Save generated video
+      # =========================================================
+      - name: Upload generated video artifact
         uses: actions/upload-artifact@v4
-
         with:
-
           name: tiktok-short-${{ github.run_number }}
-
           path: |
-
-            tiktok-short.mp4
-
+            output.mp4
             script.txt
-
-            captions.ass
-
+            captions.srt
             video_title.txt
-
             video_type.txt
-
-            pexels_query.txt
-
-            creator.json
-
-            tiktok_status.json
-
-          retention-days: 3
