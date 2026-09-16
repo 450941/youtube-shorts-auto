@@ -6,10 +6,36 @@
   <title>Short Video Creator</title>
 </head>
 <body>
+
   <h1>Short Video Creator</h1>
+
   <p>TikTokへショート動画を投稿できます。</p>
 
-  <button>Login with TikTok</button>
-  <button>Post Video to TikTok</button>
+  <button id="login">Login with TikTok</button>
+
+  <script>
+    const CLIENT_KEY = "ここにTikTokのClient Key";
+    const REDIRECT_URI = "https://450941.github.io/youtube-shorts-auto/";
+    const SCOPE = "user.info.basic,video.publish";
+
+    document.getElementById("login").addEventListener("click", () => {
+      const state = crypto.randomUUID();
+
+      sessionStorage.setItem("tiktok_state", state);
+
+      const params = new URLSearchParams({
+        client_key: CLIENT_KEY,
+        response_type: "code",
+        scope: SCOPE,
+        redirect_uri: REDIRECT_URI,
+        state: state
+      });
+
+      window.location.href =
+        "https://www.tiktok.com/v2/auth/authorize/?" +
+        params.toString();
+    });
+  </script>
+
 </body>
 </html>
