@@ -12,21 +12,37 @@ jobs:
 
     steps:
 
-      # ==========================================
-      # 1. 必要ツール
-      # ==========================================
+      # ============================================================
+      # 1. Install tools
+      # ============================================================
       - name: Install tools
         run: |
           set -e
 
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-noto-cjk jq
 
-      # ==========================================
-      # 2. Python
-      # ==========================================
+          sudo apt-get install -y \
+            ffmpeg \
+            fonts-noto-cjk \
+            jq \
+            curl
+
+          fc-cache -fv
+
+          echo "=== FFmpeg ==="
+          ffmpeg -version | head -n 1
+
+          echo "=== Japanese fonts ==="
+          fc-list | grep -i "Noto Sans CJK" | head -n 5 || true
+
+
+      # ============================================================
+      # 2. Install Python packages
+      # ============================================================
       - name: Install Python packages
         run: |
+          set -e
+
           python -m pip install --upgrade pip
 
           pip install \
@@ -36,362 +52,643 @@ jobs:
             google-auth-httplib2 \
             google-auth-oauthlib
 
-      # ==========================================
-      # 3. SEED作成
-      # ==========================================
+
+      # ============================================================
+      # 3. Create seed
+      # ============================================================
       - name: Create seed
         run: |
-
           set -e
 
           DAY=$(($(date +%s) / 86400))
+
           HOUR=$(date -u +%H)
           HOUR=$((10#$HOUR))
+
           SLOT=$((HOUR / 12))
 
           SEED=$((DAY * 2 + SLOT))
 
           echo "SEED=$SEED" >> "$GITHUB_ENV"
 
-          echo "================================"
+          echo "========================================"
           echo "SEED: $SEED"
-          echo "================================"
+          echo "DAY : $DAY"
+          echo "HOUR: $HOUR"
+          echo "SLOT: $SLOT"
+          echo "========================================"
 
-      # ==========================================
-      # 4. 300,000パターン生成
-      # ==========================================
-      - name: Generate 300000 patterns
+
+      # ============================================================
+      # 4. Generate 600000 patterns
+      #
+      # 60 contents
+      # × 100 hooks
+      # × 100 endings
+      # = 600,000 patterns
+      #
+      # 30 trivia
+      # 30 encouragement
+      # ============================================================
+      - name: Generate 600000 patterns
         run: |
-
           set -e
 
           python - <<'PY'
-
           import os
 
           seed = int(os.environ["SEED"])
 
-          # =====================================================
-          # 雑学本体
-          #
-          # 30種類
-          # =====================================================
 
-          facts = [
+          # ========================================================
+          # 30 TRIVIA
+          # ========================================================
 
-              {
-                  "query": "octopus underwater",
-                  "title": "タコの心臓は3つ",
-                  "text": "タコには心臓が3つあります。しかも、そのうち2つはエラへ血液を送っています。"
-              },
+          trivia = [
 
-              {
-                  "query": "octopus underwater",
-                  "title": "タコの血は青い",
-                  "text": "タコの血は青色です。酸素を運ぶ成分に、鉄ではなく銅を含む物質が使われています。"
-              },
+            {
+              "type": "trivia",
+              "query": "octopus underwater",
+              "title": "タコの心臓は3つ",
+              "text": "タコには心臓が3つあります。しかも、そのうち2つはエラへ血液を送っています。"
+            },
 
-              {
-                  "query": "cat cute",
-                  "title": "猫は甘さを感じにくい",
-                  "text": "猫は人間のように甘味を感じるための仕組みがうまく働きません。だから甘い物への反応が違います。"
-              },
+            {
+              "type": "trivia",
+              "query": "octopus underwater",
+              "title": "タコの血は青い",
+              "text": "タコの血は青色です。酸素を運ぶ成分に、鉄ではなく銅を含む物質が使われています。"
+            },
 
-              {
-                  "query": "butterfly",
-                  "title": "チョウは足で味を感じる",
-                  "text": "チョウには足にも味を感じるための器官があります。花に止まったとき、食べられるものか確認しています。"
-              },
+            {
+              "type": "trivia",
+              "query": "cat cute",
+              "title": "猫は甘さを感じにくい",
+              "text": "猫は人間のように甘味を感じるための仕組みがうまく働きません。だから甘い物への反応が違います。"
+            },
 
-              {
-                  "query": "bat flying",
-                  "title": "コウモリは空を飛べる哺乳類",
-                  "text": "コウモリは、継続的な飛行ができる唯一の哺乳類です。しかも種類によっては音で周囲を把握します。"
-              },
+            {
+              "type": "trivia",
+              "query": "butterfly flower",
+              "title": "チョウは足で味を感じる",
+              "text": "チョウには足にも味を感じるための器官があります。花に止まったとき、食べられるものか確認しています。"
+            },
 
-              {
-                  "query": "hummingbird",
-                  "title": "ハチドリは後ろ向きに飛べる",
-                  "text": "ハチドリは鳥の中でも珍しく、後ろ向きに飛ぶことができます。翼を特殊な動かし方で使っています。"
-              },
+            {
+              "type": "trivia",
+              "query": "bat flying",
+              "title": "コウモリは飛べる哺乳類",
+              "text": "コウモリは、自力で継続的に飛行できる哺乳類として知られています。種類によっては音で周囲を把握します。"
+            },
 
-              {
-                  "query": "penguin",
-                  "title": "ペンギンには膝がある",
-                  "text": "ペンギンにも膝があります。ただし、脚の奥に隠れているため、外からは分かりにくいんです。"
-              },
+            {
+              "type": "trivia",
+              "query": "hummingbird",
+              "title": "ハチドリは後ろ向きに飛べる",
+              "text": "ハチドリは鳥の中でも珍しく、後ろ向きに飛ぶことができます。翼を特殊な動かし方で使っています。"
+            },
 
-              {
-                  "query": "wombat",
-                  "title": "ウォンバットのフンは四角い",
-                  "text": "ウォンバットのフンは四角い形をしています。腸の形や収縮の仕組みが関係しています。"
-              },
+            {
+              "type": "trivia",
+              "query": "penguin",
+              "title": "ペンギンには膝がある",
+              "text": "ペンギンにも膝があります。ただし、脚の奥に隠れているため外からは分かりにくいんです。"
+            },
 
-              {
-                  "query": "crow bird",
-                  "title": "カラスは人の顔を覚える",
-                  "text": "カラスは人の顔を見分ける能力について研究されています。人間が思う以上に記憶力が優れています。"
-              },
+            {
+              "type": "trivia",
+              "query": "wombat",
+              "title": "ウォンバットのフンは四角い",
+              "text": "ウォンバットのフンは四角い形をしています。腸の形や収縮の仕組みが関係しています。"
+            },
 
-              {
-                  "query": "dolphin ocean",
-                  "title": "イルカには特徴的な呼び声がある",
-                  "text": "イルカには個体ごとに特徴的な呼び声があり、仲間とのコミュニケーションに使われています。"
-              },
+            {
+              "type": "trivia",
+              "query": "crow bird",
+              "title": "カラスは人の顔を覚える",
+              "text": "カラスは人の顔を見分ける能力について研究されています。人間が思う以上に記憶力が優れています。"
+            },
 
-              {
-                  "query": "human brain",
-                  "title": "記憶は録画ではない",
-                  "text": "人間の記憶は、動画のようにそのまま保存されるわけではありません。思い出すときに再構成されます。"
-              },
+            {
+              "type": "trivia",
+              "query": "dolphin ocean",
+              "title": "イルカには特徴的な呼び声がある",
+              "text": "イルカには個体ごとに特徴的な呼び声があり、仲間とのコミュニケーションに使われています。"
+            },
 
-              {
-                  "query": "brain psychology",
-                  "title": "自分の名前には反応しやすい",
-                  "text": "騒がしい場所でも、自分の名前が聞こえると注意を向けやすくなる現象が知られています。"
-              },
+            {
+              "type": "trivia",
+              "query": "human brain",
+              "title": "記憶は録画ではない",
+              "text": "人間の記憶は動画のようにそのまま保存されるわけではありません。思い出すときに再構成されます。"
+            },
 
-              {
-                  "query": "brain thinking",
-                  "title": "マルチタスクは切り替えが多い",
-                  "text": "人間は複数のことを同時にしているように感じても、実際には注意を素早く切り替えている場合があります。"
-              },
+            {
+              "type": "trivia",
+              "query": "brain psychology",
+              "title": "自分の名前には反応しやすい",
+              "text": "騒がしい場所でも自分の名前が聞こえると、注意を向けやすくなる現象が知られています。"
+            },
 
-              {
-                  "query": "sleep bed",
-                  "title": "睡眠中も脳は働いている",
-                  "text": "眠っている間も脳が完全に停止するわけではありません。睡眠中にもさまざまな活動が続いています。"
-              },
+            {
+              "type": "trivia",
+              "query": "brain thinking",
+              "title": "マルチタスクは切り替えが多い",
+              "text": "複数のことを同時にしているように感じても、実際には注意を素早く切り替えている場合があります。"
+            },
 
-              {
-                  "query": "music headphones",
-                  "title": "音楽は記憶を呼び起こす",
-                  "text": "音楽は過去の出来事や感情と結びつき、昔の記憶を思い出すきっかけになることがあります。"
-              },
+            {
+              "type": "trivia",
+              "query": "sleep bed",
+              "title": "睡眠中も脳は働いている",
+              "text": "眠っている間も脳が完全に停止するわけではありません。睡眠中にもさまざまな活動が続いています。"
+            },
 
-              {
-                  "query": "smell perfume",
-                  "title": "香りは記憶と結びつきやすい",
-                  "text": "香りは記憶や感情と強く結びつくことがあります。昔の香りで突然記憶がよみがえることがあるのはそのためです。"
-              },
+            {
+              "type": "trivia",
+              "query": "music headphones",
+              "title": "音楽は記憶を呼び起こす",
+              "text": "音楽は過去の出来事や感情と結びつき、昔の記憶を思い出すきっかけになることがあります。"
+            },
 
-              {
-                  "query": "banana",
-                  "title": "バナナは植物学上ベリー",
-                  "text": "植物学上では、バナナはベリーに分類されます。普段のイメージとはかなり違います。"
-              },
+            {
+              "type": "trivia",
+              "query": "smell perfume",
+              "title": "香りは記憶と結びつきやすい",
+              "text": "香りは記憶や感情と強く結びつくことがあります。昔の香りで記憶がよみがえることがあるのはそのためです。"
+            },
 
-              {
-                  "query": "strawberry",
-                  "title": "イチゴは植物学上のベリーではない",
-                  "text": "イチゴは普段ベリーと呼ばれますが、植物学上の分類では一般的なベリーとは異なります。"
-              },
+            {
+              "type": "trivia",
+              "query": "banana",
+              "title": "バナナは植物学上ベリー",
+              "text": "植物学上では、バナナはベリーに分類されます。普段のイメージとはかなり違います。"
+            },
 
-              {
-                  "query": "popcorn",
-                  "title": "ポップコーンが爆発する理由",
-                  "text": "ポップコーンの粒の中には水分があります。加熱すると水蒸気になり、圧力で粒が弾けます。"
-              },
+            {
+              "type": "trivia",
+              "query": "strawberry",
+              "title": "イチゴは植物学上のベリーではない",
+              "text": "イチゴは普段ベリーと呼ばれますが、植物学上の分類では一般的なベリーとは異なります。"
+            },
 
-              {
-                  "query": "bread bakery",
-                  "title": "パンが古くなる科学",
-                  "text": "パンが時間とともに硬くなるのは、単純に水分がなくなるだけではありません。デンプンの変化も関係しています。"
-              },
+            {
+              "type": "trivia",
+              "query": "popcorn",
+              "title": "ポップコーンが爆発する理由",
+              "text": "ポップコーンの粒の中には水分があります。加熱すると水蒸気になり、圧力で粒が弾けます。"
+            },
 
-              {
-                  "query": "ice water",
-                  "title": "氷は水に浮く",
-                  "text": "氷は液体の水より密度が低いため、水に浮きます。これは水が持つ珍しい性質の一つです。"
-              },
+            {
+              "type": "trivia",
+              "query": "bread bakery",
+              "title": "パンが古くなる科学",
+              "text": "パンが時間とともに硬くなるのは、単純に水分がなくなるだけではありません。デンプンの変化も関係しています。"
+            },
 
-              {
-                  "query": "lightning storm",
-                  "title": "雷は太陽表面より高温になることがある",
-                  "text": "雷の放電が通る空気は、瞬間的に太陽表面より高い温度になることがあります。"
-              },
+            {
+              "type": "trivia",
+              "query": "ice water",
+              "title": "氷は水に浮く",
+              "text": "氷は液体の水より密度が低いため、水に浮きます。これは水が持つ珍しい性質の一つです。"
+            },
 
-              {
-                  "query": "rainbow sky",
-                  "title": "虹は条件次第で円に見える",
-                  "text": "虹は条件がそろうと円形に近い姿として見えることがあります。地上では一部しか見えないことが多いんです。"
-              },
+            {
+              "type": "trivia",
+              "query": "lightning storm",
+              "title": "雷は非常に高温になる",
+              "text": "雷の放電が通る空気は、瞬間的に非常に高い温度になることがあります。"
+            },
 
-              {
-                  "query": "sky blue",
-                  "title": "空が青く見える理由",
-                  "text": "空が青く見えるのは、太陽光が大気中で散乱するためです。青い光は特に散乱されやすい性質があります。"
-              },
+            {
+              "type": "trivia",
+              "query": "rainbow sky",
+              "title": "虹は条件次第で円に見える",
+              "text": "虹は条件がそろうと円形に近い姿として見えることがあります。地上では一部しか見えないことが多いんです。"
+            },
 
-              {
-                  "query": "moon space",
-                  "title": "月の光は自分で作っていない",
-                  "text": "夜空で輝いて見える月の光は、月自身が作った光ではありません。太陽の光を反射しています。"
-              },
+            {
+              "type": "trivia",
+              "query": "sky blue",
+              "title": "空が青く見える理由",
+              "text": "空が青く見えるのは、太陽光が大気中で散乱するためです。青い光は特に散乱されやすい性質があります。"
+            },
 
-              {
-                  "query": "sun earth space",
-                  "title": "太陽の光が地球に届くまで",
-                  "text": "太陽から地球まで光が届くには、およそ8分20秒かかります。今見ている太陽は少し前の姿です。"
-              },
+            {
+              "type": "trivia",
+              "query": "moon space",
+              "title": "月の光は自分で作っていない",
+              "text": "夜空で輝いて見える月の光は、月自身が作った光ではありません。太陽の光を反射しています。"
+            },
 
-              {
-                  "query": "venus planet",
-                  "title": "金星は1日が1年より長い",
-                  "text": "金星では、自転にかかる時間が公転周期より長いという不思議な特徴があります。"
-              },
+            {
+              "type": "trivia",
+              "query": "sun earth space",
+              "title": "太陽の光が地球に届くまで",
+              "text": "太陽から地球まで光が届くには、およそ8分20秒かかります。今見ている太陽は少し前の姿です。"
+            },
 
-              {
-                  "query": "mars planet",
-                  "title": "火星では青い夕焼けが見える",
-                  "text": "火星の夕焼けは、地球とは違って青っぽく見えることがあります。大気中の細かなちりが関係しています。"
-              },
+            {
+              "type": "trivia",
+              "query": "venus planet",
+              "title": "金星は1日が1年より長い",
+              "text": "金星では、自転にかかる時間が公転周期より長いという不思議な特徴があります。"
+            },
 
-              {
-                  "query": "saturn planet",
-                  "title": "土星は水より平均密度が低い",
-                  "text": "土星の平均密度は水より低いです。もちろん実際に巨大な水槽へ浮かべることはできません。"
-              },
+            {
+              "type": "trivia",
+              "query": "mars planet",
+              "title": "火星では青い夕焼けが見える",
+              "text": "火星の夕焼けは、地球とは違って青っぽく見えることがあります。大気中の細かなちりが関係しています。"
+            },
 
-              {
-                  "query": "airplane window",
-                  "title": "飛行機の窓には小さな穴がある",
-                  "text": "飛行機の窓にある小さな穴は、窓の層の間の圧力差を調整する役割があります。"
-              }
+            {
+              "type": "trivia",
+              "query": "saturn planet",
+              "title": "土星は水より平均密度が低い",
+              "text": "土星の平均密度は水より低いです。もちろん実際に巨大な水槽へ浮かべることはできません。"
+            },
 
+            {
+              "type": "trivia",
+              "query": "airplane window",
+              "title": "飛行機の窓には小さな穴がある",
+              "text": "飛行機の窓にある小さな穴は、窓の層の間の圧力差を調整する役割があります。"
+            }
           ]
 
-          # =====================================================
-          # 100種類の導入
-          # 10 × 10
-          # =====================================================
+
+          # ========================================================
+          # 30 ENCOURAGEMENT
+          # ========================================================
+
+          encouragement = [
+
+            {
+              "type": "encouragement",
+              "query": "sunrise person",
+              "title": "今日を乗り越える",
+              "text": "今日は今日のぶんだけで大丈夫。明日のことまで、今のあなたが背負わなくていい。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "person walking sunset",
+              "title": "一歩でいい",
+              "text": "大きく前に進めなくてもいい。止まらずに一歩だけ進めたら、それで十分です。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "mountain sunrise",
+              "title": "遅くても進んでいる",
+              "text": "人と同じ速さじゃなくていい。ゆっくりでも、自分の道を歩いているなら前進です。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "rain window",
+              "title": "雨の日も終わる",
+              "text": "ずっと雨が降り続くわけじゃない。今つらい時間にも、ちゃんと終わりがあります。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "city night person",
+              "title": "頑張っている",
+              "text": "誰にも気づかれなくても、今日を生きた。それだけで、あなたはちゃんと頑張っています。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "ocean sunset",
+              "title": "休んでもいい",
+              "text": "立ち止まることは負けじゃない。疲れたら休んでいい。また歩き出せばいい。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "person alone nature",
+              "title": "自分を責めない",
+              "text": "できなかったことばかり数えなくていい。今日できた小さなことにも目を向けてください。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "sunlight window",
+              "title": "明日は変えられる",
+              "text": "今日がうまくいかなかったとしても、それで全部が決まったわけじゃない。明日はまた始められます。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "forest walking",
+              "title": "焦らなくていい",
+              "text": "焦って答えを出さなくていい。自分のペースで少しずつ進めば、それで大丈夫です。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "road sunrise",
+              "title": "道は一つじゃない",
+              "text": "今の道が苦しいなら、別の道を選んでもいい。人生には何度でも方向を変える時間があります。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "cloud sky",
+              "title": "雲の向こう",
+              "text": "今は先が見えなくても、空がずっと曇ったままとは限らない。焦らず今日を越えていこう。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "person beach",
+              "title": "小さな幸せ",
+              "text": "大きな幸せを探さなくていい。温かい飲み物や綺麗な空、それだけでも今日は十分です。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "morning coffee",
+              "title": "朝は何度でも来る",
+              "text": "眠れない夜があっても、朝はやってきます。今はただ、次の朝まで自分を守ればいい。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "person looking sky",
+              "title": "自分の人生を歩く",
+              "text": "誰かと比べなくていい。あなたの人生は、あなたの速度で進めばいい。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "road night lights",
+              "title": "迷ってもいい",
+              "text": "迷うことは悪いことじゃない。迷いながらでも、自分に合う場所を探していけばいい。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "flowers garden",
+              "title": "咲く時期は違う",
+              "text": "花が咲く時期がそれぞれ違うように、人にもそれぞれのタイミングがあります。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "ocean waves",
+              "title": "波は必ず変わる",
+              "text": "苦しい気持ちも、波のように変化します。今の感情が永遠に続くわけではありません。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "mountain road",
+              "title": "昨日より一歩",
+              "text": "昨日より少しだけ進めたら、それで十分。小さな一歩は、積み重なれば大きな道になります。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "sunset silhouette",
+              "title": "今日を終えていい",
+              "text": "今日できることをやったなら、もう休んでいい。明日の自分に続きを任せても大丈夫です。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "city sunrise",
+              "title": "まだ終わっていない",
+              "text": "今が苦しいからといって、人生全部が苦しいわけじゃない。まだこれから変わっていきます。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "person running",
+              "title": "ゆっくりでいい",
+              "text": "走れない日があってもいい。歩いてもいい。立ち止まってもいい。また動けるときに動けばいい。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "quiet room sunlight",
+              "title": "何もしない時間も必要",
+              "text": "何もしない時間は無駄じゃない。疲れた心を休ませるための、大切な時間です。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "forest sunlight",
+              "title": "比べなくていい",
+              "text": "誰かの人生と自分の人生を比べなくていい。見えている部分だけでは、誰にも分かりません。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "starry sky person",
+              "title": "夜にも意味がある",
+              "text": "暗い夜があるから、朝の光に気づける。今の時間にも、きっと意味があります。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "ocean horizon",
+              "title": "遠回りでもいい",
+              "text": "最短距離じゃなくてもいい。遠回りしたからこそ見える景色もあります。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "walking road",
+              "title": "今日を大切にする",
+              "text": "未来を心配しすぎなくていい。まずは今日一日を、自分に優しく過ごしてください。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "sunrise mountain",
+              "title": "また始めればいい",
+              "text": "何度失敗しても、また始めればいい。人生には何度でもやり直すチャンスがあります。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "person sitting beach",
+              "title": "生きているだけで十分",
+              "text": "何もできない日があってもいい。今日を生きている。それだけでも十分な一日です。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "sunset road",
+              "title": "明日の自分へ",
+              "text": "今日の自分が頑張ったぶんだけ、明日の自分が少し楽になる。だから今日はもう休もう。"
+            },
+
+            {
+              "type": "encouragement",
+              "query": "hope sunrise",
+              "title": "希望は小さくていい",
+              "text": "大きな希望が見つからなくてもいい。明日少しだけ楽になる。そのくらいの希望からでいい。"
+            }
+          ]
+
+
+          # ========================================================
+          # 100 HOOKS
+          # ========================================================
 
           hook_a = [
-              "実は、",
-              "意外ですが、",
-              "知っていましたか？",
-              "これ、意外と知られていません。",
-              "ここで一つ、面白い話です。",
-              "身近な話ですが、",
-              "一見普通ですが、",
-              "思わず誰かに話したくなるのが、",
-              "実は私たちの身近に、",
-              "たった15秒ですが、"
+            "実は、",
+            "意外ですが、",
+            "知っていましたか？",
+            "これ、意外と知られていません。",
+            "ここで一つ、覚えておいてください。",
+            "ちょっとだけ聞いてください。",
+            "今から大切なことを言います。",
+            "もし今、疲れているなら、",
+            "もし今日つらかったなら、",
+            "今のあなたに伝えたいのは、"
           ]
 
           hook_b = [
-              "こんな事実があります。",
-              "ちゃんと理由があります。",
-              "科学で説明できます。",
-              "意外な仕組みがあります。",
-              "面白い秘密があります。",
-              "知られざる特徴があります。",
-              "ちょっと不思議な現象があります。",
-              "知ると見方が変わります。",
-              "意外な事実が隠れています。",
-              "答えを知ると納得します。"
+            "こんな事実があります。",
+            "ちゃんと理由があります。",
+            "意外なことがあります。",
+            "知ると少し見方が変わります。",
+            "覚えておいてほしいことがあります。",
+            "あなたに伝えたい言葉があります。",
+            "きっと覚えておいて損はありません。",
+            "少しだけ立ち止まって聞いてください。",
+            "ここだけは忘れないでください。",
+            "この15秒だけ聞いてください。"
           ]
 
           hooks = [
-              a + b
-              for a in hook_a
-              for b in hook_b
+            a + b
+            for a in hook_a
+            for b in hook_b
           ]
 
-          # =====================================================
-          # 100種類の締め
-          # 10 × 10
-          # =====================================================
+
+          # ========================================================
+          # 100 ENDINGS
+          # ========================================================
 
           end_a = [
-              "知っておくと",
-              "覚えておくと",
-              "次に見たときは",
-              "誰かに話すと",
-              "こういう話を知ると",
-              "身近な世界を見ると",
-              "次にこの話題が出たら",
-              "今日の雑学として",
-              "こういう小さな発見が",
-              "世界はこうして見ると"
+            "知っておくと",
+            "覚えておくと",
+            "今日だけでも",
+            "明日になったら",
+            "この言葉を",
+            "少しだけでも",
+            "また苦しくなったら",
+            "今日の最後に",
+            "いつか思い出したら",
+            "この15秒を"
           ]
 
           end_b = [
-              "ちょっと得した気分です。",
-              "思わず話したくなります。",
-              "少し見え方が変わります。",
-              "きっと思い出せます。",
-              "意外と面白いですよね。",
-              "また一つ知識が増えました。",
-              "ちょっとだけ楽しくなります。",
-              "話のネタになります。",
-              "不思議に感じるはずです。",
-              "まだまだ奥深いんです。"
+            "ちょっと得した気分です。",
+            "思わず誰かに話したくなります。",
+            "少し見え方が変わります。",
+            "きっと思い出せます。",
+            "自分を少し大切にできます。",
+            "焦らなくて大丈夫です。",
+            "また一歩進めます。",
+            "今日を乗り越える力になります。",
+            "心の片隅に置いておいてください。",
+            "明日の自分に渡してあげてください。"
           ]
 
           endings = [
-              a + "、" + b
-              for a in end_a
-              for b in end_b
+            a + "、" + b
+            for a in end_a
+            for b in end_b
           ]
 
-          # =====================================================
-          # 300,000通り
+
+          # ========================================================
+          # 600,000 PATTERNS
           #
-          # 30 facts
+          # 60 contents
           # × 100 hooks
           # × 100 endings
-          # = 300,000
-          #
-          # seedを混ぜて順番に消化
-          # =====================================================
+          # = 600,000
+          # ========================================================
 
-          FACT_COUNT = len(facts)
+          contents = trivia + encouragement
+
+          CONTENT_COUNT = len(contents)
           HOOK_COUNT = len(hooks)
           END_COUNT = len(endings)
 
           TOTAL = (
-              FACT_COUNT
+              CONTENT_COUNT
               * HOOK_COUNT
               * END_COUNT
           )
 
-          # mixed-radix
-          #
-          # これにより300,000組を一周するまで
-          # 同じ組み合わせが基本的に再登場しません。
 
-          fact_index = seed % FACT_COUNT
+          # ========================================================
+          # Pattern selection
+          # ========================================================
+
+          content_index = (
+              seed % CONTENT_COUNT
+          )
 
           hook_index = (
-              seed // FACT_COUNT
+              seed // CONTENT_COUNT
           ) % HOOK_COUNT
 
           ending_index = (
-              seed // (FACT_COUNT * HOOK_COUNT)
+              seed
+              // (CONTENT_COUNT * HOOK_COUNT)
           ) % END_COUNT
 
-          fact = facts[fact_index]
+
+          content = contents[content_index]
 
           hook = hooks[hook_index]
 
           ending = endings[ending_index]
 
-          # =====================================================
-          # 台本
-          # =====================================================
 
-          script = (
-              hook
-              + "\n"
-              + fact["text"]
-              + "\n"
-              + ending
-          )
+          # ========================================================
+          # Different script style
+          # ========================================================
 
-          # =====================================================
-          # 保存
-          # =====================================================
+          if content["type"] == "encouragement":
+
+              script = (
+                  hook
+                  + "\n"
+                  + content["text"]
+                  + "\n"
+                  + ending
+              )
+
+              category = "激励"
+
+          else:
+
+              script = (
+                  hook
+                  + "\n"
+                  + content["text"]
+                  + "\n"
+                  + ending
+              )
+
+              category = "雑学"
+
+
+          # ========================================================
+          # Save files
+          # ========================================================
 
           with open(
               "script.txt",
@@ -401,13 +698,24 @@ jobs:
 
               f.write(script)
 
+
           with open(
               "category.txt",
               "w",
               encoding="utf-8"
           ) as f:
 
-              f.write(fact["title"])
+              f.write(category)
+
+
+          with open(
+              "content_title.txt",
+              "w",
+              encoding="utf-8"
+          ) as f:
+
+              f.write(content["title"])
+
 
           with open(
               "pexels_query.txt",
@@ -415,7 +723,8 @@ jobs:
               encoding="utf-8"
           ) as f:
 
-              f.write(fact["query"])
+              f.write(content["query"])
+
 
           with open(
               "video_title.txt",
@@ -423,99 +732,90 @@ jobs:
               encoding="utf-8"
           ) as f:
 
-              f.write(
-                  fact["title"]
-                  + " #Shorts"
-              )
+              if content["type"] == "encouragement":
 
-          # =====================================================
-          # ログ
-          # =====================================================
+                  title = (
+                      content["title"]
+                      + "｜今日のあなたへ #Shorts"
+                  )
 
-          print("")
-          print("========================================")
-          print("300,000 PATTERN ENGINE")
-          print("========================================")
+              else:
 
-          print(
-              "Facts:",
-              FACT_COUNT
-          )
+                  title = (
+                      content["title"]
+                      + " #Shorts"
+                  )
 
-          print(
-              "Hooks:",
-              HOOK_COUNT
-          )
+              f.write(title)
 
-          print(
-              "Endings:",
-              END_COUNT
-          )
 
-          print(
-              "TOTAL:",
-              TOTAL
-          )
+          # ========================================================
+          # GitHub environment
+          # ========================================================
 
-          print(
-              "Seed:",
-              seed
-          )
-
-          print(
-              "Fact index:",
-              fact_index
-          )
-
-          print(
-              "Hook index:",
-              hook_index
-          )
-
-          print(
-              "Ending index:",
-              ending_index
-          )
-
-          print("")
-          print("TITLE:")
-          print(fact["title"])
-
+          print("==========================================")
+          print("TOTAL PATTERNS:", TOTAL)
+          print("CONTENT COUNT :", CONTENT_COUNT)
+          print("TRIVIA        :", len(trivia))
+          print("ENCOURAGEMENT :", len(encouragement))
+          print("HOOKS         :", HOOK_COUNT)
+          print("ENDINGS       :", END_COUNT)
+          print("------------------------------------------")
+          print("SEED          :", seed)
+          print("CONTENT INDEX :", content_index)
+          print("HOOK INDEX    :", hook_index)
+          print("ENDING INDEX  :", ending_index)
+          print("TYPE          :", content["type"])
+          print("TITLE         :", content["title"])
+          print("==========================================")
           print("")
           print("SCRIPT:")
           print(script)
-
-          print("========================================")
-
+          print("")
           PY
+
 
           QUERY=$(cat pexels_query.txt)
 
           VIDEO_TITLE=$(cat video_title.txt)
 
+          CATEGORY=$(cat category.txt)
+
           echo "QUERY=$QUERY" >> "$GITHUB_ENV"
 
           echo "VIDEO_TITLE=$VIDEO_TITLE" >> "$GITHUB_ENV"
 
-      # ==========================================
-      # 5. Pexels映像
-      # ==========================================
+          echo "CATEGORY=$CATEGORY" >> "$GITHUB_ENV"
+
+
+      # ============================================================
+      # 5. Download Pexels video
+      # ============================================================
       - name: Download Pexels video
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-        run: |
 
+        run: |
           set -e
+
+          echo "=========================================="
+          echo "Pexels search"
+          echo "Category: $CATEGORY"
+          echo "Query: $QUERY"
+          echo "=========================================="
+
 
           ENCODED_QUERY=$(python - <<PY
           import urllib.parse
+
+          query = """$QUERY"""
+
           print(
-              urllib.parse.quote(
-                  """$QUERY"""
-              )
+              urllib.parse.quote(query)
           )
           PY
           )
+
 
           curl \
             --fail \
@@ -524,14 +824,58 @@ jobs:
             "https://api.pexels.com/videos/search?query=${ENCODED_QUERY}&orientation=portrait&size=medium&per_page=20" \
             -o pexels.json
 
+
           COUNT=$(jq '.videos | length' pexels.json)
 
-          echo "Pexels videos: $COUNT"
 
+          echo "Results: $COUNT"
+
+
+          # Fallback
           if [ "$COUNT" -eq 0 ]; then
 
-            echo "No portrait video found."
-            echo "Trying fallback..."
+            echo "No matching video."
+
+            if [ "$CATEGORY" = "激励" ]; then
+
+              FALLBACK_QUERY="sunrise"
+
+            else
+
+              FALLBACK_QUERY="nature"
+
+            fi
+
+
+            ENCODED_FALLBACK=$(python - <<PY
+          import urllib.parse
+
+          print(
+              urllib.parse.quote(
+                  "$FALLBACK_QUERY"
+              )
+          )
+          PY
+            )
+
+
+            curl \
+              --fail \
+              -L \
+              -H "Authorization: $PEXELS_API_KEY" \
+              "https://api.pexels.com/videos/search?query=${ENCODED_FALLBACK}&orientation=portrait&size=medium&per_page=20" \
+              -o pexels.json
+
+
+            COUNT=$(jq '.videos | length' pexels.json)
+
+          fi
+
+
+          # Second fallback
+          if [ "$COUNT" -eq 0 ]; then
+
+            echo "Using people fallback."
 
             curl \
               --fail \
@@ -544,18 +888,19 @@ jobs:
 
           fi
 
+
           test "$COUNT" -gt 0
 
+
           INDEX=$((SEED % COUNT))
+
 
           VIDEO_URL=$(jq -r \
             --argjson index "$INDEX" \
             '
             .videos[$index].video_files
             | map(
-                select(
-                  .file_type=="video/mp4"
-                )
+                select(.file_type=="video/mp4")
               )
             | sort_by(.width)
             | reverse
@@ -564,7 +909,12 @@ jobs:
             pexels.json
           )
 
+
           test -n "$VIDEO_URL"
+
+
+          echo "Downloading video..."
+
 
           curl \
             --fail \
@@ -572,17 +922,22 @@ jobs:
             "$VIDEO_URL" \
             -o source.mp4
 
+
           test -s source.mp4
 
-          echo "Pexels video downloaded."
 
-      # ==========================================
-      # 6. ナレーション
-      # ==========================================
+          echo "Video downloaded."
+
+
+      # ============================================================
+      # 6. Generate narration
+      # ============================================================
       - name: Generate narration
         run: |
-
           set -e
+
+          echo "Generating Japanese narration..."
+
 
           edge-tts \
             --voice ja-JP-NanamiNeural \
@@ -590,7 +945,12 @@ jobs:
             --file script.txt \
             --write-media voice.mp3
 
-          echo "Voice generated."
+
+          test -s voice.mp3
+
+
+          echo "Original narration duration:"
+
 
           ffprobe \
             -v error \
@@ -598,12 +958,12 @@ jobs:
             -of default=noprint_wrappers=1:nokey=1 \
             voice.mp3
 
-      # ==========================================
-      # 7. 音声を15秒以内へ調整
-      # ==========================================
+
+      # ============================================================
+      # 7. Fit narration to 15 seconds
+      # ============================================================
       - name: Fit narration
         run: |
-
           set -e
 
           DURATION=$(ffprobe \
@@ -613,13 +973,16 @@ jobs:
             voice.mp3
           )
 
-          echo "Narration: $DURATION seconds"
 
-          if awk "BEGIN {exit !($DURATION > 14.5)}"; then
+          echo "Before: $DURATION seconds"
+
+
+          if awk "BEGIN {exit !($DURATION > 14.2)}"; then
 
             SPEED=$(python - <<PY
           d = float("$DURATION")
-          speed = d / 14.5
+
+          speed = d / 14.2
 
           if speed < 1:
               speed = 1
@@ -631,7 +994,9 @@ jobs:
           PY
             )
 
+
             echo "Speed: $SPEED"
+
 
             ffmpeg \
               -y \
@@ -639,32 +1004,54 @@ jobs:
               -filter:a "atempo=$SPEED" \
               voice2.mp3
 
+
             mv voice2.mp3 voice.mp3
 
           fi
 
-      # ==========================================
-      # 8. 字幕
-      # ==========================================
-      - name: Create subtitles
-        run: |
 
+          FINAL_DURATION=$(ffprobe \
+            -v error \
+            -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 \
+            voice.mp3
+          )
+
+
+          echo "After: $FINAL_DURATION seconds"
+
+
+      # ============================================================
+      # 8. Create ASS subtitles
+      # ============================================================
+      - name: Create ASS subtitles
+        run: |
           set -e
 
           python - <<'PY'
-
           import subprocess
+          import re
+
+
+          # ========================================================
+          # Read script
+          # ========================================================
 
           with open(
               "script.txt",
               encoding="utf-8"
           ) as f:
 
-              lines = [
+              raw_lines = [
                   x.strip()
                   for x in f.read().splitlines()
                   if x.strip()
               ]
+
+
+          # ========================================================
+          # Audio duration
+          # ========================================================
 
           result = subprocess.run(
               [
@@ -682,100 +1069,327 @@ jobs:
               check=True
           )
 
+
           duration = float(
               result.stdout.strip()
           )
 
+
           duration = min(
               duration,
-              14.5
+              15.0
           )
 
-          total_chars = sum(
-              len(x)
-              for x in lines
-          )
 
-          def ts(seconds):
+          # ========================================================
+          # Split Japanese text
+          # ========================================================
 
-              ms = int(seconds * 1000)
+          def split_text(text):
 
-              h = ms // 3600000
-
-              ms %= 3600000
-
-              m = ms // 60000
-
-              ms %= 60000
-
-              s = ms // 1000
-
-              ms %= 1000
-
-              return (
-                  f"{h:02}:"
-                  f"{m:02}:"
-                  f"{s:02},"
-                  f"{ms:03}"
+              text = re.sub(
+                  r"\s+",
+                  "",
+                  text
               )
 
-          current = 0
+
+              parts = re.split(
+                  r"(?<=[。！？!?])",
+                  text
+              )
+
+
+              parts = [
+                  p.strip()
+                  for p in parts
+                  if p.strip()
+              ]
+
+
+              final = []
+
+
+              for part in parts:
+
+                  while len(part) > 18:
+
+                      cut = 18
+
+
+                      # 自然な句読点位置を探す
+                      for i in range(
+                          12,
+                          19
+                      ):
+
+                          if i < len(part):
+
+                              if part[i] in "、，":
+
+                                  cut = i + 1
+                                  break
+
+
+                      final.append(
+                          part[:cut]
+                      )
+
+
+                      part = part[cut:]
+
+
+                  if part:
+
+                      final.append(part)
+
+
+              return final
+
+
+          chunks = []
+
+
+          for line in raw_lines:
+
+              chunks.extend(
+                  split_text(line)
+              )
+
+
+          if not chunks:
+
+              raise RuntimeError(
+                  "No subtitle chunks."
+              )
+
+
+          # ========================================================
+          # Weight
+          # ========================================================
+
+          weights = []
+
+
+          for chunk in chunks:
+
+              clean = re.sub(
+                  r"[^\wぁ-んァ-ン一-龥ー]",
+                  "",
+                  chunk
+              )
+
+
+              weights.append(
+                  max(
+                      len(clean),
+                      1
+                  )
+              )
+
+
+          total_weight = sum(weights)
+
+
+          # ========================================================
+          # ASS timestamp
+          # ========================================================
+
+          def ass_time(seconds):
+
+              if seconds < 0:
+                  seconds = 0
+
+
+              hours = int(
+                  seconds // 3600
+              )
+
+              minutes = int(
+                  (seconds % 3600) // 60
+              )
+
+              secs = int(
+                  seconds % 60
+              )
+
+              centis = int(
+                  round(
+                      (seconds - int(seconds))
+                      * 100
+                  )
+              )
+
+
+              if centis >= 100:
+
+                  centis -= 100
+                  secs += 1
+
+
+              if secs >= 60:
+
+                  secs -= 60
+                  minutes += 1
+
+
+              if minutes >= 60:
+
+                  minutes -= 60
+                  hours += 1
+
+
+              return (
+                  f"{hours}:"
+                  f"{minutes:02d}:"
+                  f"{secs:02d}."
+                  f"{centis:02d}"
+              )
+
+
+          # ========================================================
+          # ASS Header
+          # ========================================================
+
+          header = """[Script Info]
+          ScriptType: v4.00+
+          PlayResX: 1080
+          PlayResY: 1920
+          WrapStyle: 2
+          ScaledBorderAndShadow: yes
+
+          [V4+ Styles]
+          Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+          Style: Default,Noto Sans CJK JP,58,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,2,2,60,60,260,1
+
+          [Events]
+          Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+          """
+
+
+          # ========================================================
+          # Write ASS
+          # ========================================================
+
+          current = 0.0
+
 
           with open(
-              "captions.srt",
+              "captions.ass",
               "w",
               encoding="utf-8"
           ) as f:
 
-              for i, line in enumerate(
-                  lines,
-                  1
-              ):
+              f.write(header)
+
+
+              for index, chunk in enumerate(chunks):
 
                   ratio = (
-                      len(line)
-                      /
-                      max(total_chars, 1)
+                      weights[index]
+                      / total_weight
                   )
+
 
                   segment = (
                       duration
                       * ratio
                   )
 
+
                   start = current
 
-                  end = min(
-                      current + segment,
-                      14.5
-                  )
+                  end = current + segment
+
+
+                  if index == len(chunks) - 1:
+
+                      end = duration
+
+
+                  # ==================================================
+                  # 2-line subtitle
+                  # ==================================================
+
+                  if len(chunk) > 10:
+
+                      midpoint = len(chunk) // 2
+
+                      candidates = []
+
+
+                      for i in range(
+                          max(5, midpoint - 5),
+                          min(
+                              len(chunk) - 1,
+                              midpoint + 6
+                          )
+                      ):
+
+                          if chunk[i] in "、。！？":
+
+                              candidates.append(
+                                  i + 1
+                              )
+
+
+                      if candidates:
+
+                          split_at = min(
+                              candidates,
+                              key=lambda x:
+                              abs(x - midpoint)
+                          )
+
+                      else:
+
+                          split_at = midpoint
+
+
+                      text = (
+                          chunk[:split_at]
+                          + r"\N"
+                          + chunk[split_at:]
+                      )
+
+                  else:
+
+                      text = chunk
+
 
                   f.write(
-                      f"{i}\n"
+                      "Dialogue: 0,"
+                      + ass_time(start)
+                      + ","
+                      + ass_time(end)
+                      + ",Default,,0,0,0,,"
+                      + text
+                      + "\n"
                   )
 
-                  f.write(
-                      f"{ts(start)} --> "
-                      f"{ts(end)}\n"
-                  )
-
-                  f.write(
-                      line
-                  )
-
-                  f.write("\n\n")
 
                   current = end
 
-          PY
 
-      # ==========================================
-      # 9. 動画生成
-      # ==========================================
+          print("==========================================")
+          print("ASS subtitle created")
+          print("Duration:", duration)
+          print("Chunks:", len(chunks))
+          print("==========================================")
+
+
+      # ============================================================
+      # 9. Render 15 second Short
+      # ============================================================
       - name: Render 15 second Short
         run: |
-
           set -e
+
+          echo "=========================================="
+          echo "Rendering 15 second Short"
+          echo "Category: $CATEGORY"
+          echo "=========================================="
+
 
           ffmpeg \
             -y \
@@ -783,57 +1397,82 @@ jobs:
             -i source.mp4 \
             -i voice.mp3 \
             -t 15 \
-            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=captions.srt:force_style='FontName=Noto Sans CJK JP,FontSize=28,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=230'" \
+            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,ass=captions.ass" \
             -map 0:v:0 \
             -map 1:a:0 \
             -c:v libx264 \
             -preset veryfast \
             -crf 23 \
             -pix_fmt yuv420p \
+            -r 30 \
             -c:a aac \
             -b:a 128k \
             -ar 44100 \
             -af "apad=pad_dur=15,atrim=0:15" \
             -t 15 \
+            -movflags +faststart \
             short.mp4
+
 
           test -s short.mp4
 
-      # ==========================================
-      # 10. 動画チェック
-      # ==========================================
+
+          echo "Render completed."
+
+
+      # ============================================================
+      # 10. Check video
+      # ============================================================
       - name: Check video
         run: |
-
           set -e
 
-          echo "================================"
-          echo "FINAL VIDEO"
-          echo "================================"
+          echo "=========================================="
+          echo "VIDEO INFORMATION"
+          echo "=========================================="
 
-          ls -lh short.mp4
 
           ffprobe \
+            -v error \
+            -show_entries \
+            format=duration,size \
+            -show_entries \
+            stream=codec_name,width,height,r_frame_rate \
+            -of default=noprint_wrappers=1 \
+            short.mp4
+
+
+          DURATION=$(ffprobe \
             -v error \
             -show_entries format=duration \
             -of default=noprint_wrappers=1:nokey=1 \
             short.mp4
+          )
 
-          ffprobe \
-            -v error \
-            -show_streams \
-            short.mp4
 
-      # ==========================================
-      # 11. YouTube投稿
-      # ==========================================
-      - name: Upload to YouTube
-        env:
-          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          echo ""
+          echo "Final duration: $DURATION"
+
+
+          if ! awk \
+            "BEGIN {exit !($DURATION >= 14.5 && $DURATION <= 15.5)}"
+          then
+
+            echo "ERROR: Video is not approximately 15 seconds."
+
+            exit 1
+
+          fi
+
+
+          echo "Video check OK."
+
+
+      # ============================================================
+      # 11. Create YouTube upload script
+      # ============================================================
+      - name: Create YouTube upload script
         run: |
-
           set -e
 
           cat > upload.py <<'PY'
@@ -847,30 +1486,36 @@ jobs:
           from googleapiclient.http import MediaFileUpload
 
 
+          CLIENT_ID = os.environ[
+              "YOUTUBE_CLIENT_ID"
+          ]
+
+          CLIENT_SECRET = os.environ[
+              "YOUTUBE_CLIENT_SECRET"
+          ]
+
+          REFRESH_TOKEN = os.environ[
+              "YOUTUBE_REFRESH_TOKEN"
+          ]
+
+
           credentials = Credentials(
 
               token=None,
 
-              refresh_token=os.environ[
-                  "YOUTUBE_REFRESH_TOKEN"
-              ],
+              refresh_token=REFRESH_TOKEN,
 
               token_uri=(
                   "https://oauth2.googleapis.com/token"
               ),
 
-              client_id=os.environ[
-                  "YOUTUBE_CLIENT_ID"
-              ],
+              client_id=CLIENT_ID,
 
-              client_secret=os.environ[
-                  "YOUTUBE_CLIENT_SECRET"
-              ],
+              client_secret=CLIENT_SECRET,
 
               scopes=[
                   "https://www.googleapis.com/auth/youtube.upload"
               ]
-
           )
 
 
@@ -883,16 +1528,45 @@ jobs:
 
           title = os.environ.get(
               "VIDEO_TITLE",
-              "知らないと驚く雑学 #Shorts"
+              "15秒ショート #Shorts"
           )
 
 
-          description = (
-              "15秒で楽しめる雑学ショートです。\n"
-              "知っていると誰かに話したくなる豆知識を紹介します。\n"
-              "\n"
-              "#Shorts #雑学 #豆知識"
+          category = os.environ.get(
+              "CATEGORY",
+              "雑学"
           )
+
+
+          if category == "激励":
+
+              description = (
+                  "今日を頑張るあなたへ。\n"
+                  "少しでも心が軽くなる言葉を15秒で。\n\n"
+                  "#Shorts #激励 #応援 #前向き"
+              )
+
+              tags = [
+                  "Shorts",
+                  "激励",
+                  "応援",
+                  "前向き",
+                  "モチベーション"
+              ]
+
+          else:
+
+              description = (
+                  "知られざる雑学を15秒で紹介します。\n\n"
+                  "#Shorts #雑学 #豆知識"
+              )
+
+              tags = [
+                  "Shorts",
+                  "雑学",
+                  "豆知識",
+                  "面白い話"
+              ]
 
 
           body = {
@@ -903,8 +1577,9 @@ jobs:
 
                   "description": description,
 
-                  "categoryId": "22"
+                  "tags": tags,
 
+                  "categoryId": "22"
               },
 
               "status": {
@@ -912,9 +1587,7 @@ jobs:
                   "privacyStatus": "public",
 
                   "selfDeclaredMadeForKids": False
-
               }
-
           }
 
 
@@ -925,7 +1598,6 @@ jobs:
               mimetype="video/mp4",
 
               resumable=True
-
           )
 
 
@@ -936,26 +1608,43 @@ jobs:
               body=body,
 
               media_body=media
-
           )
 
 
-          response = request.execute()
+          response = None
 
 
-          print("")
-          print("================================")
-          print("YOUTUBE UPLOAD SUCCESS")
-          print("================================")
+          while response is None:
+
+              status, response = (
+                  request.next_chunk()
+              )
+
+              if status:
+
+                  print(
+                      "Upload progress:",
+                      int(
+                          status.progress() * 100
+                      ),
+                      "%"
+                  )
+
+
+          print("==========================================")
 
           print(
-              "VIDEO ID:",
+              "YouTube upload completed!"
+          )
+
+          print(
+              "Category:",
+              category
+          )
+
+          print(
+              "Video ID:",
               response["id"]
-          )
-
-          print(
-              "TITLE:",
-              title
           )
 
           print(
@@ -964,23 +1653,43 @@ jobs:
               + response["id"]
           )
 
-          print("================================")
+          print("==========================================")
 
 
           PY
 
+
+      # ============================================================
+      # 12. Upload to YouTube
+      # ============================================================
+      - name: Upload to YouTube
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
+          CATEGORY: ${{ env.CATEGORY }}
+
+        run: |
+          set -e
+
           python upload.py
 
-      # ==========================================
-      # 12. 完成動画を保存
-      # ==========================================
+
+      # ============================================================
+      # 13. Upload artifact
+      # ============================================================
       - name: Upload artifact
         uses: actions/upload-artifact@v4
 
         with:
+          name: youtube-short-${{ github.run_number }}
 
-          name: youtube-short
+          path: |
+            short.mp4
+            script.txt
+            captions.ass
+            category.txt
+            content_title.txt
 
-          path: short.mp4
-
-          retention-days: 1
+          retention-days: 3
