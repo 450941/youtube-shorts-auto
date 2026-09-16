@@ -20,7 +20,7 @@ jobs:
       - name: Install packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-noto-cjk jq
+          sudo apt-get install -y ffmpeg fonts-noto-cjk fonts-noto-cjk-extra jq
           python -m pip install --upgrade pip
           pip install edge-tts
 
@@ -48,15 +48,12 @@ jobs:
 
       - name: Generate 300000+ content patterns
         run: |
-
           python - <<'PY'
-
           import os
 
           seed = int(os.environ["SEED"])
 
           contents = [
-
               {
                   "type": "2択クイズ",
                   "query": "person thinking",
@@ -207,7 +204,6 @@ jobs:
                   "query": "person peaceful",
                   "text": "うまくできなかった日も、自分を全部否定しなくていい。今日を終えたことも一つの結果。"
               }
-
           ]
 
           hook_bases = [
@@ -290,8 +286,10 @@ jobs:
 
           content_index = seed % len(contents)
           remaining = seed // len(contents)
+
           hook_index = remaining % len(hooks)
           remaining = remaining // len(hooks)
+
           ending_index = remaining % len(endings)
 
           item = contents[content_index]
@@ -352,7 +350,12 @@ jobs:
           python - "$QUERY" <<'PY' > encoded_query.txt
           import sys
           import urllib.parse
-          print(urllib.parse.quote(sys.argv[1]))
+
+          print(
+              urllib.parse.quote(
+                  sys.argv[1]
+              )
+          )
           PY
 
           ENCODED_QUERY=$(cat encoded_query.txt)
@@ -475,7 +478,6 @@ jobs:
       - name: Create synchronized subtitles
         run: |
           python - <<'PY'
-
           import re
           import subprocess
 
@@ -517,20 +519,19 @@ jobs:
 
           for part in parts:
 
-              if len(part) <= 18:
+              if len(part) <= 14:
                   final_parts.append(part)
-                  continue
 
-              words = [
-                  part[i:i+18]
+              else:
+
                   for i in range(
                       0,
                       len(part),
-                      18
-                  )
-              ]
-
-              final_parts.extend(words)
+                      14
+                  ):
+                      final_parts.append(
+                          part[i:i+14]
+                      )
 
           parts = final_parts
 
@@ -578,28 +579,46 @@ jobs:
                       f"{text}\n\n"
                   )
 
-          PY
+          print("=================================")
+          print("SUBTITLE TEXT")
+          print("=================================")
 
-          echo "================================="
-          echo "SUBTITLES"
-          echo "================================="
+          print(script)
 
-          cat captions.srt
+          print("=================================")
+          print("SRT")
+          print("=================================")
+
+          print(
+              open(
+                  "captions.srt",
+                  encoding="utf-8"
+              ).read()
+          )
 
       - name: Render 15 second video
         run: |
           set -e
 
-          echo "================================="
-          echo "CHECK SUBTITLE FILE"
-          echo "================================="
+          FONT="/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
 
-          test -s captions.srt
+          if [ ! -f "$FONT" ]; then
 
-          cat captions.srt
+            echo "Noto font not found."
+
+            find /usr/share/fonts \
+              -iname "*NotoSansCJK*" \
+              | head -20
+
+            exit 1
+
+          fi
+
+          echo "Using font:"
+          echo "$FONT"
 
           echo "================================="
-          echo "RENDER VIDEO WITH SOFT SUBTITLES"
+          echo "CREATE VIDEO WITH DRAW TEXT"
           echo "================================="
 
           ffmpeg \
@@ -607,7 +626,7 @@ jobs:
             -stream_loop -1 \
             -i source.mp4 \
             -i narration_fit.mp3 \
-            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=filename=captions.srt:force_style='FontName=Noto Sans CJK JP,FontSize=48,PrimaryColour=&H00FFFFFF,OutlineColour=&H00333333,Outline=2,Shadow=0,Alignment=2,MarginV=520'" \
+            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,drawtext=fontfile='$FONT':textfile='script.txt':fontcolor=white:fontsize=52:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-500:line_spacing=12:fix_bounds=true" \
             -t 15 \
             -map 0:v:0 \
             -map 1:a:0 \
@@ -624,7 +643,7 @@ jobs:
 
           echo "================================="
           echo "VIDEO CREATED"
-          echo "SUBTITLES BURNED INTO VIDEO"
+          echo "DRAW TEXT SUBTITLE INCLUDED"
           echo "================================="
 
           ffprobe \
@@ -676,7 +695,10 @@ jobs:
 
           if [ -n "$ERROR_CODE" ]; then
             echo "TikTok OAuth returned an error."
-            echo "$RESPONSE" | jq 'del(.access_token, .refresh_token)'
+
+            echo "$RESPONSE" | jq \
+              'del(.access_token, .refresh_token)'
+
             exit 1
           fi
 
@@ -684,7 +706,10 @@ jobs:
 
           if [ -z "$ACCESS_TOKEN" ]; then
             echo "ERROR: TikTok access token was not returned."
-            echo "$RESPONSE" | jq 'del(.access_token, .refresh_token)'
+
+            echo "$RESPONSE" | jq \
+              'del(.access_token, .refresh_token)'
+
             exit 1
           fi
 
@@ -733,7 +758,6 @@ jobs:
           TITLE=$(cat video_title.txt)
 
           python - "$TITLE" "$FILE_SIZE" <<'PY' > init.json
-
           import json
           import sys
 
@@ -742,37 +766,22 @@ jobs:
           file_size = int(sys.argv[2])
 
           data = {
-
               "post_info": {
-
                   "title": title,
-
                   "privacy_level": "SELF_ONLY",
-
                   "disable_duet": False,
-
                   "disable_comment": False,
-
                   "disable_stitch": False,
-
                   "video_cover_timestamp_ms": 1000,
-
                   "is_aigc": True
-
               },
 
               "source_info": {
-
                   "source": "FILE_UPLOAD",
-
                   "video_size": file_size,
-
                   "chunk_size": file_size,
-
                   "total_chunk_count": 1
-
               }
-
           }
 
           print(
@@ -781,7 +790,6 @@ jobs:
                   ensure_ascii=False
               )
           )
-
           PY
 
           echo "TikTok initialization request:"
