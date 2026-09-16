@@ -1,1 +1,32 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TikTok認証</title>
+</head>
+<body>
+  <h2>TikTok認証</h2>
+  <button onclick="login()">TikTokで認証する</button>
 
+  <script>
+    function login() {
+      const clientKey = "sbawbs7cmjqpneet8e";
+      const redirectUri = "https://450941.github.io/youtube-shorts-auto/";
+      const state = Math.random().toString(36).substring(2);
+
+      localStorage.setItem("tiktok_state", state);
+
+      const url =
+        "https://www.tiktok.com/v2/auth/authorize/" +
+        "?client_key=" + encodeURIComponent(clientKey) +
+        "&response_type=code" +
+        "&scope=" + encodeURIComponent("user.info.basic,video.publish") +
+        "&redirect_uri=" + encodeURIComponent(redirectUri) +
+        "&state=" + encodeURIComponent(state);
+
+      window.location.href = url;
+    }
+  </script>
+</body>
+</html>
