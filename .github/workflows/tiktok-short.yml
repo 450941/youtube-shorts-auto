@@ -14,15 +14,9 @@ jobs:
 
     steps:
 
-      # =========================================================
-      # 1. Checkout
-      # =========================================================
       - name: Checkout
         uses: actions/checkout@v4
 
-      # =========================================================
-      # 2. Install
-      # =========================================================
       - name: Install packages
         run: |
           sudo apt-get update
@@ -30,9 +24,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install edge-tts
 
-      # =========================================================
-      # 3. Create deterministic seed
-      # =========================================================
       - name: Create seed
         run: |
           DAY=$(date -u +%j)
@@ -55,9 +46,6 @@ jobs:
           echo "SLOT=$SLOT"
           echo "SEED=$SEED"
 
-      # =========================================================
-      # 4. Generate 300,000+ combinations
-      # =========================================================
       - name: Generate 300000+ content patterns
         run: |
 
@@ -346,32 +334,25 @@ jobs:
           PY
 
           echo "================================="
-          echo "Generated content"
+          echo "GENERATED CONTENT"
           echo "================================="
 
           cat video_type.txt
           echo
           cat script.txt
 
-      # =========================================================
-      # 5. Search Pexels
-      # =========================================================
       - name: Search Pexels video
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: |
-
           set -e
 
           QUERY=$(cat pexels_query.txt)
 
           python - "$QUERY" <<'PY' > encoded_query.txt
-
           import sys
           import urllib.parse
-
           print(urllib.parse.quote(sys.argv[1]))
-
           PY
 
           ENCODED_QUERY=$(cat encoded_query.txt)
@@ -438,12 +419,8 @@ jobs:
 
           echo "Pexels video downloaded."
 
-      # =========================================================
-      # 6. Generate narration
-      # =========================================================
       - name: Generate narration
         run: |
-
           edge-tts \
             --voice "ja-JP-NanamiNeural" \
             --rate "+10%" \
@@ -452,12 +429,8 @@ jobs:
 
           test -s narration.mp3
 
-      # =========================================================
-      # 7. Fit narration into 15 seconds
-      # =========================================================
       - name: Fit narration
         run: |
-
           DURATION=$(ffprobe \
             -v error \
             -show_entries format=duration \
@@ -468,7 +441,6 @@ jobs:
           echo "$DURATION seconds"
 
           SPEED=$(python - "$DURATION" <<'PY'
-
           import sys
 
           duration = float(sys.argv[1])
@@ -482,7 +454,6 @@ jobs:
                   speed = 1.95
 
               print(f"{speed:.3f}")
-
           PY
           )
 
@@ -490,27 +461,19 @@ jobs:
           echo "$SPEED"
 
           if [ "$SPEED" = "1.0" ]; then
-
             cp narration.mp3 narration_fit.mp3
-
           else
-
             ffmpeg \
               -y \
               -i narration.mp3 \
               -filter:a "atempo=$SPEED" \
               narration_fit.mp3
-
           fi
 
           test -s narration_fit.mp3
 
-      # =========================================================
-      # 8. Create synchronized subtitles
-      # =========================================================
       - name: Create synchronized subtitles
         run: |
-
           python - <<'PY'
 
           import re
@@ -570,6 +533,7 @@ jobs:
               final_parts.extend(words)
 
           parts = final_parts
+
           count = len(parts)
 
           def timestamp(seconds):
@@ -622,18 +586,28 @@ jobs:
 
           cat captions.srt
 
-      # =========================================================
-      # 9. Render 15-second vertical video
-      # =========================================================
       - name: Render 15 second video
         run: |
+          set -e
+
+          echo "================================="
+          echo "CHECK SUBTITLE FILE"
+          echo "================================="
+
+          test -s captions.srt
+
+          cat captions.srt
+
+          echo "================================="
+          echo "RENDER VIDEO WITH SOFT SUBTITLES"
+          echo "================================="
 
           ffmpeg \
             -y \
             -stream_loop -1 \
             -i source.mp4 \
             -i narration_fit.mp3 \
-            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=captions.srt:force_style='FontName=Noto Sans CJK JP,FontSize=52,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=4,Shadow=1,Alignment=2,MarginV=520'" \
+            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=filename=captions.srt:force_style='FontName=Noto Sans CJK JP,FontSize=48,PrimaryColour=&H00FFFFFF,OutlineColour=&H00333333,Outline=2,Shadow=0,Alignment=2,MarginV=520'" \
             -t 15 \
             -map 0:v:0 \
             -map 1:a:0 \
@@ -650,6 +624,7 @@ jobs:
 
           echo "================================="
           echo "VIDEO CREATED"
+          echo "SUBTITLES BURNED INTO VIDEO"
           echo "================================="
 
           ffprobe \
@@ -658,9 +633,6 @@ jobs:
             -of default=noprint_wrappers=1 \
             output.mp4
 
-      # =========================================================
-      # 10. Get TikTok access token
-      # =========================================================
       - name: Get TikTok access token
         env:
           TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
@@ -669,7 +641,6 @@ jobs:
           TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
           TIKTOK_REDIRECT_URI: ${{ secrets.TIKTOK_REDIRECT_URI }}
         run: |
-
           set -e
 
           if [ -n "$TIKTOK_REFRESH_TOKEN" ]; then
@@ -723,15 +694,11 @@ jobs:
 
           if [ -n "$NEW_REFRESH_TOKEN" ]; then
             echo "A TikTok refresh token was returned."
-            echo "It must be saved as TIKTOK_REFRESH_TOKEN for future scheduled runs."
+            echo "Save it as TIKTOK_REFRESH_TOKEN for future scheduled runs."
           fi
 
-      # =========================================================
-      # 11. Get creator information
-      # =========================================================
       - name: Get TikTok creator info
         run: |
-
           curl -sS \
             -X POST \
             "https://open.tiktokapis.com/v2/post/publish/creator_info/query/" \
@@ -741,33 +708,28 @@ jobs:
             -o creator.json
 
           echo "Creator information:"
+
           cat creator.json | jq .
 
-          ERROR_CODE=$(jq -r \
-            '.error.code // empty' \
-            creator.json)
+          ERROR_CODE=$(jq -r '.error.code // empty' creator.json)
 
           if [ "$ERROR_CODE" != "ok" ]; then
             echo "ERROR: TikTok creator info failed."
             exit 1
           fi
 
-          PRIVACY_OPTIONS=$(jq -r \
-            '.data.privacy_level_options[]?' \
-            creator.json)
+          PRIVACY_OPTIONS=$(jq -r '.data.privacy_level_options[]?' creator.json)
 
           echo "Available privacy levels:"
+
           echo "$PRIVACY_OPTIONS"
 
-      # =========================================================
-      # 12. Initialize TikTok Direct Post
-      # =========================================================
       - name: Initialize TikTok Direct Post
         run: |
-
           set -e
 
           FILE_SIZE=$(stat -c%s output.mp4)
+
           TITLE=$(cat video_title.txt)
 
           python - "$TITLE" "$FILE_SIZE" <<'PY' > init.json
@@ -776,24 +738,41 @@ jobs:
           import sys
 
           title = sys.argv[1]
+
           file_size = int(sys.argv[2])
 
           data = {
+
               "post_info": {
+
                   "title": title,
+
                   "privacy_level": "SELF_ONLY",
+
                   "disable_duet": False,
+
                   "disable_comment": False,
+
                   "disable_stitch": False,
+
                   "video_cover_timestamp_ms": 1000,
+
                   "is_aigc": True
+
               },
+
               "source_info": {
+
                   "source": "FILE_UPLOAD",
+
                   "video_size": file_size,
+
                   "chunk_size": file_size,
+
                   "total_chunk_count": 1
+
               }
+
           }
 
           print(
@@ -806,6 +785,7 @@ jobs:
           PY
 
           echo "TikTok initialization request:"
+
           cat init.json | jq .
 
           curl -sS \
@@ -817,24 +797,19 @@ jobs:
             -o publish.json
 
           echo "TikTok initialization response:"
+
           cat publish.json | jq .
 
-          ERROR_CODE=$(jq -r \
-            '.error.code // empty' \
-            publish.json)
+          ERROR_CODE=$(jq -r '.error.code // empty' publish.json)
 
           if [ "$ERROR_CODE" != "ok" ]; then
             echo "ERROR: TikTok initialization failed."
             exit 1
           fi
 
-          PUBLISH_ID=$(jq -r \
-            '.data.publish_id // empty' \
-            publish.json)
+          PUBLISH_ID=$(jq -r '.data.publish_id // empty' publish.json)
 
-          UPLOAD_URL=$(jq -r \
-            '.data.upload_url // empty' \
-            publish.json)
+          UPLOAD_URL=$(jq -r '.data.upload_url // empty' publish.json)
 
           if [ -z "$PUBLISH_ID" ]; then
             echo "ERROR: publish_id was not returned."
@@ -847,19 +822,17 @@ jobs:
           fi
 
           echo "PUBLISH_ID=$PUBLISH_ID" >> "$GITHUB_ENV"
+
           echo "UPLOAD_URL=$UPLOAD_URL" >> "$GITHUB_ENV"
 
-      # =========================================================
-      # 13. Upload video
-      # =========================================================
       - name: Upload video to TikTok
         run: |
-
           set -e
 
           FILE_SIZE=$(stat -c%s output.mp4)
 
           echo "Uploading video..."
+
           echo "File size: $FILE_SIZE bytes"
 
           curl -fL \
@@ -872,18 +845,16 @@ jobs:
 
           echo "TikTok video upload completed."
 
-      # =========================================================
-      # 14. Check publish status
-      # =========================================================
       - name: Check TikTok publish status
         run: |
-
           set -e
 
           for i in $(seq 1 12); do
 
             echo "================================="
+
             echo "TikTok status check $i / 12"
+
             echo "================================="
 
             RESPONSE=$(curl -sS \
@@ -895,15 +866,16 @@ jobs:
 
             echo "$RESPONSE" | jq .
 
-            STATUS=$(echo "$RESPONSE" | jq -r \
-              '.data.status // empty')
+            STATUS=$(echo "$RESPONSE" | jq -r '.data.status // empty')
 
             echo "STATUS=$STATUS"
 
             if [ "$STATUS" = "PUBLISH_COMPLETE" ]; then
 
               echo "================================="
+
               echo "TikTok publish complete!"
+
               echo "================================="
 
               exit 0
@@ -923,11 +895,9 @@ jobs:
           done
 
           echo "TikTok is still processing."
+
           echo "The workflow itself completed."
 
-      # =========================================================
-      # 15. Save generated video artifact
-      # =========================================================
       - name: Upload generated video artifact
         uses: actions/upload-artifact@v4
         with:
