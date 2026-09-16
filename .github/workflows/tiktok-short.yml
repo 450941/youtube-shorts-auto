@@ -3,11 +3,8 @@ name: Generate TikTok Shorts
 on:
   workflow_dispatch:
   schedule:
-    # 12:00 JST
     - cron: "0 3 * * *"
-    # 18:00 JST
     - cron: "0 9 * * *"
-    # 21:00 JST
     - cron: "0 12 * * *"
 
 jobs:
@@ -26,9 +23,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install edge-tts
 
-      - name: Create video information
-        env:
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      - name: Create 1 million pattern script
         run: |
           set -e
 
@@ -37,10 +32,10 @@ jobs:
           HOUR=$((10#$HOUR))
 
           case "$HOUR" in
-            3)  SLOT=0 ;;
-            9)  SLOT=1 ;;
+            3) SLOT=0 ;;
+            9) SLOT=1 ;;
             12) SLOT=2 ;;
-            *)  SLOT=0 ;;
+            *) SLOT=0 ;;
           esac
 
           SEED=$((DAY * 3 + SLOT))
@@ -52,80 +47,190 @@ jobs:
           seed = int(sys.argv[1])
           random.seed(seed)
 
+          # ============================================================
+          # 25ネタ × 4パターン = 100ネタ
+          # ============================================================
+
+          content_bases = [
+              "人は朝起きてすぐより、少し時間が経ってから集中しやすいことがあります",
+              "人間の脳は何もしていないように見える時間にも情報を整理しています",
+              "笑うことはストレスに関係する心身の反応に影響することがあります",
+              "好きな音楽を聴くと気分や集中状態が変わることがあります",
+              "短時間で何度も復習するより、時間を空けて復習する方法が記憶に役立つことがあります",
+              "スマホを少しだけ見るつもりが長時間になってしまうことがあります",
+              "睡眠中も脳は記憶の整理などを続けています",
+              "水分不足によってだるさや集中しづらさを感じることがあります",
+              "同じ言葉でも言われるタイミングによって印象が変わることがあります",
+              "小さな達成感を積み重ねると次の行動を始めやすくなることがあります",
+              "新しい環境では普段より多くの情報を処理するため疲れを感じることがあります",
+              "散歩のような軽い運動が気分転換になることがあります",
+              "人は一度に多くのことをしようとすると注意が分散しやすくなります",
+              "作業を始める前にやることを一つに絞ると取り掛かりやすくなることがあります",
+              "同じ場所で同じ作業を続けるより、少し環境を変えることで気分が変わることがあります",
+              "目標を大きくしすぎると最初の一歩が重く感じられることがあります",
+              "人は失敗した経験を強く覚えているように感じることがあります",
+              "誰かに感謝を伝えることは人間関係を良くするきっかけになります",
+              "好きなことをしている時間は時間の流れを短く感じることがあります",
+              "新しいことを始めると最初はうまくできなくても自然なことです",
+              "部屋を少し片付けるだけでも作業を始めるきっかけになることがあります",
+              "朝に一つ小さな予定を決めると一日の行動を始めやすくなることがあります",
+              "大きな目標も小さな行動に分けることで取り組みやすくなります",
+              "休憩を入れることで長い作業を続けやすくなることがあります",
+              "人は自分が思っているより他人から細かく見られていないことがあります",
+          ]
+
+          content_variations = [
+              "。知っておくと面白い話です。",
+              "。意外ですが、こうした特徴があります。",
+              "。身近なことですが、意識すると面白いポイントです。",
+              "。毎日の生活にも関係している話です。",
+          ]
+
           contents = [
-              ("雑学", "実は、人は朝起きてすぐより、少し時間が経ってからのほうが集中しやすいと言われています。"),
-              ("雑学", "人間の脳は、何もしない時間にも情報を整理しています。ぼーっとする時間も無駄ではありません。"),
-              ("雑学", "笑うだけでも、脳はストレスに関係する反応を変えることがあります。"),
-              ("雑学", "好きな音楽を聴くと、気分が変わることがあります。音楽は脳への刺激になるからです。"),
-              ("雑学", "新しいことを覚えるとき、短時間で何度も復習するより、間隔を空けて復習するほうが記憶に残りやすいです。"),
-              ("雑学", "人は『あと少しだけ』と思ってスマホを見ると、気づかないうちに長時間見てしまうことがあります。"),
-              ("雑学", "眠っている間も脳は完全に休んでいるわけではなく、記憶の整理などをしています。"),
-              ("雑学", "水分が足りないだけでも、だるさや集中しづらさを感じることがあります。"),
-              ("雑学", "人は同じ言葉でも、言われたタイミングによって印象が大きく変わることがあります。"),
-              ("雑学", "小さな達成感を積み重ねると、次の行動を始めやすくなります。"),
+              base + variation
+              for base in content_bases
+              for variation in content_variations
+          ]
 
-              ("人生", "人生で意外と大切なのは、頑張ることだけじゃなく、頑張らない時間を作ることです。"),
-              ("人生", "うまくいかない日は、人生が失敗した日ではなく、ただの一日です。"),
-              ("人生", "誰かと比べて遅れているように感じても、その人とあなたではスタート地点が違います。"),
-              ("人生", "何歳からでも始められることは、思っているよりたくさんあります。"),
-              ("人生", "昨日の自分より少し前に進めたら、それだけで十分です。"),
-              ("人生", "人生は一気に変わるより、小さな習慣が積み重なって変わることのほうが多いです。"),
-              ("人生", "失敗した経験は、その瞬間には意味がなくても、後から役に立つことがあります。"),
-              ("人生", "自分を責め続けても、過去の日には戻れません。だから次の一歩に使える力を残しておくことが大切です。"),
-              ("人生", "周りから見れば普通の日でも、自分にとって大切な一日になることがあります。"),
-              ("人生", "焦って答えを出さなくてもいいことは、意外とたくさんあります。"),
+          # ============================================================
+          # 20フック × 5パターン = 100フック
+          # ============================================================
 
-              ("やる気", "今日は何もしたくない。そんな日は、全部やろうとせず、一つだけ終わらせてみてください。"),
-              ("やる気", "やる気が出てから動くのではなく、少し動くことでやる気が出てくることがあります。"),
-              ("やる気", "完璧じゃなくても、始めた時点で昨日の自分とは違います。"),
-              ("やる気", "たった5分でも始めれば、ゼロではなくなります。"),
-              ("やる気", "うまくいかないときは、才能ではなく方法を変えるだけで結果が変わることがあります。"),
-              ("やる気", "今日できることを一つだけやって、それで終わりにしてもいい日があります。"),
-              ("やる気", "自信は、最初から持っているものではなく、行動の後についてくることがあります。"),
-              ("やる気", "小さな一歩でも、止まっている状態から動き出したなら、それは前進です。"),
-              ("やる気", "やることが多すぎるなら、一番小さい作業から始めてください。"),
-              ("やる気", "明日の自分を助けるために、今日一つだけ片付けておく。それだけでも十分です。"),
+          hook_bases = [
+              "これ、意外と知られてません",
+              "実はかなり面白い話です",
+              "知っておくとちょっと得する話",
+              "たった15秒だけ聞いてください",
+              "これを知ると少し見方が変わるかもしれません",
+              "意外すぎる話なんですが",
+              "知らないままだともったいないかもしれません",
+              "実は多くの人が見落としています",
+              "これ、今日から意識できます",
+              "最後まで聞いてみてください",
+              "知ってるようで知らない話です",
+              "意外と身近なところにあります",
+              "一度だけ考えてみてください",
+              "これを知っていましたか",
+              "15秒後には誰かに話したくなるかもしれません",
+              "意外な事実を一つ紹介します",
+              "毎日の生活に関係する話です",
+              "知らないと気づきにくいポイントです",
+              "実はここが重要なんです",
+              "最後の一言まで聞いてください",
+          ]
+
+          hook_variations = [
+              "。",
+              "。まずこれだけ聞いてください。",
+              "。ちょっと意外ですよね。",
+              "。知っていましたか？",
+              "。ここからが面白いところです。",
           ]
 
           hooks = [
-              "これ、意外と知られてません。",
-              "実はこれ、かなり大事です。",
-              "知っておくとちょっと得する話。",
-              "たった15秒だけ聞いてください。",
-              "これを知ったら少し見方が変わるかも。",
-              "意外すぎる話なんですが、",
-              "知らないままだと損かもしれません。",
-              "実は、ほとんどの人が勘違いしています。",
-              "これ、今日から使えます。",
-              "最後まで聞いてみてください。",
+              base + variation
+              for base in hook_bases
+              for variation in hook_variations
+          ]
+
+          # ============================================================
+          # 20締め × 5パターン = 100締め
+          # ============================================================
+
+          ending_bases = [
+              "覚えておいてください",
+              "今日から少し意識してみてください",
+              "知らなかったら保存しておいてください",
+              "あなたはどう思いますか",
+              "明日の自分のために覚えておいてください",
+              "こういう小さな知識も面白いですよ",
+              "意外だったら保存しておきましょう",
+              "誰かに話してみるのも面白いかもしれません",
+              "忘れそうなら保存しておいてください",
+              "また一つ知識が増えましたね",
+              "今日の雑学として覚えておきましょう",
+              "知っているだけでも少し見方が変わります",
+              "こういう話が好きならまた見てください",
+              "次に誰かと話すときに使えるかもしれません",
+              "15秒で一つ賢くなりました",
+              "小さな知識を積み重ねていきましょう",
+              "また次の動画で紹介します",
+              "次も面白い話を持ってきます",
+              "気になったらもう一度見返してください",
+              "最後まで見てくれてありがとうございました",
+          ]
+
+          ending_variations = [
+              "。",
+              "。ぜひ覚えておいてください。",
+              "。これだけでも覚えておくと便利です。",
+              "。意外だったら保存しておきましょう。",
+              "。また次の動画で。",
           ]
 
           endings = [
-              "覚えておいてください。",
-              "これだけでも覚えておくと便利です。",
-              "今日から少し意識してみてください。",
-              "もし知らなかったら保存しておいてください。",
-              "あなたはどう思いますか？",
-              "明日の自分のために覚えておいてください。",
-              "意外だったらコメントで教えてください。",
-              "こういう話、知っておくと面白いですよ。",
-              "忘れそうなら保存しておきましょう。",
-              "また次の動画で。",
+              base + variation
+              for base in ending_bases
+              for variation in ending_variations
           ]
 
-          category, content = contents[seed % len(contents)]
-          hook = hooks[(seed // len(contents)) % len(hooks)]
-          ending = endings[(seed // (len(contents) * len(hooks))) % len(endings)]
+          # ============================================================
+          # 1,000,000通り
+          # ============================================================
 
-          script = f"{hook} {content} {ending}"
+          total_patterns = len(contents) * len(hooks) * len(endings)
 
-          queries = {
-              "雑学": ["nature", "city", "people", "technology", "ocean"],
-              "人生": ["sunrise", "walking", "city", "nature", "people"],
-              "やる気": ["running", "success", "walking", "sunrise", "work"],
-          }
+          print("Contents:", len(contents))
+          print("Hooks:", len(hooks))
+          print("Endings:", len(endings))
+          print("TOTAL PATTERNS:", total_patterns)
 
-          query = queries[category][seed % len(queries[category])]
+          content_index = seed % len(contents)
+          hook_index = (seed // len(contents)) % len(hooks)
+          ending_index = (
+              seed // (len(contents) * len(hooks))
+          ) % len(endings)
+
+          category_names = [
+              "雑学",
+              "人生",
+              "やる気",
+          ]
+
+          category = category_names[seed % len(category_names)]
+
+          script = (
+              hooks[hook_index]
+              + " "
+              + contents[content_index]
+              + " "
+              + endings[ending_index]
+          )
+
+          queries = [
+              "nature",
+              "city",
+              "people",
+              "technology",
+              "ocean",
+              "sunrise",
+              "walking",
+              "forest",
+              "mountains",
+              "ocean",
+              "street",
+              "night city",
+              "coffee",
+              "working",
+              "running",
+              "travel",
+              "sky",
+              "beach",
+              "lifestyle",
+              "modern city",
+          ]
+
+          query = queries[seed % len(queries)]
 
           with open("script.txt", "w", encoding="utf-8") as f:
               f.write(script)
@@ -136,15 +241,19 @@ jobs:
           with open("pexels_query.txt", "w", encoding="utf-8") as f:
               f.write(query)
 
-          title = f"{category}｜{hook}"
+          title = f"{category}｜{hooks[hook_index]}"
 
           with open("video_title.txt", "w", encoding="utf-8") as f:
               f.write(title)
 
+          print("--------------------------------")
           print("SEED:", seed)
           print("CATEGORY:", category)
+          print("PATTERN:", content_index, hook_index, ending_index)
           print("QUERY:", query)
           print("SCRIPT:", script)
+          print("TOTAL:", total_patterns)
+          print("--------------------------------")
           PY
 
       - name: Download Pexels video
@@ -154,7 +263,9 @@ jobs:
           set -e
 
           QUERY=$(cat pexels_query.txt)
-          ENCODED_QUERY=$(python -c "import urllib.parse; print(urllib.parse.quote('''$QUERY'''))")
+
+          ENCODED_QUERY=$(python -c \
+            "import urllib.parse; print(urllib.parse.quote('''$QUERY'''))")
 
           curl -L \
             -H "Authorization: $PEXELS_API_KEY" \
@@ -172,6 +283,7 @@ jobs:
 
           if [ "$VIDEO_URL" = "null" ] || [ -z "$VIDEO_URL" ]; then
             echo "Fallback: sunrise"
+
             curl -L \
               -H "Authorization: $PEXELS_API_KEY" \
               "https://api.pexels.com/videos/search?query=sunrise&orientation=portrait&size=medium&per_page=20" \
@@ -187,11 +299,16 @@ jobs:
             ' pexels.json)
           fi
 
+          if [ "$VIDEO_URL" = "null" ] || [ -z "$VIDEO_URL" ]; then
+            echo "No video found"
+            exit 1
+          fi
+
           curl -L "$VIDEO_URL" -o source.mp4
 
           test -s source.mp4
 
-      - name: Generate narration
+      - name: Generate Japanese narration
         run: |
           set -e
 
@@ -203,22 +320,32 @@ jobs:
 
           test -s voice.mp3
 
-      - name: Fit narration
+      - name: Fit narration to video
         run: |
           set -e
 
-          DURATION=$(ffprobe -v error \
+          DURATION=$(ffprobe \
+            -v error \
             -show_entries format=duration \
             -of default=noprint_wrappers=1:nokey=1 \
             voice.mp3)
 
           SPEED=$(python - "$DURATION" <<'PY'
           import sys
-          d=float(sys.argv[1])
-          target=14.2
-          print(max(1.0, min(1.95, d/target)))
+
+          duration = float(sys.argv[1])
+          target = 14.2
+
+          speed = duration / target
+
+          speed = max(1.0, min(1.95, speed))
+
+          print(speed)
           PY
           )
+
+          echo "Original duration: $DURATION"
+          echo "Speed: $SPEED"
 
           ffmpeg -y \
             -i voice.mp3 \
@@ -227,41 +354,72 @@ jobs:
 
           mv voice_fit.mp3 voice.mp3
 
-      - name: Create subtitles
+      - name: Create ASS subtitles
         run: |
           python - <<'PY'
           import re
+          import subprocess
 
-          text=open("script.txt",encoding="utf-8").read().strip()
+          text = open(
+              "script.txt",
+              encoding="utf-8"
+          ).read().strip()
 
-          parts=re.split(r'(?<=[。！？!?])',text)
-          parts=[x.strip() for x in parts if x.strip()]
+          parts = re.split(
+              r'(?<=[。！？!?])',
+              text
+          )
 
-          chunks=[]
-          for p in parts:
-              while len(p)>18:
-                  chunks.append(p[:18])
-                  p=p[18:]
-              if p:
-                  chunks.append(p)
+          parts = [
+              x.strip()
+              for x in parts
+              if x.strip()
+          ]
 
-          duration=float(__import__("subprocess").check_output([
-              "ffprobe","-v","error",
-              "-show_entries","format=duration",
-              "-of","default=noprint_wrappers=1:nokey=1",
-              "voice.mp3"
-          ]).decode().strip())
+          chunks = []
 
-          total_chars=sum(len(x) for x in chunks)
+          for part in parts:
+              while len(part) > 18:
+                  chunks.append(part[:18])
+                  part = part[18:]
+
+              if part:
+                  chunks.append(part)
+
+          duration = float(
+              subprocess.check_output([
+                  "ffprobe",
+                  "-v",
+                  "error",
+                  "-show_entries",
+                  "format=duration",
+                  "-of",
+                  "default=noprint_wrappers=1:nokey=1",
+                  "voice.mp3"
+              ]).decode().strip()
+          )
+
+          total_chars = sum(
+              len(x)
+              for x in chunks
+          )
 
           def ass_time(sec):
-              h=int(sec//3600)
-              m=int((sec%3600)//60)
-              s=int(sec%60)
-              cs=int((sec-int(sec))*100)
-              return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+              h = int(sec // 3600)
+              m = int((sec % 3600) // 60)
+              s = int(sec % 60)
+              cs = int((sec - int(sec)) * 100)
 
-          with open("captions.ass","w",encoding="utf-8") as f:
+              return (
+                  f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+              )
+
+          with open(
+              "captions.ass",
+              "w",
+              encoding="utf-8"
+          ) as f:
+
               f.write("""[Script Info]
           ScriptType: v4.00+
           PlayResX: 1080
@@ -275,25 +433,43 @@ jobs:
           Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
           """)
 
-              current=0
+              current = 0
 
               for chunk in chunks:
-                  share=len(chunk)/max(total_chars,1)
-                  length=duration*share
 
-                  start=current
-                  end=min(duration,current+length)
-
-                  safe=chunk.replace("{","\\{").replace("}","\\}")
-
-                  f.write(
-                      f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Default,,0,0,0,,{safe}\n"
+                  share = (
+                      len(chunk)
+                      / max(total_chars, 1)
                   )
 
-                  current=end
+                  length = duration * share
+
+                  start = current
+                  end = min(
+                      duration,
+                      current + length
+                  )
+
+                  safe = (
+                      chunk
+                      .replace("{", "\\{")
+                      .replace("}", "\\}")
+                  )
+
+                  f.write(
+                      "Dialogue: 0,"
+                      + ass_time(start)
+                      + ","
+                      + ass_time(end)
+                      + ",Default,,0,0,0,,"
+                      + safe
+                      + "\n"
+                  )
+
+                  current = end
           PY
 
-      - name: Render 15 second video
+      - name: Render 15 second TikTok video
         run: |
           set -e
 
@@ -318,7 +494,8 @@ jobs:
             -movflags +faststart \
             tiktok-short.mp4
 
-          DURATION=$(ffprobe -v error \
+          DURATION=$(ffprobe \
+            -v error \
             -show_entries format=duration \
             -of default=noprint_wrappers=1:nokey=1 \
             tiktok-short.mp4)
@@ -327,12 +504,22 @@ jobs:
 
           python - "$DURATION" <<'PY'
           import sys
-          d=float(sys.argv[1])
-          if not 14.5 <= d <= 15.5:
-              raise SystemExit("Video duration is outside 15-second range")
+
+          duration = float(sys.argv[1])
+
+          if not 14.5 <= duration <= 15.5:
+              raise SystemExit(
+                  "Video duration is outside 15-second range"
+              )
           PY
 
-      - name: Save generated video
+      - name: Create metadata
+        run: |
+          echo "1,000,000 pattern generator" > pattern_count.txt
+          echo "100 contents × 100 hooks × 100 endings" >> pattern_count.txt
+          echo "Generated at $(date -u)" >> pattern_count.txt
+
+      - name: Upload TikTok video artifact
         uses: actions/upload-artifact@v4
         with:
           name: tiktok-short-${{ github.run_number }}
@@ -343,4 +530,5 @@ jobs:
             category.txt
             video_title.txt
             pexels_query.txt
+            pattern_count.txt
           retention-days: 7
