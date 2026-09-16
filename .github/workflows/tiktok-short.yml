@@ -541,6 +541,7 @@ jobs:
           TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
           TIKTOK_REDIRECT_URI: ${{ secrets.TIKTOK_REDIRECT_URI }}
           GH_ADMIN_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
         run: |
           set -e
 
@@ -678,11 +679,19 @@ jobs:
 
           VIDEO_SIZE=$(stat -c%s output.mp4)
 
-          # 10 MB chunk.
-          # TikTok allows chunks up to 64 MB.
-          CHUNK_SIZE=10000000
+          # TikTok requires a valid chunk size.
+          # For videos smaller than 5 MB,
+          # use the entire video as one chunk.
+          # For videos 5 MB or larger,
+          # use 10 MB chunks.
 
-          TOTAL_CHUNKS=$(( (VIDEO_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE ))
+          if [ "$VIDEO_SIZE" -lt 5000000 ]; then
+            CHUNK_SIZE="$VIDEO_SIZE"
+            TOTAL_CHUNKS=1
+          else
+            CHUNK_SIZE=10000000
+            TOTAL_CHUNKS=$(( (VIDEO_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE ))
+          fi
 
           echo "VIDEO_SIZE=$VIDEO_SIZE"
           echo "CHUNK_SIZE=$CHUNK_SIZE"
