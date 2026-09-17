@@ -39,7 +39,8 @@ jobs:
             fonts-noto-cjk \
             fonts-dejavu \
             jq \
-            imagemagick
+            imagemagick \
+            curl
 
       # ============================================================
       # 4. Install Python packages
@@ -68,10 +69,37 @@ jobs:
           mkdir -p media/images
           mkdir -p media/audio
           mkdir -p media/scenes
+          mkdir -p media/bgm
           mkdir -p output
 
       # ============================================================
-      # 6. Generate video
+      # 6. Download BGM
+      #
+      # CC0:
+      # John Bartmann - Happy Clappy
+      #
+      # 約54秒のBGM。
+      # 最終動画ではFFmpegで自動ループする。
+      # ============================================================
+      - name: Download BGM
+        run: |
+          echo "Downloading BGM..."
+
+          curl -L \
+            --fail \
+            --retry 3 \
+            --connect-timeout 20 \
+            --max-time 120 \
+            "https://commons.wikimedia.org/wiki/Special:Redirect/file/John_Bartmann_-_09_-_Happy_Clappy.ogg" \
+            -o media/bgm/trivia_bgm.ogg
+
+          test -s media/bgm/trivia_bgm.ogg
+
+          echo "BGM downloaded:"
+          ls -lh media/bgm/trivia_bgm.ogg
+
+      # ============================================================
+      # 7. Generate video
       # ============================================================
       - name: Generate video
         env:
@@ -110,15 +138,28 @@ jobs:
 
           MAX_FACTS = 10
 
+          # いらすとや無料利用を考慮して
+          # 動画内で使う固有画像は最大20枚。
           IMAGE_LIMIT = 20
+
+          # 1つの雑学につき最大2枚の画像を使う。
+          IMAGES_PER_FACT = 2
 
           VOICE = "ja-JP-NanamiNeural"
 
           VOICE_RATE = "+8%"
 
-          OUTPUT = Path("output/final_video.mp4")
+          # BGM音量。
+          # 0.12 = 12%
+          BGM_VOLUME = 0.12
 
-          THUMBNAIL = Path("output/thumbnail.jpg")
+          OUTPUT = Path(
+              "output/final_video.mp4"
+          )
+
+          THUMBNAIL = Path(
+              "output/thumbnail.jpg"
+          )
 
           MEDIA = Path("media")
 
@@ -128,7 +169,16 @@ jobs:
 
           SCENE_DIR = MEDIA / "scenes"
 
-          RUN_ID = os.environ.get("GITHUB_RUN_ID", "0")
+          BGM_FILE = (
+              MEDIA
+              / "bgm"
+              / "trivia_bgm.ogg"
+          )
+
+          RUN_ID = os.environ.get(
+              "GITHUB_RUN_ID",
+              "0"
+          )
 
           SEED = (
               int(time.time())
@@ -467,23 +517,6 @@ jobs:
               return result
 
 
-          def safe_filename(text):
-
-              text = re.sub(
-                  r'[\\/:*?"<>|]',
-                  "_",
-                  text
-              )
-
-              text = re.sub(
-                  r"\s+",
-                  "_",
-                  text
-              )
-
-              return text[:100]
-
-
           def duration_seconds(path):
 
               result = subprocess.run(
@@ -507,7 +540,27 @@ jobs:
               if not value:
                   return 0.0
 
-              return float(value)
+              try:
+                  return float(value)
+              except Exception:
+                  return 0.0
+
+
+          def safe_filename(text):
+
+              text = re.sub(
+                  r'[\\/:*?"<>|]',
+                  "_",
+                  text
+              )
+
+              text = re.sub(
+                  r"\s+",
+                  "_",
+                  text
+              )
+
+              return text[:100]
 
 
           # ============================================================
@@ -523,24 +576,18 @@ jobs:
                   "AppleWebKit/537.36 "
                   "(KHTML, like Gecko) "
                   "Chrome/120 Safari/537.36",
+
               "Accept-Language":
                   "ja-JP,ja;q=0.9,en;q=0.8"
           })
 
 
+          # ============================================================
+          # IMAGE SEARCH
+          # ============================================================
+
           used_image_urls = set()
 
-
-          # ============================================================
-          # IRASUTOYA SEARCH
-          #
-          # Google検索だけに依存しない。
-          #
-          # 1. いらすとや公式サイト内検索
-          # 2. Google検索
-          #
-          # の順番で試す。
-          # ============================================================
 
           def extract_official_images(page_url):
 
@@ -605,18 +652,20 @@ jobs:
               return found
 
 
-          def search_irasutoya(keyword, limit=3):
+          def search_irasutoya(
+              keyword,
+              limit=4
+          ):
 
               print(
-                  f"Searching Irasutoya: "
-                  f"{keyword}"
+                  "Searching Irasutoya:",
+                  keyword
               )
 
               results = []
 
               # --------------------------------------------------------
-              # Method 1
-              # Official Irasutoya search
+              # Official search
               # --------------------------------------------------------
 
               try:
@@ -625,11 +674,6 @@ jobs:
                       "https://www.irasutoya.com/"
                       "search?q="
                       + quote_plus(keyword)
-                  )
-
-                  print(
-                      "Official search:",
-                      search_url
                   )
 
                   response = session.get(
@@ -654,7 +698,9 @@ jobs:
                           href=True
                       ):
 
-                          href = a.get("href")
+                          href = a.get(
+                              "href"
+                          )
 
                           if not href:
                               continue
@@ -673,34 +719,29 @@ jobs:
                           if "/search" in href:
                               continue
 
-                          if href.endswith(
+                          if not href.endswith(
                               ".html"
                           ):
+                              continue
 
-                              images = (
-                                  extract_official_images(
-                                      href
-                                  )
+                          images = (
+                              extract_official_images(
+                                  href
                               )
+                          )
 
-                              for image in images:
+                          for image in images:
 
-                                  if image not in results:
+                              if image not in results:
 
-                                      results.append(
-                                          image
-                                      )
+                                  results.append(
+                                      image
+                                  )
 
-                                  if (
-                                      len(results)
-                                      >= limit
-                                  ):
-                                      break
+                              if len(results) >= limit:
+                                  break
 
-                          if (
-                              len(results)
-                              >= limit
-                          ):
+                          if len(results) >= limit:
                               break
 
               except Exception as e:
@@ -712,7 +753,6 @@ jobs:
 
 
               # --------------------------------------------------------
-              # Method 2
               # Google fallback
               # --------------------------------------------------------
 
@@ -730,12 +770,8 @@ jobs:
 
                       try:
 
-                          google_url = (
-                              "https://www.google.com/search"
-                          )
-
                           response = session.get(
-                              google_url,
+                              "https://www.google.com/search",
                               params={
                                   "q": query,
                                   "num": 10
@@ -743,10 +779,7 @@ jobs:
                               timeout=20
                           )
 
-                          if (
-                              response.status_code
-                              != 200
-                          ):
+                          if response.status_code != 200:
                               continue
 
                           soup = BeautifulSoup(
@@ -794,16 +827,10 @@ jobs:
                                           image
                                       )
 
-                                  if (
-                                      len(results)
-                                      >= limit
-                                  ):
+                                  if len(results) >= limit:
                                       break
 
-                              if (
-                                  len(results)
-                                  >= limit
-                              ):
+                              if len(results) >= limit:
                                   break
 
                       except Exception as e:
@@ -815,7 +842,7 @@ jobs:
 
 
               print(
-                  "Found official images:",
+                  "Found images:",
                   len(results)
               )
 
@@ -838,10 +865,7 @@ jobs:
                       timeout=30
                   )
 
-                  if (
-                      response.status_code
-                      != 200
-                  ):
+                  if response.status_code != 200:
                       return False
 
                   content = response.content
@@ -877,7 +901,7 @@ jobs:
               except Exception as e:
 
                   print(
-                      "Download error:",
+                      "Image download error:",
                       e
                   )
 
@@ -889,19 +913,23 @@ jobs:
 
 
           # ============================================================
-          # DOWNLOAD IRASUTOYA IMAGES
+          # SELECT FACTS
           # ============================================================
-
-          print()
-          print("=" * 70)
-          print("Downloading Irasutoya images")
-          print("=" * 70)
-
 
           selected_facts = random.sample(
               facts,
               MAX_FACTS
           )
+
+
+          # ============================================================
+          # DOWNLOAD IMAGES
+          # ============================================================
+
+          print()
+          print("=" * 70)
+          print("DOWNLOADING IRASUTOYA IMAGES")
+          print("=" * 70)
 
 
           all_scene_images = []
@@ -920,16 +948,15 @@ jobs:
 
               local_images = []
 
-              # --------------------------------------------------------
-              # Try multiple short keywords
-              # --------------------------------------------------------
-
               for keyword in fact.get(
                   "keywords",
                   []
               ):
 
-                  if len(local_images) >= 2:
+                  if len(local_images) >= IMAGES_PER_FACT:
+                      break
+
+                  if len(used_image_urls) >= IMAGE_LIMIT:
                       break
 
                   urls = search_irasutoya(
@@ -939,10 +966,10 @@ jobs:
 
                   for url in urls:
 
-                      if (
-                          len(used_image_urls)
-                          >= IMAGE_LIMIT
-                      ):
+                      if len(local_images) >= IMAGES_PER_FACT:
+                          break
+
+                      if len(used_image_urls) >= IMAGE_LIMIT:
                           break
 
                       if url in used_image_urls:
@@ -958,12 +985,10 @@ jobs:
                           / filename
                       )
 
-                      success = download_image(
+                      if download_image(
                           url,
                           output_path
-                      )
-
-                      if success:
+                      ):
 
                           used_image_urls.add(
                               url
@@ -973,21 +998,16 @@ jobs:
                               output_path
                           )
 
-                      if len(local_images) >= 2:
-                          break
+                          print(
+                              "Downloaded:",
+                              output_path
+                          )
 
-              if local_images:
 
-                  print(
-                      "Downloaded images:",
-                      len(local_images)
-                  )
-
-              else:
-
-                  print(
-                      "No official Irasutoya image found."
-                  )
+              print(
+                  "Images for fact:",
+                  len(local_images)
+              )
 
               all_scene_images.append(
                   local_images
@@ -1015,10 +1035,14 @@ jobs:
               )
 
               font_paths = [
-                  "/usr/share/fonts/opentype/"
-                  "noto/NotoSansCJK-Regular.ttc",
-                  "/usr/share/fonts/truetype/"
-                  "fonts-japanese-gothic.ttf"
+
+                  "/usr/share/fonts/"
+                  "opentype/noto/"
+                  "NotoSansCJK-Regular.ttc",
+
+                  "/usr/share/fonts/"
+                  "opentype/noto/"
+                  "NotoSansCJK-Bold.ttc"
               ]
 
               font = None
@@ -1079,10 +1103,6 @@ jobs:
               )
 
 
-          # ============================================================
-          # GUARANTEE EVERY SCENE HAS AN IMAGE
-          # ============================================================
-
           for i in range(
               len(all_scene_images)
           ):
@@ -1109,16 +1129,19 @@ jobs:
 
 
           # ============================================================
-          # TEXT SPLITTING
+          # TEXT CHUNKS
           # ============================================================
 
           def split_text(text):
 
               text = text.strip()
 
-              if len(text) <= 18:
+              if not text:
+                  return []
 
-                  return [text]
+              # --------------------------------------------------------
+              # 文末でまず分割
+              # --------------------------------------------------------
 
               punctuation = "。！？"
 
@@ -1147,6 +1170,11 @@ jobs:
                       current.strip()
                   )
 
+
+              # --------------------------------------------------------
+              # 長すぎる文章を分割
+              # --------------------------------------------------------
+
               result = []
 
               for piece in pieces:
@@ -1167,153 +1195,12 @@ jobs:
                           piece
                       )
 
+
               return result
 
 
           # ============================================================
-          # SRT TIMESTAMP
-          # ============================================================
-
-          def srt_timestamp(seconds):
-
-              seconds = max(
-                  0,
-                  seconds
-              )
-
-              milliseconds = int(
-                  round(
-                      (
-                          seconds
-                          - int(seconds)
-                      ) * 1000
-                  )
-              )
-
-              total = int(seconds)
-
-              sec = total % 60
-
-              minute = (
-                  total // 60
-              ) % 60
-
-              hour = total // 3600
-
-              if milliseconds >= 1000:
-
-                  milliseconds = 0
-
-                  sec += 1
-
-              return (
-                  f"{hour:02d}:"
-                  f"{minute:02d}:"
-                  f"{sec:02d},"
-                  f"{milliseconds:03d}"
-              )
-
-
-          # ============================================================
-          # CREATE SRT
-          # ============================================================
-
-          def create_srt(
-              lines,
-              audio_duration,
-              output_path
-          ):
-
-              if not lines:
-
-                  lines = [""]
-
-              total_chars = sum(
-                  max(
-                      1,
-                      len(line)
-                  )
-                  for line in lines
-              )
-
-              current = 0.0
-
-              entries = []
-
-              for i, line in enumerate(
-                  lines
-              ):
-
-                  weight = max(
-                      1,
-                      len(line)
-                  )
-
-                  segment_duration = (
-                      audio_duration
-                      * weight
-                      / total_chars
-                  )
-
-                  start = current
-
-                  end = (
-                      current
-                      + segment_duration
-                  )
-
-                  if (
-                      i
-                      == len(lines) - 1
-                  ):
-
-                      end = audio_duration
-
-                  entries.append(
-                      (
-                          i + 1,
-                          start,
-                          end,
-                          line
-                      )
-                  )
-
-                  current = end
-
-              with open(
-                  output_path,
-                  "w",
-                  encoding="utf-8"
-              ) as f:
-
-                  for (
-                      number,
-                      start,
-                      end,
-                      line
-                  ) in entries:
-
-                      f.write(
-                          f"{number}\n"
-                      )
-
-                      f.write(
-                          f"{srt_timestamp(start)} "
-                          f"--> "
-                          f"{srt_timestamp(end)}\n"
-                      )
-
-                      f.write(
-                          line
-                      )
-
-                      f.write(
-                          "\n\n"
-                      )
-
-
-          # ============================================================
-          # TTS SCRIPT
+          # TTS GENERATOR
           # ============================================================
 
           async_code = r'''
@@ -1340,6 +1227,7 @@ jobs:
           asyncio.run(main())
           '''
 
+
           with open(
               "tts_generate.py",
               "w",
@@ -1357,294 +1245,164 @@ jobs:
 
           subtitle_style = (
               "FontName=Noto Sans CJK JP,"
-              "FontSize=38,"
+              "FontSize=42,"
               "PrimaryColour=&H00FFFFFF,"
               "OutlineColour=&H00000000,"
               "BorderStyle=3,"
-              "BackColour=&H99000000,"
+              "BackColour=&HAA000000,"
               "Outline=2,"
               "Shadow=0,"
-              "MarginV=70,"
+              "MarginV=65,"
               "Alignment=2"
           )
 
 
           # ============================================================
-          # RENDER SCENES
+          # CREATE ONE CHUNK VIDEO
           # ============================================================
 
-          scene_files = []
-
-
-          for index, fact in enumerate(
-              selected_facts,
-              start=1
+          def render_chunk(
+              image_path,
+              audio_path,
+              subtitle_text,
+              output_path,
+              zoom_direction=1
           ):
-
-              print()
-              print("=" * 70)
-              print(
-                  f"Rendering scene "
-                  f"{index}/{MAX_FACTS}"
-              )
-              print(
-                  fact["title"]
-              )
-              print("=" * 70)
-
-
-              scene_text = (
-                  fact["title"]
-                  + "。"
-                  + fact["body"]
-              )
-
-
-              audio_path = (
-                  AUDIO_DIR
-                  / f"audio_{index:02d}.mp3"
-              )
-
-
-              srt_path = (
-                  MEDIA
-                  / f"subtitle_{index:02d}.srt"
-              )
-
-
-              scene_path = (
-                  SCENE_DIR
-                  / f"scene_{index:02d}.mp4"
-              )
-
-
-              # ========================================================
-              # TTS
-              # ========================================================
-
-              run([
-                  sys.executable,
-                  "tts_generate.py",
-                  scene_text,
-                  str(audio_path)
-              ])
-
 
               audio_duration = duration_seconds(
                   audio_path
               )
 
-
-              print(
-                  "Audio duration:",
-                  audio_duration
-              )
-
-
               if audio_duration <= 0:
-
                   raise RuntimeError(
-                      "TTS audio duration is invalid"
+                      "Invalid audio duration"
                   )
 
 
-              # ========================================================
-              # SUBTITLE
-              # ========================================================
+              # --------------------------------------------------------
+              # Temporary subtitle
+              # --------------------------------------------------------
 
-              subtitle_lines = split_text(
-                  scene_text
-              )
-
-
-              create_srt(
-                  subtitle_lines,
-                  audio_duration,
-                  srt_path
-              )
-
-
-              # ========================================================
-              # VISUALS
-              # ========================================================
-
-              images = (
-                  all_scene_images[
-                      index - 1
-                  ]
-              )
-
-
-              if not images:
-
-                  raise RuntimeError(
-                      "No images available"
-                  )
-
-
-              image_duration = (
-                  audio_duration
-                  / len(images)
-              )
-
-
-              visual_clips = []
-
-
-              for img_index, image_path in enumerate(
-                  images
-              ):
-
-                  visual_path = (
-                      SCENE_DIR
-                      / (
-                          f"visual_"
-                          f"{index:02d}_"
-                          f"{img_index:02d}.mp4"
-                      )
-                  )
-
-
-                  # ====================================================
-                  # SAFE ZOOM
-                  #
-                  # ここが今回の重要修正。
-                  #
-                  # 以前:
-                  #
-                  # zoompan=z='1.02+(1.07-1.02)*on/597'
-                  #
-                  # ↑ GitHub Actions の FFmpeg で
-                  # フィルター解析エラーになっていた。
-                  #
-                  # 今回:
-                  #
-                  # zoompan=z=1.02+0.00008*on
-                  #
-                  # クォートを使わない。
-                  # ====================================================
-
-                  zoom_base = random.uniform(
-                      1.00,
-                      1.03
-                  )
-
-                  zoom_speed = random.uniform(
-                      0.00003,
-                      0.00008
-                  )
-
-
-                  zoompan = (
-                      "zoompan="
-                      f"z={zoom_base:.5f}"
-                      f"+{zoom_speed:.5f}*on:"
-                      "d=1:"
-                      f"s={WIDTH}x{HEIGHT}:"
-                      f"fps={FPS}"
-                  )
-
-
-                  filter_complex = (
-                      f"scale="
-                      f"{WIDTH}:"
-                      f"{HEIGHT}:"
-                      "force_original_aspect_ratio="
-                      "decrease,"
-                      f"pad="
-                      f"{WIDTH}:"
-                      f"{HEIGHT}:"
-                      "(ow-iw)/2:"
-                      "(oh-ih)/2,"
-                      f"{zoompan},"
-                      "format=yuv420p"
-                  )
-
-
-                  print(
-                      "FFmpeg zoom filter:",
-                      filter_complex
-                  )
-
-
-                  run([
-                      "ffmpeg",
-                      "-y",
-                      "-loop",
-                      "1",
-                      "-i",
-                      str(image_path),
-                      "-vf",
-                      filter_complex,
-                      "-t",
-                      f"{image_duration:.3f}",
-                      "-r",
-                      str(FPS),
-                      "-an",
-                      "-c:v",
-                      "libx264",
-                      "-preset",
-                      "veryfast",
-                      "-crf",
-                      "20",
-                      "-pix_fmt",
-                      "yuv420p",
-                      str(visual_path)
-                  ])
-
-
-                  visual_clips.append(
-                      visual_path
-                  )
-
-
-              # ========================================================
-              # CONCAT VISUALS
-              # ========================================================
-
-              visual_list = (
-                  MEDIA
+              subtitle_path = (
+                  output_path.parent
                   / (
-                      f"visual_list_"
-                      f"{index:02d}.txt"
+                      output_path.stem
+                      + ".srt"
                   )
               )
+
+
+              def srt_time(sec):
+
+                  total_ms = int(
+                      round(sec * 1000)
+                  )
+
+                  ms = total_ms % 1000
+
+                  total_s = total_ms // 1000
+
+                  s = total_s % 60
+
+                  m = (
+                      total_s // 60
+                  ) % 60
+
+                  h = total_s // 3600
+
+                  return (
+                      f"{h:02d}:"
+                      f"{m:02d}:"
+                      f"{s:02d},"
+                      f"{ms:03d}"
+                  )
 
 
               with open(
-                  visual_list,
+                  subtitle_path,
                   "w",
                   encoding="utf-8"
               ) as f:
 
-                  for clip in visual_clips:
+                  f.write("1\n")
 
-                      clip_path = (
-                          str(
-                              clip.resolve()
-                          )
-                      )
+                  f.write(
+                      "00:00:00,000 --> "
+                      + srt_time(audio_duration)
+                      + "\n"
+                  )
 
-                      clip_path = (
-                          clip_path
-                          .replace(
-                              "'",
-                              "'\\''"
-                          )
-                      )
+                  f.write(
+                      subtitle_text
+                  )
 
-                      f.write(
-                          "file '"
-                          + clip_path
-                          + "'\n"
-                      )
+                  f.write(
+                      "\n\n"
+                  )
 
 
-              visual_concat = (
-                  SCENE_DIR
+              # --------------------------------------------------------
+              # Zoom
+              #
+              # クォートなし。
+              # 前回のzoompanエラーを回避。
+              # --------------------------------------------------------
+
+              zoom_base = random.uniform(
+                  1.00,
+                  1.03
+              )
+
+              if zoom_direction > 0:
+
+                  zoom_speed = random.uniform(
+                      0.000025,
+                      0.000060
+                  )
+
+              else:
+
+                  zoom_speed = random.uniform(
+                      0.000060,
+                      0.000025
+                  )
+
+
+              zoompan = (
+                  "zoompan="
+                  f"z={zoom_base:.5f}"
+                  f"+{zoom_speed:.5f}*on:"
+                  "d=1:"
+                  f"s={WIDTH}x{HEIGHT}:"
+                  f"fps={FPS}"
+              )
+
+
+              filter_complex = (
+                  "scale="
+                  f"{WIDTH}:"
+                  f"{HEIGHT}:"
+                  "force_original_aspect_ratio="
+                  "decrease,"
+                  f"pad="
+                  f"{WIDTH}:"
+                  f"{HEIGHT}:"
+                  "(ow-iw)/2:"
+                  "(oh-ih)/2,"
+                  f"{zoompan},"
+                  "format=yuv420p"
+              )
+
+
+              # --------------------------------------------------------
+              # Visual
+              # --------------------------------------------------------
+
+              temp_visual = (
+                  output_path.parent
                   / (
-                      f"visual_concat_"
-                      f"{index:02d}.mp4"
+                      output_path.stem
+                      + "_visual.mp4"
                   )
               )
 
@@ -1652,32 +1410,47 @@ jobs:
               run([
                   "ffmpeg",
                   "-y",
-                  "-f",
-                  "concat",
-                  "-safe",
-                  "0",
+
+                  "-loop",
+                  "1",
+
                   "-i",
-                  str(visual_list),
+                  str(image_path),
+
+                  "-vf",
+                  filter_complex,
+
+                  "-t",
+                  f"{audio_duration:.3f}",
+
+                  "-r",
+                  str(FPS),
+
                   "-an",
+
                   "-c:v",
                   "libx264",
+
                   "-preset",
                   "veryfast",
+
                   "-crf",
                   "20",
+
                   "-pix_fmt",
                   "yuv420p",
-                  str(visual_concat)
+
+                  str(temp_visual)
               ])
 
 
-              # ========================================================
-              # SUBTITLE
-              # ========================================================
+              # --------------------------------------------------------
+              # Subtitle
+              # --------------------------------------------------------
 
               subtitle_file = (
                   str(
-                      srt_path.resolve()
+                      subtitle_path.resolve()
                   )
                   .replace(
                       "\\",
@@ -1699,11 +1472,11 @@ jobs:
               )
 
 
-              subtitled = (
-                  SCENE_DIR
+              temp_subtitle = (
+                  output_path.parent
                   / (
-                      f"subtitled_"
-                      f"{index:02d}.mp4"
+                      output_path.stem
+                      + "_subtitle.mp4"
                   )
               )
 
@@ -1711,61 +1484,285 @@ jobs:
               run([
                   "ffmpeg",
                   "-y",
+
                   "-i",
-                  str(visual_concat),
+                  str(temp_visual),
+
                   "-vf",
                   subtitle_filter,
+
                   "-an",
+
                   "-c:v",
                   "libx264",
+
                   "-preset",
                   "veryfast",
+
                   "-crf",
                   "20",
+
                   "-pix_fmt",
                   "yuv420p",
-                  str(subtitled)
+
+                  str(temp_subtitle)
               ])
 
 
-              # ========================================================
-              # MUX AUDIO
-              # ========================================================
+              # --------------------------------------------------------
+              # Audio + video
+              # --------------------------------------------------------
 
               run([
                   "ffmpeg",
                   "-y",
+
                   "-i",
-                  str(subtitled),
+                  str(temp_subtitle),
+
                   "-i",
                   str(audio_path),
+
                   "-map",
                   "0:v:0",
+
                   "-map",
                   "1:a:0",
+
                   "-c:v",
                   "copy",
+
                   "-c:a",
                   "aac",
+
                   "-b:a",
                   "192k",
+
                   "-shortest",
-                  str(scene_path)
+
+                  "-movflags",
+                  "+faststart",
+
+                  str(output_path)
               ])
 
 
-              scene_files.append(
-                  scene_path
+              temp_visual.unlink(
+                  missing_ok=True
+              )
+
+              temp_subtitle.unlink(
+                  missing_ok=True
+              )
+
+              subtitle_path.unlink(
+                  missing_ok=True
               )
 
 
           # ============================================================
-          # CONCAT ALL 10 SCENES
+          # RENDER ALL FACTS
+          # ============================================================
+
+          segment_files = []
+
+
+          for fact_index, fact in enumerate(
+              selected_facts,
+              start=1
+          ):
+
+              print()
+              print("=" * 70)
+              print(
+                  f"FACT "
+                  f"{fact_index}/"
+                  f"{MAX_FACTS}"
+              )
+              print(
+                  fact["title"]
+              )
+              print("=" * 70)
+
+
+              # --------------------------------------------------------
+              # Hook → explanation
+              #
+              # 短く切ることで参考動画に近いテンポにする。
+              # --------------------------------------------------------
+
+              chunks = []
+
+              title = fact["title"]
+
+              body = fact["body"]
+
+
+              chunks.append(
+                  title
+              )
+
+
+              body_chunks = split_text(
+                  body
+              )
+
+
+              # 最大4チャンク程度にまとめる
+              if len(body_chunks) > 4:
+
+                  merged = []
+
+                  current = ""
+
+                  for piece in body_chunks:
+
+                      if (
+                          len(current)
+                          + len(piece)
+                          <= 34
+                      ):
+
+                          current += piece
+
+                      else:
+
+                          if current:
+                              merged.append(
+                                  current
+                              )
+
+                          current = piece
+
+                  if current:
+                      merged.append(
+                          current
+                      )
+
+                  body_chunks = merged
+
+
+              chunks.extend(
+                  body_chunks
+              )
+
+
+              # 最低3カット
+              if len(chunks) < 3:
+
+                  chunks.append(
+                      "ここがポイントです。"
+                  )
+
+
+              fact_images = (
+                  all_scene_images[
+                      fact_index - 1
+                  ]
+              )
+
+
+              if not fact_images:
+
+                  raise RuntimeError(
+                      "No image for fact"
+                  )
+
+
+              for chunk_index, chunk_text in enumerate(
+                  chunks,
+                  start=1
+              ):
+
+                  print()
+                  print(
+                      "Chunk:",
+                      chunk_index,
+                      "/",
+                      len(chunks)
+                  )
+
+                  print(
+                      chunk_text
+                  )
+
+
+                  audio_path = (
+                      AUDIO_DIR
+                      / (
+                          f"fact_"
+                          f"{fact_index:02d}_"
+                          f"chunk_"
+                          f"{chunk_index:02d}.mp3"
+                      )
+                  )
+
+
+                  segment_path = (
+                      SCENE_DIR
+                      / (
+                          f"segment_"
+                          f"{fact_index:02d}_"
+                          f"{chunk_index:02d}.mp4"
+                      )
+                  )
+
+
+                  # ----------------------------------------------------
+                  # TTS
+                  # ----------------------------------------------------
+
+                  run([
+                      sys.executable,
+                      "tts_generate.py",
+                      chunk_text,
+                      str(audio_path)
+                  ])
+
+
+                  # ----------------------------------------------------
+                  # Image
+                  #
+                  # 2枚を交互に使用。
+                  # 同じ画像でもズーム方向を変える。
+                  # ----------------------------------------------------
+
+                  image_path = (
+                      fact_images[
+                          (chunk_index - 1)
+                          % len(fact_images)
+                      ]
+                  )
+
+
+                  zoom_direction = (
+                      1
+                      if chunk_index % 2
+                      else -1
+                  )
+
+
+                  render_chunk(
+                      image_path,
+                      audio_path,
+                      chunk_text,
+                      segment_path,
+                      zoom_direction
+                  )
+
+
+                  segment_files.append(
+                      segment_path
+                  )
+
+
+          # ============================================================
+          # CONCAT ALL SEGMENTS
           # ============================================================
 
           print()
           print("=" * 70)
-          print("Concatenating 10 trivia scenes")
+          print("CONCATENATING VIDEO")
           print("=" * 70)
 
 
@@ -1781,16 +1778,16 @@ jobs:
               encoding="utf-8"
           ) as f:
 
-              for scene in scene_files:
+              for segment in segment_files:
 
-                  scene_path = (
+                  segment_path = (
                       str(
-                          scene.resolve()
+                          segment.resolve()
                       )
                   )
 
-                  scene_path = (
-                      scene_path
+                  segment_path = (
+                      segment_path
                       .replace(
                           "'",
                           "'\\''"
@@ -1799,7 +1796,7 @@ jobs:
 
                   f.write(
                       "file '"
-                      + scene_path
+                      + segment_path
                       + "'\n"
                   )
 
@@ -1813,24 +1810,22 @@ jobs:
           run([
               "ffmpeg",
               "-y",
+
               "-f",
               "concat",
+
               "-safe",
               "0",
+
               "-i",
               str(concat_list),
+
               "-c",
               "copy",
+
               str(raw_final)
           ])
 
-
-          # ============================================================
-          # NATURAL DURATION
-          #
-          # 5分に無理やり合わせない。
-          # 10個目が終わったら終了。
-          # ============================================================
 
           if not raw_final.exists():
 
@@ -1839,31 +1834,156 @@ jobs:
               )
 
 
-          final_duration = duration_seconds(
+          raw_duration = duration_seconds(
               raw_final
           )
 
 
-          if final_duration <= 0:
+          print(
+              "Video duration before BGM:",
+              raw_duration,
+              "seconds"
+          )
+
+
+          # ============================================================
+          # ADD BGM
+          #
+          # BGM:
+          # - 無限ループ
+          # - 動画終了時に自動停止
+          # - 音量12%
+          # - ナレーションを優先
+          # ============================================================
+
+          if not BGM_FILE.exists():
 
               raise RuntimeError(
-                  "Final video duration is invalid"
+                  "BGM file not found: "
+                  + str(BGM_FILE)
               )
 
 
           print()
           print("=" * 70)
-          print(
-              "FINAL NATURAL DURATION:",
-              final_duration,
-              "seconds"
-          )
+          print("ADDING BGM")
           print("=" * 70)
 
 
+          bgm_final = (
+              Path("output")
+              / "final_with_bgm.mp4"
+          )
+
+
+          # ------------------------------------------------------------
+          # ナレーション側の音量を軽く整える。
+          #
+          # BGMは12%。
+          # ------------------------------------------------------------
+
+          audio_filter = (
+              "[0:a]"
+              "loudnorm="
+              "I=-16:"
+              "TP=-1.5:"
+              "LRA=11"
+              "[voice];"
+
+              "[1:a]"
+              f"volume={BGM_VOLUME},"
+              "afade="
+              "t=out:"
+              f"st={max(0, raw_duration - 2):.3f}:"
+              "d=2"
+              "[bgm];"
+
+              "[voice]"
+              "[bgm]"
+              "amix="
+              "inputs=2:"
+              "duration=first:"
+              "dropout_transition=2:"
+              "normalize=0"
+              "[mixed]"
+          )
+
+
+          run([
+              "ffmpeg",
+              "-y",
+
+              "-i",
+              str(raw_final),
+
+              "-stream_loop",
+              "-1",
+
+              "-i",
+              str(BGM_FILE),
+
+              "-filter_complex",
+              audio_filter,
+
+              "-map",
+              "0:v:0",
+
+              "-map",
+              "[mixed]",
+
+              "-c:v",
+              "copy",
+
+              "-c:a",
+              "aac",
+
+              "-b:a",
+              "192k",
+
+              "-t",
+              f"{raw_duration:.3f}",
+
+              "-movflags",
+              "+faststart",
+
+              str(bgm_final)
+          ])
+
+
+          # ============================================================
+          # FINAL OUTPUT
+          # ============================================================
+
           shutil.copy2(
-              raw_final,
+              bgm_final,
               OUTPUT
+          )
+
+
+          final_duration = duration_seconds(
+              OUTPUT
+          )
+
+
+          print()
+          print("=" * 70)
+          print("BGM COMPLETE")
+          print("=" * 70)
+
+          print(
+              "BGM:",
+              BGM_FILE
+          )
+
+          print(
+              "BGM volume:",
+              f"{BGM_VOLUME * 100:.0f}%"
+          )
+
+          print(
+              "Final duration:",
+              final_duration,
+              "seconds"
           )
 
 
@@ -1943,8 +2063,9 @@ jobs:
                   )
 
                   im.thumbnail(
-                      (1600, 900)
+                      (1100, 620)
                   )
+
 
                   canvas = Image.new(
                       "RGB",
@@ -1952,35 +2073,44 @@ jobs:
                       "white"
                   )
 
+
                   x = (
                       1280
                       - im.width
                   ) // 2
+
 
                   y = (
                       720
                       - im.height
                   ) // 2
 
+
                   canvas.paste(
                       im,
                       (x, y)
                   )
 
+
                   draw = ImageDraw.Draw(
                       canvas
                   )
 
+
                   font_candidates = [
+
                       "/usr/share/fonts/"
                       "opentype/noto/"
                       "NotoSansCJK-Bold.ttc",
+
                       "/usr/share/fonts/"
                       "opentype/noto/"
                       "NotoSansCJK-Regular.ttc"
                   ]
 
+
                   thumb_font = None
+
 
                   for fp in font_candidates:
 
@@ -1991,7 +2121,7 @@ jobs:
                               thumb_font = (
                                   ImageFont.truetype(
                                       fp,
-                                      52
+                                      48
                                   )
                               )
 
@@ -2032,6 +2162,7 @@ jobs:
                       bbox[2]
                       - bbox[0]
                   )
+
 
                   th = (
                       bbox[3]
@@ -2129,11 +2260,32 @@ jobs:
           # ============================================================
 
           metadata = {
+
               "facts": selected_facts,
-              "thumbnail_fact": thumbnail_fact,
-              "duration_seconds": final_duration,
-              "seed": SEED,
-              "run_id": RUN_ID
+
+              "thumbnail_fact":
+                  thumbnail_fact,
+
+              "duration_seconds":
+                  final_duration,
+
+              "seed":
+                  SEED,
+
+              "run_id":
+                  RUN_ID,
+
+              "bgm":
+                  {
+                      "file":
+                          "John Bartmann - Happy Clappy",
+
+                      "license":
+                          "CC0 1.0",
+
+                      "volume":
+                          BGM_VOLUME
+                  }
           }
 
 
@@ -2177,6 +2329,16 @@ jobs:
           )
 
           print(
+              "BGM:",
+              "ON"
+          )
+
+          print(
+              "BGM volume:",
+              f"{BGM_VOLUME * 100:.0f}%"
+          )
+
+          print(
               "Thumbnail:",
               THUMBNAIL
           )
@@ -2198,7 +2360,7 @@ jobs:
 
           print()
           print(
-              "No duration stretching."
+              "Natural duration."
           )
 
           print(
@@ -2211,7 +2373,7 @@ jobs:
 
 
       # ============================================================
-      # 7. Upload to YouTube
+      # 8. Upload to YouTube
       # ============================================================
       - name: Upload to YouTube
         env:
@@ -2228,13 +2390,19 @@ jobs:
           from pathlib import Path
 
           from google.oauth2.credentials import Credentials
+
           from googleapiclient.discovery import build
+
           from googleapiclient.http import MediaFileUpload
 
 
-          VIDEO = "output/final_video.mp4"
+          VIDEO = (
+              "output/final_video.mp4"
+          )
 
-          THUMBNAIL = "output/thumbnail.jpg"
+          THUMBNAIL = (
+              "output/thumbnail.jpg"
+          )
 
 
           SCOPES = [
@@ -2278,10 +2446,16 @@ jobs:
 
           credentials = Credentials(
               None,
+
               refresh_token=refresh_token,
-              token_uri="https://oauth2.googleapis.com/token",
+
+              token_uri=
+                  "https://oauth2.googleapis.com/token",
+
               client_id=client_id,
+
               client_secret=client_secret,
+
               scopes=SCOPES
           )
 
@@ -2362,13 +2536,17 @@ jobs:
 
               "snippet": {
 
-                  "title": title,
+                  "title":
+                      title,
 
-                  "description": description,
+                  "description":
+                      description,
 
-                  "categoryId": "27",
+                  "categoryId":
+                      "27",
 
                   "tags": [
+
                       "雑学",
                       "豆知識",
                       "面白い雑学",
@@ -2382,9 +2560,11 @@ jobs:
 
               "status": {
 
-                  "privacyStatus": "public",
+                  "privacyStatus":
+                      "public",
 
-                  "selfDeclaredMadeForKids": False
+                  "selfDeclaredMadeForKids":
+                      False
 
               }
 
@@ -2399,14 +2579,19 @@ jobs:
 
           media = MediaFileUpload(
               VIDEO,
-              mimetype="video/mp4",
+
+              mimetype=
+                  "video/mp4",
+
               resumable=True
           )
 
 
           request = youtube.videos().insert(
               part="snippet,status",
+
               body=body,
+
               media_body=media
           )
 
@@ -2438,27 +2623,25 @@ jobs:
 
 
           print()
-          print(
-              "=" * 70
-          )
+          print("=" * 70)
+          print("YOUTUBE UPLOAD COMPLETE")
+          print("=" * 70)
 
-          print(
-              "YOUTUBE UPLOAD COMPLETE"
-          )
 
           print(
               "Video ID:",
               video_id
           )
 
-          print(
-              "URL:",
-              f"https://www.youtube.com/watch?v={video_id}"
-          )
 
           print(
-              "=" * 70
+              "URL:",
+              "https://www.youtube.com/watch?v="
+              + str(video_id)
           )
+
+
+          print("=" * 70)
 
 
           # ============================================================
@@ -2475,15 +2658,20 @@ jobs:
 
                   youtube.thumbnails().set(
                       videoId=video_id,
+
                       media_body=MediaFileUpload(
                           THUMBNAIL,
-                          mimetype="image/jpeg"
+
+                          mimetype=
+                              "image/jpeg"
                       )
                   ).execute()
+
 
                   print(
                       "Thumbnail uploaded."
                   )
+
 
               except Exception as e:
 
@@ -2499,14 +2687,17 @@ jobs:
 
           upload_info = {
 
-              "video_id": video_id,
+              "video_id":
+                  video_id,
 
-              "url": (
-                  "https://www.youtube.com/watch?v="
-                  f"{video_id}"
-              ),
+              "url":
+                  (
+                      "https://www.youtube.com/watch?v="
+                      + str(video_id)
+                  ),
 
-              "title": title
+              "title":
+                  title
 
           }
 
@@ -2531,7 +2722,7 @@ jobs:
 
 
       # ============================================================
-      # 8. Upload artifacts
+      # 9. Upload artifacts
       # ============================================================
       - name: Upload generated files
         uses: actions/upload-artifact@v4
