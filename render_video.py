@@ -1,1135 +1,186 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import os
 import re
 import json
-import math
-import time
 import random
-import shutil
+import asyncio
 import hashlib
 import subprocess
 from pathlib import Path
-from urllib.parse import quote, urljoin
 
 import requests
-from PIL import Image, ImageDraw, ImageFont
-from io import BytesIO
+import edge_tts
+
+from PIL import (
+    Image,
+    ImageDraw,
+    ImageFont,
+    ImageFilter,
+    ImageEnhance,
+)
 
 
-# ============================================================
-# 基本設定
-# ============================================================
+# =========================================================
+# SETTINGS
+# =========================================================
 
 WIDTH = 1920
 HEIGHT = 1080
+
+THUMB_WIDTH = 3840
+THUMB_HEIGHT = 2160
+
 FPS = 30
 
-OUTPUT_DIR = Path("output")
-MEDIA_DIR = Path("media")
-IMAGE_DIR = MEDIA_DIR / "images"
-VIDEO_DIR = MEDIA_DIR / "videos"
+TOPICS_PER_VIDEO = 15
+
+VOICE = "ja-JP-NanamiNeural"
+VOICE_RATE = "-3%"
+
+PEXELS_API_KEY = os.environ.get(
+    "PEXELS_API_KEY",
+    ""
+).strip()
+
+REQUEST_TIMEOUT = 30
+
+BASE_DIR = Path(".")
+
+MEDIA_DIR = BASE_DIR / "media"
 AUDIO_DIR = MEDIA_DIR / "audio"
+VIDEO_DIR = MEDIA_DIR / "video"
 
-for d in [OUTPUT_DIR, MEDIA_DIR, IMAGE_DIR, VIDEO_DIR, AUDIO_DIR]:
-    d.mkdir(parents=True, exist_ok=True)
+CACHE_DIR = BASE_DIR / "cache"
 
-PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "").strip()
+OUTPUT_DIR = BASE_DIR / "output"
 
-USER_AGENT = (
-    "Mozilla/5.0 (X11; Linux x86_64) "
-    "AppleWebKit/537.36 Chrome/128.0 Safari/537.36"
+USED_TOPICS_FILE = (
+    CACHE_DIR / "used_topics.json"
 )
 
-HEADERS = {
-    "User-Agent": USER_AGENT,
-    "Accept-Language": "ja,en-US;q=0.8,en;q=0.6",
-}
+USED_VIDEOS_FILE = (
+    CACHE_DIR / "used_pexels_videos.json"
+)
 
-REQUEST_TIMEOUT = 20
+VIDEO_SEARCH_CACHE = (
+    CACHE_DIR / "pexels_video_cache.json"
+)
 
-MAX_IRASUTOYA_UNIQUE = 20
+PHOTO_SEARCH_CACHE = (
+    CACHE_DIR / "pexels_photo_cache.json"
+)
 
+FINAL_VIDEO = (
+    OUTPUT_DIR / "final_video.mp4"
+)
 
-# ============================================================
-# 雑学
-# ============================================================
+THUMBNAIL = (
+    OUTPUT_DIR / "thumbnail.jpg"
+)
 
-FACTS = [
-    {
-        "title": "なぜ人は他人の目が気になる？",
-        "chunks": [
-            "人は、自分が周りからどう見られているかを意識しやすい生き物です。",
-            "特に人がたくさんいる場所では、自然と周囲の人の視線を気にしてしまいます。",
-            "これは昔から、人との関係を保つために役立ってきたと考えられています。",
-            "つまり、他人の目が気になるのは、ある意味では人間らしい反応なんです。",
-        ],
-        "visuals": [
-            {
-                "ira": ["人に見られている人", "周りを見る人", "人がいる", "人"],
-                "pexels": ["person surrounded by people", "people looking at person"],
-            },
-            {
-                "ira": ["困っている人", "考えている人", "悩んでいる人"],
-                "pexels": ["worried person", "thinking person"],
-            },
-            {
-                "ira": ["人が集まる", "人が話している", "会話する人"],
-                "pexels": ["group of people talking", "people together"],
-            },
-            {
-                "ira": ["笑顔の人", "人間関係", "仲良くする人"],
-                "pexels": ["friends talking", "happy people"],
-            },
-        ],
-    },
+TITLE_FILE = (
+    OUTPUT_DIR / "title.txt"
+)
 
-    {
-        "title": "なぜあくびはうつる？",
-        "chunks": [
-            "誰かがあくびをすると、自分まであくびをしたくなることがあります。",
-            "これは人間だけでなく、一部の動物でも見られる現象です。",
-            "相手の行動を無意識にまねすることと関係していると考えられています。",
-            "つまり、あくびは意外にも、人と人とのつながりに関係しているんです。",
-        ],
-        "visuals": [
-            {
-                "ira": ["あくびをしている人", "眠そうな人", "眠い人"],
-                "pexels": ["person yawning", "sleepy person"],
-            },
-            {
-                "ira": ["眠そうな人", "目をこする人", "疲れた人"],
-                "pexels": ["tired person", "sleepy person"],
-            },
-            {
-                "ira": ["人を見る", "人と人", "向かい合う人"],
-                "pexels": ["two people looking at each other"],
-            },
-            {
-                "ira": ["眠る人", "ベッドで寝る人", "寝ている人"],
-                "pexels": ["person sleeping in bed"],
-            },
-        ],
-    },
-
-    {
-        "title": "なぜ炭酸を飲むとスッキリする？",
-        "chunks": [
-            "炭酸飲料を飲んだとき、口の中にシュワシュワした刺激を感じます。",
-            "この刺激は、舌や口の中にある感覚に影響します。",
-            "さらに冷たい飲み物なら、冷たさも加わって爽快感を感じやすくなります。",
-            "つまり、炭酸そのものだけではなく、刺激や冷たさもスッキリ感に関係しているんです。",
-        ],
-        "visuals": [
-            {
-                "ira": ["飲み物を飲んでいる人", "コップで飲む人", "飲む人"],
-                "pexels": ["person drinking from glass", "person drinking beverage"],
-            },
-            {
-                "ira": ["ペットボトルを持つ人", "飲み物", "ペットボトル"],
-                "pexels": ["person holding bottle", "bottle drink"],
-            },
-            {
-                "ira": ["コップ", "飲み物", "ジュース"],
-                "pexels": ["glass of drink", "cold beverage"],
-            },
-            {
-                "ira": ["喜ぶ人", "笑顔の人", "元気な人"],
-                "pexels": ["happy person drinking", "refreshing drink"],
-            },
-        ],
-    },
-
-    {
-        "title": "なぜ人は昔の失敗を思い出す？",
-        "chunks": [
-            "寝る前などに、昔の恥ずかしい失敗を突然思い出すことがあります。",
-            "嫌だった出来事は、強い感情と一緒に記憶されやすいからです。",
-            "そのため、普通の日常よりも印象に残っていることがあります。",
-            "忘れたい記憶ほど、なぜか突然出てくることがあるんです。",
-        ],
-        "visuals": [
-            {
-                "ira": ["失敗した人", "困っている人", "落ち込む人"],
-                "pexels": ["sad person", "person feeling embarrassed"],
-            },
-            {
-                "ira": ["考えている人", "思い出す人", "頭を抱える人"],
-                "pexels": ["person thinking", "person remembering"],
-            },
-            {
-                "ira": ["恥ずかしがる人", "顔を隠す人", "困る人"],
-                "pexels": ["embarrassed person", "person covering face"],
-            },
-            {
-                "ira": ["考える人", "悩む人", "一人で考える人"],
-                "pexels": ["person thinking alone", "reflective person"],
-            },
-        ],
-    },
-
-    {
-        "title": "なぜ寝ると記憶が整理される？",
-        "chunks": [
-            "眠っている間も、脳は完全に休んでいるわけではありません。",
-            "日中に入ってきた情報の一部が整理され、記憶として定着していきます。",
-            "そのため、勉強したあとに睡眠をとることは、記憶にとって重要です。",
-            "寝ることは、ただ体を休ませるだけではないんです。",
-        ],
-        "visuals": [
-            {
-                "ira": ["ベッド", "寝ている人", "眠る人"],
-                "pexels": ["person sleeping in bed", "bedroom sleeping"],
-            },
-            {
-                "ira": ["眠そうな人", "目の下にクマ", "疲れた人"],
-                "pexels": ["sleepy person", "tired face"],
-            },
-            {
-                "ira": ["勉強する人", "本を読む人", "机で勉強"],
-                "pexels": ["person studying", "student reading"],
-            },
-            {
-                "ira": ["ぐっすり寝る人", "快眠", "ベッドで寝る"],
-                "pexels": ["deep sleep", "sleeping person"],
-            },
-        ],
-    },
-
-    {
-        "title": "なぜ緊張すると心臓が速くなる？",
-        "chunks": [
-            "大事な場面になると、心臓がドキドキすることがあります。",
-            "これは体が緊張や危険を感じたときに起こる自然な反応です。",
-            "体はすぐに動けるように、心拍数などを変化させます。",
-            "つまり、ドキドキするのは体が準備をしているサインでもあるんです。",
-        ],
-        "visuals": [
-            {
-                "ira": ["緊張している人", "ドキドキする人", "緊張する人"],
-                "pexels": ["nervous person", "person nervous"],
-            },
-            {
-                "ira": ["心臓", "胸を押さえる人", "ドキドキ"],
-                "pexels": ["person holding chest", "heartbeat"],
-            },
-            {
-                "ira": ["汗をかく人", "困っている人", "焦る人"],
-                "pexels": ["nervous sweating person", "stressed person"],
-            },
-            {
-                "ira": ["頑張る人", "走る人", "元気な人"],
-                "pexels": ["person running", "active person"],
-            },
-        ],
-    },
-
-    {
-        "title": "なぜスマホを見ると時間が早く感じる？",
-        "chunks": [
-            "スマホを見ていると、気づいたら何十分も経っていることがあります。",
-            "動画やSNSなどに集中すると、時間そのものへの注意が減ります。",
-            "その結果、あとから振り返ったときに時間が短く感じられることがあります。",
-            "スマホを少し見ただけのつもりが、かなり時間が経っていたというわけです。",
-        ],
-        "visuals": [
-            {
-                "ira": ["スマホを見る人", "携帯を見る人", "スマートフォン"],
-                "pexels": ["person using smartphone", "person looking at phone"],
-            },
-            {
-                "ira": ["スマホを持つ人", "携帯電話", "スマホ"],
-                "pexels": ["person holding smartphone"],
-            },
-            {
-                "ira": ["時計を見る人", "時計", "時間を見る"],
-                "pexels": ["person looking at clock", "clock time"],
-            },
-            {
-                "ira": ["夜にスマホを見る人", "ベッドでスマホ", "スマホと寝る人"],
-                "pexels": ["person using phone in bed", "phone at night"],
-            },
-        ],
-    },
-
-    {
-        "title": "なぜ笑うと気分が変わる？",
-        "chunks": [
-            "面白いことがなくても、笑っていると少し気分が変わることがあります。",
-            "笑顔や笑いは、体の状態にもさまざまな変化を起こします。",
-            "さらに、人が笑っていると周りの人も笑いやすくなります。",
-            "笑いは、自分だけでなく周囲にも影響する行動なんです。",
-        ],
-        "visuals": [
-            {
-                "ira": ["笑っている人", "笑顔の人", "楽しそうな人"],
-                "pexels": ["happy person laughing", "smiling person"],
-            },
-            {
-                "ira": ["友達と笑う人", "人と話す", "楽しく話す人"],
-                "pexels": ["friends laughing", "people laughing together"],
-            },
-            {
-                "ira": ["笑顔", "嬉しい人", "喜ぶ人"],
-                "pexels": ["happy smiling person"],
-            },
-            {
-                "ira": ["仲良くする人", "友達", "人間関係"],
-                "pexels": ["friends together", "friends talking"],
-            },
-        ],
-    },
-
-    {
-        "title": "なぜ人は名前を忘れる？",
-        "chunks": [
-            "人の顔は覚えているのに、名前だけ出てこないことがあります。",
-            "名前は顔や場所などの情報と比べて、意味との結びつきが弱い場合があります。",
-            "そのため、知っているはずなのに一瞬だけ思い出せないことがあります。",
-            "顔は浮かぶのに名前が出ない、という現象は珍しくありません。",
-        ],
-        "visuals": [
-            {
-                "ira": ["名前を思い出す人", "考えている人", "困っている人"],
-                "pexels": ["person trying to remember", "thinking person"],
-            },
-            {
-                "ira": ["人の顔", "人物", "人"],
-                "pexels": ["person portrait", "people faces"],
-            },
-            {
-                "ira": ["頭を抱える人", "悩む人", "困る人"],
-                "pexels": ["confused person", "person thinking"],
-            },
-            {
-                "ira": ["思いつく人", "ひらめく人", "喜ぶ人"],
-                "pexels": ["person having an idea", "happy person"],
-            },
-        ],
-    },
-
-    {
-        "title": "なぜ雨の前に眠くなることがある？",
-        "chunks": [
-            "雨が降る前になると、なんとなく眠く感じる人がいます。",
-            "天気が変化すると、気圧や明るさなどの環境も変わります。",
-            "そうした変化が、眠気やだるさを感じるきっかけになることがあります。",
-            "雨の日に眠く感じるのには、環境の変化も関係しているんです。",
-        ],
-        "visuals": [
-            {
-                "ira": ["眠そうな人", "眠い人", "目をこする人"],
-                "pexels": ["sleepy person", "tired person"],
-            },
-            {
-                "ira": ["雨", "雨の日", "傘をさす人"],
-                "pexels": ["person walking in rain", "rainy day"],
-            },
-            {
-                "ira": ["窓を見る人", "窓の外を見る", "雨を見る人"],
-                "pexels": ["person looking through window rain"],
-            },
-            {
-                "ira": ["ベッド", "寝る人", "布団"],
-                "pexels": ["bedroom", "person sleeping"],
-            },
-        ],
-    },
-
-    {
-        "title": "なぜ好きな曲は何度も聴きたくなる？",
-        "chunks": [
-            "好きな曲は、何度聴いてもまた聴きたくなることがあります。",
-            "聞き慣れた音楽は、次にどんな音が来るか予想しやすくなります。",
-            "そして、その予想と実際の音が組み合わさることも楽しさにつながります。",
-            "だからお気に入りの曲を何十回も聴いてしまうことがあるんです。",
-        ],
-        "visuals": [
-            {
-                "ira": ["音楽を聴く人", "イヤホンで音楽", "ヘッドホン"],
-                "pexels": ["person listening to music", "headphones person"],
-            },
-            {
-                "ira": ["スマホで音楽", "スマホを見る人", "音楽"],
-                "pexels": ["person listening music phone"],
-            },
-            {
-                "ira": ["楽しそうな人", "笑顔の人", "嬉しい人"],
-                "pexels": ["happy person listening music"],
-            },
-            {
-                "ira": ["歌う人", "音楽を聴く人", "イヤホン"],
-                "pexels": ["person singing", "music headphones"],
-            },
-        ],
-    },
-
-    {
-        "title": "なぜ甘いものを見ると食べたくなる？",
-        "chunks": [
-            "ケーキやチョコレートを見ると、急に食べたくなることがあります。",
-            "見た目や香りなどの情報が、食欲と結びついているからです。",
-            "特に過去に食べておいしいと感じたものほど、強く反応することがあります。",
-            "つまり、食べる前から脳が食事の準備を始めることがあるんです。",
-        ],
-        "visuals": [
-            {
-                "ira": ["ケーキを見る人", "甘いもの", "お菓子を見る人"],
-                "pexels": ["person looking at cake", "dessert person"],
-            },
-            {
-                "ira": ["ケーキ", "チョコレート", "お菓子"],
-                "pexels": ["cake dessert", "chocolate dessert"],
-            },
-            {
-                "ira": ["食べる人", "お菓子を食べる人", "食事する人"],
-                "pexels": ["person eating dessert"],
-            },
-            {
-                "ira": ["嬉しい人", "笑顔の人", "喜ぶ人"],
-                "pexels": ["happy person eating"],
-            },
-        ],
-    },
-
-    {
-        "title": "なぜ時間は年齢によって早く感じる？",
-        "chunks": [
-            "子どもの頃は長く感じた一年が、大人になると短く感じることがあります。",
-            "毎日が似たような生活になると、新しい出来事が少なくなります。",
-            "あとから振り返ったとき、印象に残る出来事が少ないほど時間が短く感じられることがあります。",
-            "同じ一年でも、過ごし方によって体感が変わるんです。",
-        ],
-        "visuals": [
-            {
-                "ira": ["子供", "子どもが遊ぶ", "遊ぶ人"],
-                "pexels": ["child playing", "children playing"],
-            },
-            {
-                "ira": ["大人", "働く人", "仕事をする人"],
-                "pexels": ["adult working", "person working"],
-            },
-            {
-                "ira": ["時計", "時間", "時計を見る人"],
-                "pexels": ["clock time", "person looking at clock"],
-            },
-            {
-                "ira": ["カレンダー", "予定", "日付を見る人"],
-                "pexels": ["calendar", "person looking at calendar"],
-            },
-        ],
-    },
-
-    {
-        "title": "なぜ人はつらいとき昔のことを思い出す？",
-        "chunks": [
-            "つらいとき、なぜか昔の出来事を思い出すことがあります。",
-            "特に強い感情と結びついた記憶は、何かをきっかけに浮かびやすくなります。",
-            "昔の写真や音楽、場所などがきっかけになることもあります。",
-            "記憶は、現在の気分や周囲の刺激ともつながっているんです。",
-        ],
-        "visuals": [
-            {
-                "ira": ["落ち込む人", "悲しい人", "一人で悩む人"],
-                "pexels": ["sad person alone", "person feeling down"],
-            },
-            {
-                "ira": ["昔を思い出す人", "考えている人", "思い出す"],
-                "pexels": ["person remembering past"],
-            },
-            {
-                "ira": ["写真を見る人", "アルバム", "写真を見る"],
-                "pexels": ["person looking at old photos"],
-            },
-            {
-                "ira": ["音楽を聴く人", "イヤホン", "思い出す人"],
-                "pexels": ["person listening to music alone"],
-            },
-        ],
-    },
-
-    {
-        "title": "なぜ人は同じ曲を頭の中で繰り返す？",
-        "chunks": [
-            "一度聴いた曲が、頭の中で何度も繰り返されることがあります。",
-            "特に短くて覚えやすいメロディーは、頭の中に残りやすいと言われています。",
-            "曲を実際に聴いていなくても、脳の中でその一部が再生されることがあります。",
-            "気づいたら同じフレーズをずっと考えていた、ということが起こるんです。",
-        ],
-        "visuals": [
-            {
-                "ira": ["音楽を聴く人", "イヤホン", "ヘッドホン"],
-                "pexels": ["person listening to music"],
-            },
-            {
-                "ira": ["考えている人", "頭の中", "思い出す人"],
-                "pexels": ["person thinking"],
-            },
-            {
-                "ira": ["歌う人", "音楽", "歌"],
-                "pexels": ["person singing"],
-            },
-            {
-                "ira": ["楽しそうな人", "笑顔", "音楽を聴く人"],
-                "pexels": ["happy person music"],
-            },
-        ],
-    },
-]
+CREDIT_FILE = (
+    OUTPUT_DIR / "pexels_credit.txt"
+)
 
 
-# ============================================================
-# 共通関数
-# ============================================================
-
-def run_cmd(cmd, check=True):
-    print("RUN:", " ".join(str(x) for x in cmd))
-    result = subprocess.run(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
+for directory in [
+    MEDIA_DIR,
+    AUDIO_DIR,
+    VIDEO_DIR,
+    CACHE_DIR,
+    OUTPUT_DIR,
+]:
+    directory.mkdir(
+        parents=True,
+        exist_ok=True
     )
 
-    if result.stdout:
-        print(result.stdout[-5000:])
+
+# =========================================================
+# BASIC FUNCTIONS
+# =========================================================
+
+def run_command(
+    command,
+    check=True
+):
+
+    print(
+        "\n$ " +
+        " ".join(
+            str(x)
+            for x in command
+        )
+    )
+
+    result = subprocess.run(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True
+    )
+
+    print(
+        result.stdout[-5000:]
+    )
 
     if check and result.returncode != 0:
         raise RuntimeError(
-            f"Command failed: {result.returncode}\n"
-            + result.stdout[-5000:]
+            "Command failed:\n" +
+            " ".join(
+                str(x)
+                for x in command
+            )
         )
 
     return result
 
 
-def safe_name(text):
-    text = re.sub(r"[^\wぁ-んァ-ヶ一-龯]+", "_", text)
-    return text[:80]
+def load_json(
+    path,
+    default
+):
 
+    if not path.exists():
+        return default
 
-def md5_text(text):
-    return hashlib.md5(text.encode("utf-8")).hexdigest()[:16]
+    try:
 
-
-# ============================================================
-# フォント
-# ============================================================
-
-def find_font():
-    candidates = [
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
-    ]
-
-    for p in candidates:
-        if Path(p).exists():
-            return p
-
-    return None
-
-
-FONT_PATH = find_font()
-
-
-# ============================================================
-# イラスト屋
-# ============================================================
-
-class IrasutoyaLibrary:
-
-    def __init__(self):
-        self.used_urls = set()
-        self.used_files = set()
-        self.count = 0
-
-    def search_result_pages(self, query):
-        url = "https://www.irasutoya.com/search?q=" + quote(query)
-
-        try:
-            r = requests.get(
-                url,
-                headers=HEADERS,
-                timeout=REQUEST_TIMEOUT,
+        return json.loads(
+            path.read_text(
+                encoding="utf-8"
             )
-
-            if r.status_code != 200:
-                print(f"[IRA] HTTP {r.status_code}: {query}")
-                return []
-
-            html = r.text
-
-            post_urls = []
-
-            # Blogger型の投稿URL
-            patterns = [
-                r'https?://www\.irasutoya\.com/\d{4}/\d{2}/[^"\']+\.html',
-                r'href=["\'](/?\d{4}/\d{2}/[^"\']+\.html)["\']',
-            ]
-
-            for pattern in patterns:
-                for match in re.findall(pattern, html, re.I):
-                    if match.startswith("/"):
-                        full = "https://www.irasutoya.com" + match
-                    else:
-                        full = match
-
-                    full = full.split("#")[0]
-
-                    if full not in post_urls:
-                        post_urls.append(full)
-
-            # 最大12件だけ
-            return post_urls[:12]
-
-        except Exception as e:
-            print(f"[IRA] search error: {query} / {e}")
-            return []
-
-    def get_image_from_post(self, post_url):
-        try:
-            r = requests.get(
-                post_url,
-                headers=HEADERS,
-                timeout=REQUEST_TIMEOUT,
-            )
-
-            if r.status_code != 200:
-                return None
-
-            html = r.text
-
-            candidates = []
-
-            # og:image
-            m = re.search(
-                r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)',
-                html,
-                re.I,
-            )
-
-            if m:
-                candidates.append(m.group(1))
-
-            # content -> og:image の順番が逆の場合
-            m = re.search(
-                r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image',
-                html,
-                re.I,
-            )
-
-            if m:
-                candidates.append(m.group(1))
-
-            # img src
-            img_patterns = [
-                r'<img[^>]+src=["\']([^"\']+)["\']',
-                r'<img[^>]+data-src=["\']([^"\']+)["\']',
-                r'<img[^>]+data-original=["\']([^"\']+)["\']',
-                r'<img[^>]+data-lazy-src=["\']([^"\']+)["\']',
-            ]
-
-            for pattern in img_patterns:
-                for img_url in re.findall(pattern, html, re.I):
-                    candidates.append(img_url)
-
-            for image_url in candidates:
-                image_url = image_url.replace("&amp;", "&")
-
-                if image_url.startswith("//"):
-                    image_url = "https:" + image_url
-
-                elif image_url.startswith("/"):
-                    image_url = urljoin(post_url, image_url)
-
-                if not image_url.startswith("http"):
-                    continue
-
-                low = image_url.lower()
-
-                if any(
-                    x in low
-                    for x in [
-                        "logo",
-                        "icon",
-                        "avatar",
-                        "favicon",
-                        "profile",
-                    ]
-                ):
-                    continue
-
-                if image_url in self.used_urls:
-                    continue
-
-                self.used_urls.add(image_url)
-
-                return image_url
-
-            return None
-
-        except Exception as e:
-            print(f"[IRA] post error: {e}")
-            return None
-
-    def download(self, query_list):
-        if self.count >= MAX_IRASUTOYA_UNIQUE:
-            return None
-
-        for query in query_list:
-
-            if self.count >= MAX_IRASUTOYA_UNIQUE:
-                break
-
-            print(f"[IRA SEARCH] {query}")
-
-            posts = self.search_result_pages(query)
-
-            for post in posts:
-
-                if self.count >= MAX_IRASUTOYA_UNIQUE:
-                    break
-
-                image_url = self.get_image_from_post(post)
-
-                if not image_url:
-                    continue
-
-                filename = IMAGE_DIR / (
-                    f"ira_{self.count:02d}_{md5_text(image_url)}.png"
-                )
-
-                try:
-                    r = requests.get(
-                        image_url,
-                        headers=HEADERS,
-                        timeout=REQUEST_TIMEOUT,
-                    )
-
-                    if r.status_code != 200:
-                        continue
-
-                    if len(r.content) < 1000:
-                        continue
-
-                    img = Image.open(BytesIO(r.content))
-
-                    if img.width < 100 or img.height < 100:
-                        continue
-
-                    # RGB/RGBAに変換して確実に保存
-                    if img.mode not in ["RGB", "RGBA"]:
-                        img = img.convert("RGBA")
-
-                    img.save(filename, "PNG")
-
-                    # 保存確認
-                    check = Image.open(filename)
-                    if check.width < 100 or check.height < 100:
-                        filename.unlink(missing_ok=True)
-                        continue
-
-                    self.count += 1
-                    self.used_files.add(str(filename))
-
-                    print(
-                        f"[IRA OK] {filename} "
-                        f"{img.width}x{img.height}"
-                    )
-
-                    return filename
-
-                except Exception as e:
-                    print(f"[IRA DOWNLOAD ERROR] {e}")
-
-        return None
-
-
-# ============================================================
-# Pexels
-# ============================================================
-
-class PexelsLibrary:
-
-    def __init__(self):
-        self.used_ids = set()
-        self.count = 0
-
-    def search(self, queries):
-
-        if not PEXELS_API_KEY:
-            print("[PEXELS] API KEYなし")
-            return None
-
-        headers = {
-            "Authorization": PEXELS_API_KEY,
-            "User-Agent": USER_AGENT,
-        }
-
-        for query in queries:
-
-            print(f"[PEXELS SEARCH] {query}")
-
-            try:
-                params = {
-                    "query": query,
-                    "orientation": "landscape",
-                    "size": "medium",
-                    "locale": "en-US",
-                    "per_page": 15,
-                }
-
-                r = requests.get(
-                    "https://api.pexels.com/v1/videos/search",
-                    headers=headers,
-                    params=params,
-                    timeout=REQUEST_TIMEOUT,
-                )
-
-                if r.status_code != 200:
-                    print(
-                        f"[PEXELS] HTTP {r.status_code}: "
-                        f"{r.text[:500]}"
-                    )
-                    continue
-
-                data = r.json()
-
-                videos = data.get("videos", [])
-
-                # 大きいものを優先
-                videos = sorted(
-                    videos,
-                    key=lambda v: (
-                        v.get("width", 0) * v.get("height", 0)
-                    ),
-                    reverse=True,
-                )
-
-                for video in videos:
-
-                    video_id = video.get("id")
-
-                    if not video_id:
-                        continue
-
-                    if video_id in self.used_ids:
-                        continue
-
-                    files = video.get("video_files", [])
-
-                    candidates = []
-
-                    for f in files:
-
-                        link = f.get("link")
-
-                        if not link:
-                            continue
-
-                        width = f.get("width") or 0
-                        height = f.get("height") or 0
-                        file_type = f.get("file_type", "")
-
-                        if file_type and file_type != "video/mp4":
-                            continue
-
-                        if width <= 0 or height <= 0:
-                            continue
-
-                        # 横動画だけ
-                        if width < height:
-                            continue
-
-                        candidates.append(f)
-
-                    if not candidates:
-                        continue
-
-                    candidates.sort(
-                        key=lambda f: (
-                            (f.get("width") or 0)
-                            * (f.get("height") or 0)
-                        ),
-                        reverse=True,
-                    )
-
-                    selected = candidates[0]
-                    link = selected["link"]
-
-                    filename = VIDEO_DIR / (
-                        f"pexels_{video_id}_{md5_text(link)}.mp4"
-                    )
-
-                    if not filename.exists():
-
-                        try:
-                            vr = requests.get(
-                                link,
-                                headers={"User-Agent": USER_AGENT},
-                                stream=True,
-                                timeout=60,
-                            )
-
-                            if vr.status_code != 200:
-                                continue
-
-                            with open(filename, "wb") as f:
-                                for chunk in vr.iter_content(1024 * 1024):
-                                    if chunk:
-                                        f.write(chunk)
-
-                        except Exception as e:
-                            print(
-                                f"[PEXELS DOWNLOAD ERROR] {e}"
-                            )
-                            filename.unlink(missing_ok=True)
-                            continue
-
-                    if filename.exists() and filename.stat().st_size > 10000:
-
-                        # ffprobe確認
-                        probe = subprocess.run(
-                            [
-                                "ffprobe",
-                                "-v",
-                                "error",
-                                "-show_entries",
-                                "format=duration",
-                                "-of",
-                                "default=noprint_wrappers=1:nokey=1",
-                                str(filename),
-                            ],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            text=True,
-                        )
-
-                        try:
-                            duration = float(probe.stdout.strip())
-                        except Exception:
-                            duration = 0
-
-                        if duration < 0.5:
-                            filename.unlink(missing_ok=True)
-                            continue
-
-                        self.used_ids.add(video_id)
-                        self.count += 1
-
-                        print(
-                            f"[PEXELS OK] {filename} "
-                            f"{selected.get('width')}x"
-                            f"{selected.get('height')} "
-                            f"{duration:.1f}s"
-                        )
-
-                        return filename
-
-            except Exception as e:
-                print(f"[PEXELS ERROR] {query}: {e}")
-
-        return None
-
-
-# ============================================================
-# フォールバック画像
-# ============================================================
-
-def create_fallback_image(text, index):
-    """
-    何も取れなかった場合でも真っ黒にはしない。
-    人物っぽいシンプルなカードを生成。
-    """
-
-    path = IMAGE_DIR / f"fallback_{index:04d}.png"
-
-    img = Image.new(
-        "RGB",
-        (WIDTH, HEIGHT),
-        (245, 245, 245),
-    )
-
-    draw = ImageDraw.Draw(img)
-
-    # シンプルな人物アイコン
-    cx = WIDTH // 2
-    cy = 390
-
-    draw.ellipse(
-        (cx - 90, cy - 90, cx + 90, cy + 90),
-        fill=(80, 80, 80),
-    )
-
-    draw.rounded_rectangle(
-        (
-            cx - 170,
-            cy + 70,
-            cx + 170,
-            cy + 420,
-        ),
-        radius=80,
-        fill=(110, 110, 110),
-    )
-
-    if FONT_PATH:
-        font = ImageFont.truetype(FONT_PATH, 60)
-    else:
-        font = ImageFont.load_default()
-
-    bbox = draw.textbbox((0, 0), text, font=font)
-    tw = bbox[2] - bbox[0]
-
-    draw.text(
-        (
-            (WIDTH - tw) / 2,
-            700,
-        ),
-        text,
-        fill=(40, 40, 40),
-        font=font,
-    )
-
-    img.save(path)
-
-    return path
-
-
-# ============================================================
-# ビジュアル取得
-# ============================================================
-
-class VisualManager:
-
-    def __init__(self):
-        self.ira = IrasutoyaLibrary()
-        self.pexels = PexelsLibrary()
-        self.used_visual_paths = set()
-        self.fallback_index = 0
-
-    def get_visual(self, scene):
-
-        # ----------------------------------------------------
-        # 1. イラスト屋
-        # ----------------------------------------------------
-
-        image = self.ira.download(scene["ira"])
-
-        if image and str(image) not in self.used_visual_paths:
-            self.used_visual_paths.add(str(image))
-
-            print(f"[VISUAL] IRASUTOYA: {image}")
-
-            return {
-                "type": "image",
-                "path": image,
-            }
-
-        # ----------------------------------------------------
-        # 2. Pexels
-        # ----------------------------------------------------
-
-        video = self.pexels.search(scene["pexels"])
-
-        if video and str(video) not in self.used_visual_paths:
-            self.used_visual_paths.add(str(video))
-
-            print(f"[VISUAL] PEXELS: {video}")
-
-            return {
-                "type": "video",
-                "path": video,
-            }
-
-        # ----------------------------------------------------
-        # 3. 既存素材を探す
-        # ----------------------------------------------------
-
-        for p in list(IMAGE_DIR.glob("*.png")):
-            if str(p) not in self.used_visual_paths:
-                self.used_visual_paths.add(str(p))
-
-                print(f"[VISUAL] REUSE IMAGE: {p}")
-
-                return {
-                    "type": "image",
-                    "path": p,
-                }
-
-        for p in list(VIDEO_DIR.glob("*.mp4")):
-            if str(p) not in self.used_visual_paths:
-                self.used_visual_paths.add(str(p))
-
-                print(f"[VISUAL] REUSE VIDEO: {p}")
-
-                return {
-                    "type": "video",
-                    "path": p,
-                }
-
-        # ----------------------------------------------------
-        # 4. 最終フォールバック
-        # ----------------------------------------------------
-
-        self.fallback_index += 1
-
-        fallback = create_fallback_image(
-            scene["ira"][0],
-            self.fallback_index,
         )
 
-        self.used_visual_paths.add(str(fallback))
+    except Exception:
 
-        print(f"[VISUAL] FALLBACK: {fallback}")
-
-        return {
-            "type": "image",
-            "path": fallback,
-        }
+        return default
 
 
-# ============================================================
-# Edge TTS
-# ============================================================
+def save_json(
+    path,
+    data
+):
 
-def create_tts(text, output_path):
-
-    if output_path.exists() and output_path.stat().st_size > 1000:
-        return output_path
-
-    code = f"""
-import asyncio
-import edge_tts
-
-async def main():
-    communicate = edge_tts.Communicate(
-        {text!r},
-        "ja-JP-NanamiNeural",
-        rate="-3%",
-        volume="+0%",
+    path.parent.mkdir(
+        parents=True,
+        exist_ok=True
     )
-    await communicate.save({str(output_path)!r})
 
-asyncio.run(main())
-"""
-
-    tmp = AUDIO_DIR / "tts_temp.py"
-    tmp.write_text(code, encoding="utf-8")
-
-    run_cmd(["python", str(tmp)])
-
-    if not output_path.exists():
-        raise RuntimeError(
-            f"TTS生成失敗: {output_path}"
-        )
-
-    return output_path
+    path.write_text(
+        json.dumps(
+            data,
+            ensure_ascii=False,
+            indent=2
+        ),
+        encoding="utf-8"
+    )
 
 
-def get_audio_duration(path):
+def get_duration(path):
 
     result = subprocess.run(
         [
@@ -1140,671 +191,3626 @@ def get_audio_duration(path):
             "format=duration",
             "-of",
             "default=noprint_wrappers=1:nokey=1",
-            str(path),
+            str(path)
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
+        text=True
     )
 
     try:
-        return float(result.stdout.strip())
+
+        return float(
+            result.stdout.strip()
+        )
+
     except Exception:
-        return 1.0
+
+        return 0.0
 
 
-# ============================================================
-# 字幕PNG
-# ============================================================
+def find_font():
 
-def make_subtitle_png(text, index):
+    candidates = [
 
-    path = MEDIA_DIR / f"subtitle_{index:04d}.png"
+        "/usr/share/fonts/opentype/noto/"
+        "NotoSansCJK-Bold.ttc",
 
-    img = Image.new(
-        "RGBA",
-        (WIDTH, HEIGHT),
-        (0, 0, 0, 0),
+        "/usr/share/fonts/opentype/noto/"
+        "NotoSansCJK-Regular.ttc",
+
+        "/usr/share/fonts/truetype/noto/"
+        "NotoSansCJK-Bold.ttf",
+
+        "/usr/share/fonts/truetype/noto/"
+        "NotoSansCJK-Regular.ttf",
+
+    ]
+
+    for font in candidates:
+
+        if Path(font).exists():
+
+            return font
+
+    return None
+
+
+# =========================================================
+# TOPIC BANK
+#
+# 100ベーステーマ × 10視点
+# = 最大1000パターン
+# =========================================================
+
+BASE_TOPICS = [
+
+    (
+        "心理",
+        "なぜ人は他人の目を気にするのか",
+        [
+            "person thinking",
+            "worried person",
+            "people talking",
+            "social interaction"
+        ]
+    ),
+
+    (
+        "心理",
+        "なぜ失敗すると何度も思い出してしまうのか",
+        [
+            "sad person thinking",
+            "person remembering",
+            "worried person",
+            "thinking man"
+        ]
+    ),
+
+    (
+        "心理",
+        "なぜ褒められると嬉しくなるのか",
+        [
+            "happy person",
+            "smiling person",
+            "people talking",
+            "celebration"
+        ]
+    ),
+
+    (
+        "心理",
+        "なぜ嫌な記憶ほど残りやすいのか",
+        [
+            "person thinking",
+            "memory",
+            "sad person",
+            "deep thinking"
+        ]
+    ),
+
+    (
+        "心理",
+        "なぜ人は比較してしまうのか",
+        [
+            "people comparison",
+            "person using smartphone",
+            "social media",
+            "thinking person"
+        ]
+    ),
+
+    (
+        "心理",
+        "なぜ緊張すると手が震えるのか",
+        [
+            "nervous person",
+            "anxious person",
+            "business meeting",
+            "worried man"
+        ]
+    ),
+
+    (
+        "心理",
+        "なぜ初対面では緊張するのか",
+        [
+            "first meeting",
+            "people meeting",
+            "nervous person",
+            "conversation"
+        ]
+    ),
+
+    (
+        "心理",
+        "なぜ笑い声につられて笑ってしまうのか",
+        [
+            "friends laughing",
+            "people laughing",
+            "happy friends",
+            "smiling people"
+        ]
+    ),
+
+    (
+        "心理",
+        "なぜ好きな人のことばかり考えてしまうのか",
+        [
+            "romantic couple",
+            "person thinking",
+            "love",
+            "young couple"
+        ]
+    ),
+
+    (
+        "心理",
+        "なぜ人は秘密を知りたくなるのか",
+        [
+            "curious person",
+            "secret",
+            "mysterious person",
+            "thinking person"
+        ]
+    ),
+
+    (
+        "脳",
+        "なぜあくびはうつるのか",
+        [
+            "yawning person",
+            "sleepy person",
+            "tired person",
+            "people yawning"
+        ]
+    ),
+
+    (
+        "脳",
+        "なぜ夢を見るのか",
+        [
+            "sleeping person",
+            "dream",
+            "bedroom night",
+            "sleep"
+        ]
+    ),
+
+    (
+        "脳",
+        "なぜ眠いと集中できなくなるのか",
+        [
+            "sleepy person working",
+            "tired office worker",
+            "sleepy student",
+            "person tired"
+        ]
+    ),
+
+    (
+        "脳",
+        "なぜ寝不足だとイライラしやすいのか",
+        [
+            "tired person",
+            "angry person",
+            "sleep deprived",
+            "exhausted worker"
+        ]
+    ),
+
+    (
+        "脳",
+        "なぜ昔の曲を聞くと記憶がよみがえるのか",
+        [
+            "person listening music",
+            "headphones",
+            "nostalgia",
+            "music listener"
+        ]
+    ),
+
+    (
+        "脳",
+        "なぜ名前を忘れてしまうのか",
+        [
+            "confused person",
+            "thinking person",
+            "forgetful person",
+            "memory"
+        ]
+    ),
+
+    (
+        "脳",
+        "なぜ勉強すると疲れるのか",
+        [
+            "student studying",
+            "tired student",
+            "books",
+            "studying desk"
+        ]
+    ),
+
+    (
+        "脳",
+        "なぜ時間が早く感じる日と遅く感じる日があるのか",
+        [
+            "clock",
+            "person thinking",
+            "time",
+            "waiting person"
+        ]
+    ),
+
+    (
+        "脳",
+        "なぜ同じことを繰り返すと飽きるのか",
+        [
+            "bored person",
+            "tired person",
+            "repetition",
+            "office worker"
+        ]
+    ),
+
+    (
+        "脳",
+        "なぜ集中すると周りが見えなくなるのか",
+        [
+            "focused person",
+            "person working",
+            "concentration",
+            "office worker"
+        ]
+    ),
+
+    (
+        "人体",
+        "なぜ炭酸飲料を飲むとげっぷが出るのか",
+        [
+            "person drinking soda",
+            "soda bottle",
+            "carbonated drink",
+            "glass soda"
+        ]
+    ),
+
+    (
+        "人体",
+        "なぜ辛いものを食べると汗が出るのか",
+        [
+            "person eating spicy food",
+            "spicy food",
+            "sweating person",
+            "hot food"
+        ]
+    ),
+
+    (
+        "人体",
+        "なぜ寒いと鳥肌が立つのか",
+        [
+            "cold person",
+            "winter person",
+            "cold weather",
+            "person outside winter"
+        ]
+    ),
+
+    (
+        "人体",
+        "なぜ運動すると息が上がるのか",
+        [
+            "running person",
+            "runner breathing",
+            "exercise",
+            "fitness"
+        ]
+    ),
+
+    (
+        "人体",
+        "なぜ疲れると眠くなるのか",
+        [
+            "tired person",
+            "sleepy person",
+            "person sleeping",
+            "bed"
+        ]
+    ),
+
+    (
+        "人体",
+        "なぜ緊張すると汗をかくのか",
+        [
+            "nervous person",
+            "sweating person",
+            "anxious person",
+            "stress"
+        ]
+    ),
+
+    (
+        "人体",
+        "なぜ目を閉じると眠りやすくなるのか",
+        [
+            "person sleeping",
+            "closed eyes",
+            "bedroom",
+            "sleep"
+        ]
+    ),
+
+    (
+        "人体",
+        "なぜ水を飲むと喉の渇きが落ち着くのか",
+        [
+            "person drinking water",
+            "water glass",
+            "drinking water",
+            "hydration"
+        ]
+    ),
+
+    (
+        "人体",
+        "なぜ運動後に心臓が速く動くのか",
+        [
+            "runner",
+            "exercise person",
+            "fitness",
+            "running"
+        ]
+    ),
+
+    (
+        "人体",
+        "なぜ長時間スマホを見ると目が疲れるのか",
+        [
+            "person using smartphone",
+            "tired eyes",
+            "smartphone",
+            "phone screen"
+        ]
+    ),
+
+    (
+        "日常",
+        "なぜ電子レンジは食べ物を温められるのか",
+        [
+            "microwave kitchen",
+            "person cooking",
+            "kitchen appliance",
+            "food microwave"
+        ]
+    ),
+
+    (
+        "日常",
+        "なぜ氷は水に浮くのか",
+        [
+            "ice water",
+            "glass ice",
+            "ice cube",
+            "cold drink"
+        ]
+    ),
+
+    (
+        "日常",
+        "なぜ雨の日は眠く感じることがあるのか",
+        [
+            "rain window",
+            "sleepy person",
+            "rainy day",
+            "bedroom rain"
+        ]
+    ),
+
+    (
+        "日常",
+        "なぜシャワーを浴びるとスッキリするのか",
+        [
+            "person shower",
+            "shower water",
+            "bathroom",
+            "relaxing shower"
+        ]
+    ),
+
+    (
+        "日常",
+        "なぜ朝は起きるのがつらいのか",
+        [
+            "person waking up",
+            "alarm clock",
+            "sleepy person",
+            "morning bed"
+        ]
+    ),
+
+    (
+        "日常",
+        "なぜ夜になると考え事が増えるのか",
+        [
+            "person thinking at night",
+            "night bedroom",
+            "person alone",
+            "night smartphone"
+        ]
+    ),
+
+    (
+        "日常",
+        "なぜ部屋を片付けると気分が変わるのか",
+        [
+            "cleaning room",
+            "organized room",
+            "person cleaning",
+            "tidy home"
+        ]
+    ),
+
+    (
+        "日常",
+        "なぜ香りで昔の記憶を思い出すのか",
+        [
+            "smelling flowers",
+            "perfume person",
+            "memory",
+            "person smelling"
+        ]
+    ),
+
+    (
+        "日常",
+        "なぜ人は時計を何度も確認するのか",
+        [
+            "person checking clock",
+            "wristwatch",
+            "smartphone time",
+            "waiting person"
+        ]
+    ),
+
+    (
+        "日常",
+        "なぜ待ち時間は長く感じるのか",
+        [
+            "person waiting",
+            "waiting room",
+            "clock waiting",
+            "bored person"
+        ]
+    ),
+
+    (
+        "科学",
+        "なぜ空は青く見えるのか",
+        [
+            "blue sky",
+            "person looking sky",
+            "clouds sky",
+            "nature sky"
+        ]
+    ),
+
+    (
+        "科学",
+        "なぜ夕焼けは赤く見えるのか",
+        [
+            "sunset",
+            "red sky",
+            "person watching sunset",
+            "sunset landscape"
+        ]
+    ),
+
+    (
+        "科学",
+        "なぜ虹が見えるのか",
+        [
+            "rainbow",
+            "person looking rainbow",
+            "rain sky",
+            "nature rainbow"
+        ]
+    ),
+
+    (
+        "科学",
+        "なぜ雷が光ってから音が聞こえるのか",
+        [
+            "lightning storm",
+            "thunderstorm",
+            "storm sky",
+            "person watching storm"
+        ]
+    ),
+
+    (
+        "科学",
+        "なぜ海は青く見えるのか",
+        [
+            "blue ocean",
+            "person beach",
+            "ocean water",
+            "sea waves"
+        ]
+    ),
+
+    (
+        "科学",
+        "なぜ植物は太陽の方向へ伸びるのか",
+        [
+            "plants sunlight",
+            "plant growing",
+            "sunlight plant",
+            "person gardening"
+        ]
+    ),
+
+    (
+        "科学",
+        "なぜ金属は冷たく感じるのか",
+        [
+            "metal object",
+            "person touching metal",
+            "cold metal",
+            "hand metal"
+        ]
+    ),
+
+    (
+        "科学",
+        "なぜ水滴は丸くなるのか",
+        [
+            "water droplets",
+            "rain drop",
+            "water closeup",
+            "droplets"
+        ]
+    ),
+
+    (
+        "科学",
+        "なぜシャボン玉は虹色に見えるのか",
+        [
+            "soap bubbles",
+            "rainbow bubbles",
+            "bubbles closeup",
+            "person bubbles"
+        ]
+    ),
+
+    (
+        "科学",
+        "なぜ熱い飲み物から湯気が出るのか",
+        [
+            "hot coffee",
+            "steam coffee",
+            "tea cup",
+            "hot drink"
+        ]
+    ),
+
+    (
+        "哲学",
+        "自分とは何なのか",
+        [
+            "person mirror",
+            "thinking person",
+            "reflection",
+            "philosophy person"
+        ]
+    ),
+
+    (
+        "哲学",
+        "自由とは何なのか",
+        [
+            "person outdoors",
+            "freedom person",
+            "open sky",
+            "person landscape"
+        ]
+    ),
+
+    (
+        "哲学",
+        "幸せとは何なのか",
+        [
+            "happy person",
+            "smiling person",
+            "friends happiness",
+            "joy"
+        ]
+    ),
+
+    (
+        "哲学",
+        "なぜ人は意味を求めるのか",
+        [
+            "person thinking",
+            "deep thinking",
+            "person looking sky",
+            "philosophy"
+        ]
+    ),
+
+    (
+        "哲学",
+        "なぜ人は未来を不安に感じるのか",
+        [
+            "worried person",
+            "future thinking",
+            "anxious person",
+            "person looking horizon"
+        ]
+    ),
+
+    (
+        "哲学",
+        "なぜ過去を変えられないのに考えてしまうのか",
+        [
+            "nostalgia person",
+            "person remembering",
+            "old photos",
+            "thinking person"
+        ]
+    ),
+
+    (
+        "哲学",
+        "もし時間を戻せたら人生は変わるのか",
+        [
+            "clock person",
+            "time concept",
+            "person thinking",
+            "old clock"
+        ]
+    ),
+
+    (
+        "哲学",
+        "完璧を目指すと苦しくなるのはなぜか",
+        [
+            "stressed person",
+            "perfectionist",
+            "worried worker",
+            "person working"
+        ]
+    ),
+
+    (
+        "哲学",
+        "なぜ人は正解を探してしまうのか",
+        [
+            "person thinking",
+            "choice person",
+            "decision",
+            "confused person"
+        ]
+    ),
+
+    (
+        "哲学",
+        "本当に自分で選んでいると言えるのか",
+        [
+            "person choosing",
+            "decision person",
+            "thinking person",
+            "choices"
+        ]
+    ),
+
+    (
+        "SNS",
+        "なぜSNSを見ると時間が早く過ぎるのか",
+        [
+            "person smartphone",
+            "social media phone",
+            "phone scrolling",
+            "smartphone user"
+        ]
+    ),
+
+    (
+        "SNS",
+        "なぜ通知が来ると確認したくなるのか",
+        [
+            "phone notification",
+            "person checking phone",
+            "smartphone notification",
+            "phone user"
+        ]
+    ),
+
+    (
+        "SNS",
+        "なぜ他人の楽しそうな投稿が気になるのか",
+        [
+            "social media person",
+            "happy person smartphone",
+            "phone scrolling",
+            "social media"
+        ]
+    ),
+
+    (
+        "SNS",
+        "なぜ既読が気になってしまうのか",
+        [
+            "person texting",
+            "messaging smartphone",
+            "waiting phone",
+            "phone message"
+        ]
+    ),
+
+    (
+        "SNS",
+        "なぜ短い動画は次々見てしまうのか",
+        [
+            "person watching smartphone",
+            "short video phone",
+            "scrolling smartphone",
+            "phone user"
+        ]
+    ),
+
+    (
+        "SNS",
+        "なぜコメント欄を読んでしまうのか",
+        [
+            "person reading smartphone",
+            "social media comments",
+            "phone scrolling",
+            "smartphone user"
+        ]
+    ),
+
+    (
+        "SNS",
+        "なぜ数字が多い投稿ほど気になるのか",
+        [
+            "social media smartphone",
+            "phone numbers",
+            "person phone",
+            "social media user"
+        ]
+    ),
+
+    (
+        "SNS",
+        "なぜSNSを見た後に疲れることがあるのか",
+        [
+            "tired smartphone user",
+            "person phone tired",
+            "social media fatigue",
+            "exhausted person"
+        ]
+    ),
+
+    (
+        "SNS",
+        "なぜ知らない人の生活が気になるのか",
+        [
+            "person using phone",
+            "social media",
+            "smartphone user",
+            "curious person"
+        ]
+    ),
+
+    (
+        "SNS",
+        "なぜ通知音に反応してしまうのか",
+        [
+            "phone notification",
+            "person hearing phone",
+            "smartphone alert",
+            "phone user"
+        ]
+    ),
+
+    (
+        "食べ物",
+        "なぜ甘いものを食べたくなるのか",
+        [
+            "person eating dessert",
+            "sweet food",
+            "dessert person",
+            "cake eating"
+        ]
+    ),
+
+    (
+        "食べ物",
+        "なぜ空腹だとイライラしやすいのか",
+        [
+            "hungry person",
+            "hungry angry person",
+            "food person",
+            "hungry"
+        ]
+    ),
+
+    (
+        "食べ物",
+        "なぜ熱い料理はおいしく感じるのか",
+        [
+            "hot food",
+            "person eating",
+            "restaurant food",
+            "cooking"
+        ]
+    ),
+
+    (
+        "食べ物",
+        "なぜ冷たい飲み物がおいしく感じるのか",
+        [
+            "cold drink",
+            "ice drink",
+            "person drinking",
+            "summer drink"
+        ]
+    ),
+
+    (
+        "食べ物",
+        "なぜコーヒーを飲むと眠気が減るのか",
+        [
+            "person drinking coffee",
+            "coffee office",
+            "coffee cup",
+            "tired person coffee"
+        ]
+    ),
+
+    (
+        "食べ物",
+        "なぜポップコーンは映画館で食べたくなるのか",
+        [
+            "popcorn movie",
+            "person eating popcorn",
+            "cinema popcorn",
+            "movie theater"
+        ]
+    ),
+
+    (
+        "食べ物",
+        "なぜ香ばしい匂いでお腹が空くのか",
+        [
+            "cooking food",
+            "food aroma",
+            "person cooking",
+            "restaurant food"
+        ]
+    ),
+
+    (
+        "食べ物",
+        "なぜ炭酸飲料は刺激的に感じるのか",
+        [
+            "soda drinking",
+            "carbonated drink",
+            "soda bottle",
+            "person drinking soda"
+        ]
+    ),
+
+    (
+        "食べ物",
+        "なぜ辛い食べ物がクセになるのか",
+        [
+            "spicy food person",
+            "eating spicy food",
+            "hot food",
+            "spicy meal"
+        ]
+    ),
+
+    (
+        "食べ物",
+        "なぜ食後に眠くなるのか",
+        [
+            "sleepy after eating",
+            "person eating",
+            "sleepy person",
+            "meal person"
+        ]
+    ),
+
+    (
+        "人間関係",
+        "なぜ第一印象は強く残るのか",
+        [
+            "first impression",
+            "people meeting",
+            "business meeting",
+            "person portrait"
+        ]
+    ),
+
+    (
+        "人間関係",
+        "なぜ親しい人ほど気を使わなくなるのか",
+        [
+            "friends talking",
+            "close friends",
+            "friends laughing",
+            "people conversation"
+        ]
+    ),
+
+    (
+        "人間関係",
+        "なぜ沈黙が気まずく感じるのか",
+        [
+            "awkward silence",
+            "two people talking",
+            "nervous person",
+            "conversation"
+        ]
+    ),
+
+    (
+        "人間関係",
+        "なぜ目を合わせると緊張するのか",
+        [
+            "eye contact",
+            "conversation",
+            "nervous person",
+            "people talking"
+        ]
+    ),
+
+    (
+        "人間関係",
+        "なぜ人は同じ趣味の人に親近感を持つのか",
+        [
+            "friends hobby",
+            "friends talking",
+            "people hobby",
+            "friends laughing"
+        ]
+    ),
+
+    (
+        "人間関係",
+        "なぜ謝るのが難しいのか",
+        [
+            "apologizing person",
+            "sad person",
+            "conversation",
+            "relationship"
+        ]
+    ),
+
+    (
+        "人間関係",
+        "なぜありがとうと言われると嬉しいのか",
+        [
+            "happy people",
+            "thank you conversation",
+            "smiling person",
+            "friends"
+        ]
+    ),
+
+    (
+        "人間関係",
+        "なぜ人は表情から感情を読み取るのか",
+        [
+            "facial expression",
+            "human face",
+            "conversation",
+            "emotion"
+        ]
+    ),
+
+    (
+        "人間関係",
+        "なぜ共感されると安心するのか",
+        [
+            "friends talking",
+            "supportive conversation",
+            "comfort person",
+            "friends"
+        ]
+    ),
+
+    (
+        "人間関係",
+        "なぜ人は孤独を感じるのか",
+        [
+            "lonely person",
+            "person alone",
+            "sad person",
+            "night alone"
+        ]
+    ),
+
+    (
+        "仕事",
+        "なぜ先延ばししてしまうのか",
+        [
+            "procrastination",
+            "person smartphone office",
+            "lazy worker",
+            "office worker"
+        ]
+    ),
+
+    (
+        "仕事",
+        "なぜ締切直前になると集中できるのか",
+        [
+            "deadline worker",
+            "focused office worker",
+            "computer worker",
+            "office work"
+        ]
+    ),
+
+    (
+        "仕事",
+        "なぜ同時に色々やると疲れるのか",
+        [
+            "busy office worker",
+            "stressed worker",
+            "multitasking",
+            "office computer"
+        ]
+    ),
+
+    (
+        "仕事",
+        "なぜ休憩すると頭がスッキリするのか",
+        [
+            "office break",
+            "coffee break",
+            "relaxed worker",
+            "office worker"
+        ]
+    ),
+
+    (
+        "仕事",
+        "なぜ朝のほうが集中しやすい人がいるのか",
+        [
+            "morning worker",
+            "morning office",
+            "focused person",
+            "coffee office"
+        ]
+    ),
+
+    (
+        "仕事",
+        "なぜ机が散らかると集中しにくいのか",
+        [
+            "messy desk",
+            "office desk",
+            "stressed worker",
+            "cluttered desk"
+        ]
+    ),
+
+    (
+        "仕事",
+        "なぜ一度気が散ると戻りにくいのか",
+        [
+            "distracted worker",
+            "smartphone office",
+            "office worker",
+            "concentration"
+        ]
+    ),
+
+    (
+        "仕事",
+        "なぜ目標を紙に書くと意識しやすいのか",
+        [
+            "writing goals",
+            "notebook goals",
+            "person writing",
+            "goal planning"
+        ]
+    ),
+
+    (
+        "仕事",
+        "なぜ小さな達成感がやる気につながるのか",
+        [
+            "happy worker",
+            "successful person",
+            "achievement",
+            "smiling worker"
+        ]
+    ),
+
+    (
+        "仕事",
+        "なぜ疲れると判断が雑になるのか",
+        [
+            "tired worker",
+            "exhausted office worker",
+            "stress worker",
+            "tired person"
+        ]
+    ),
+
+    (
+        "自然",
+        "なぜ雲は空に浮いているのか",
+        [
+            "clouds sky",
+            "person looking sky",
+            "blue sky",
+            "cloud landscape"
+        ]
+    ),
+
+    (
+        "自然",
+        "なぜ風が吹くのか",
+        [
+            "wind trees",
+            "person outdoors",
+            "wind nature",
+            "trees moving wind"
+        ]
+    ),
+
+    (
+        "自然",
+        "なぜ雪は白いのか",
+        [
+            "snow landscape",
+            "person snow",
+            "winter snow",
+            "snow nature"
+        ]
+    ),
+
+    (
+        "自然",
+        "なぜ葉っぱは緑色なのか",
+        [
+            "green leaves",
+            "plant closeup",
+            "person gardening",
+            "green nature"
+        ]
+    ),
+
+    (
+        "自然",
+        "なぜ海には波があるのか",
+        [
+            "ocean waves",
+            "person beach",
+            "sea waves",
+            "ocean landscape"
+        ]
+    ),
+
+    (
+        "自然",
+        "なぜ朝日を見ると気持ちが変わるのか",
+        [
+            "sunrise person",
+            "person watching sunrise",
+            "morning nature",
+            "sunrise"
+        ]
+    ),
+
+    (
+        "自然",
+        "なぜ夜空には星が見えるのか",
+        [
+            "night sky stars",
+            "person looking stars",
+            "milky way",
+            "stars night"
+        ]
+    ),
+
+    (
+        "自然",
+        "なぜ月の形は変わって見えるのか",
+        [
+            "moon night",
+            "person looking moon",
+            "night sky",
+            "moon"
+        ]
+    ),
+
+    (
+        "自然",
+        "なぜ虹は雨上がりに見えるのか",
+        [
+            "rainbow after rain",
+            "rainbow sky",
+            "person rainbow",
+            "rain nature"
+        ]
+    ),
+
+    (
+        "自然",
+        "なぜ秋になると葉が色づくのか",
+        [
+            "autumn leaves",
+            "person autumn",
+            "fall nature",
+            "red leaves"
+        ]
+    ),
+]
+
+
+ANGLES = [
+    "意外な理由",
+    "科学的な理由",
+    "脳の仕組み",
+    "身近な生活との関係",
+    "知られざる理由",
+    "意外な共通点",
+    "人間の本能との関係",
+    "日常で起きている仕組み",
+    "知ると見方が変わる理由",
+    "実は身近な理由",
+]
+
+
+def build_topic_bank():
+
+    bank = []
+
+    for base_index, (
+        category,
+        title,
+        queries
+    ) in enumerate(
+        BASE_TOPICS
+    ):
+
+        for angle_index, angle in enumerate(
+            ANGLES
+        ):
+
+            bank.append(
+                {
+                    "id": (
+                        f"{base_index:03d}_"
+                        f"{angle_index:02d}"
+                    ),
+
+                    "category": category,
+
+                    "title": title,
+
+                    "angle": angle,
+
+                    "queries": queries,
+                }
+            )
+
+    return bank
+
+
+TOPIC_BANK = build_topic_bank()
+
+
+# =========================================================
+# TOPIC SELECT
+# =========================================================
+
+def select_topics():
+
+    used = load_json(
+        USED_TOPICS_FILE,
+        []
     )
 
-    draw = ImageDraw.Draw(img)
+    used_set = set(
+        used
+    )
 
-    if FONT_PATH:
-        font_size = 64
+    unused = [
+        topic
+        for topic in TOPIC_BANK
+        if topic["id"]
+        not in used_set
+    ]
 
-        while font_size >= 42:
+    if len(unused) < TOPICS_PER_VIDEO:
 
-            font = ImageFont.truetype(
-                FONT_PATH,
-                font_size,
-            )
+        print(
+            "1000パターンを一巡。"
+            "使用履歴を整理して再利用します。"
+        )
 
-            bbox = draw.textbbox(
-                (0, 0),
-                text,
-                font=font,
-                stroke_width=2,
-            )
+        used = []
 
-            tw = bbox[2] - bbox[0]
+        unused = TOPIC_BANK.copy()
 
-            if tw <= WIDTH - 220:
+    random.shuffle(
+        unused
+    )
+
+    selected = []
+
+    category_count = {}
+
+    for topic in unused:
+
+        category = topic[
+            "category"
+        ]
+
+        count = category_count.get(
+            category,
+            0
+        )
+
+        if count >= 3:
+            continue
+
+        selected.append(
+            topic
+        )
+
+        category_count[
+            category
+        ] = count + 1
+
+        if len(selected) >= TOPICS_PER_VIDEO:
+            break
+
+    if len(selected) < TOPICS_PER_VIDEO:
+
+        for topic in unused:
+
+            if topic not in selected:
+
+                selected.append(
+                    topic
+                )
+
+            if len(selected) >= TOPICS_PER_VIDEO:
                 break
 
-            font_size -= 2
-
-    else:
-        font = ImageFont.load_default()
-
-    bbox = draw.textbbox(
-        (0, 0),
-        text,
-        font=font,
-        stroke_width=3,
+    used.extend(
+        topic["id"]
+        for topic in selected
     )
 
-    tw = bbox[2] - bbox[0]
-    th = bbox[3] - bbox[1]
-
-    x = (WIDTH - tw) // 2
-    y = 830
-
-    # 半透明黒背景
-    padding_x = 35
-    padding_y = 20
-
-    draw.rounded_rectangle(
-        (
-            x - padding_x,
-            y - padding_y,
-            x + tw + padding_x,
-            y + th + padding_y,
-        ),
-        radius=20,
-        fill=(0, 0, 0, 175),
+    save_json(
+        USED_TOPICS_FILE,
+        used[-1000:]
     )
 
-    draw.text(
-        (x, y),
-        text,
-        font=font,
-        fill=(255, 255, 255, 255),
-        stroke_width=3,
-        stroke_fill=(0, 0, 0, 255),
+    return selected
+
+
+# =========================================================
+# SCRIPT
+# =========================================================
+
+def make_script(topic):
+
+    title = topic[
+        "title"
+    ]
+
+    angle = topic[
+        "angle"
+    ]
+
+    templates = [
+
+        f"""
+知っているようで、
+実はちゃんと理由を知らない疑問。
+
+今回のテーマは、
+「{title}」です。
+
+これ、普段は当たり前すぎて
+気にすることもありません。
+
+でも少し考えてみると、
+「そもそも、なぜ？」となりますよね。
+
+実はここには、
+{angle}が関係しています。
+
+私たちは毎日の生活の中で、
+この現象を何度も経験しています。
+
+ところが仕組みを知ると、
+いつもの光景が少し違って見えてきます。
+
+つまり、
+身近なことほど、
+意外な理由が隠れているんです。
+
+知っているだけで得をする知識ではありません。
+
+でも、
+知っていると誰かに話したくなる。
+
+そんな身近な雑学です。
+""".strip(),
+
+        f"""
+今日の疑問は、
+「{title}」。
+
+一見すると、
+当たり前に思える現象です。
+
+ところが実際には、
+ちゃんとした理由があります。
+
+ポイントになるのは、
+{angle}です。
+
+私たちの体や脳、
+そして普段の生活には、
+思っている以上に面白い仕組みがあります。
+
+この仕組みを知ると、
+次に同じ場面を見たとき、
+「あ、これのことか」と
+気づくかもしれません。
+
+普段何気なく見ているものにも、
+実は小さな謎がたくさんあります。
+
+今回はその一つを、
+分かりやすく見ていきましょう。
+""".strip(),
+    ]
+
+    return random.choice(
+        templates
     )
 
-    img.save(path)
 
-    return path
+# =========================================================
+# TTS
+# =========================================================
 
-
-# ============================================================
-# イラストを1920x1080に変換
-# ============================================================
-
-def prepare_image(image_path, index):
-
-    output = MEDIA_DIR / f"prepared_image_{index:04d}.png"
-
-    img = Image.open(image_path)
-
-    if img.mode not in ["RGB", "RGBA"]:
-        img = img.convert("RGBA")
-
-    # 白背景
-    canvas = Image.new(
-        "RGB",
-        (WIDTH, HEIGHT),
-        (255, 255, 255),
-    )
-
-    img.thumbnail(
-        (
-            WIDTH - 160,
-            HEIGHT - 160,
-        ),
-        Image.Resampling.LANCZOS,
-    )
-
-    if img.mode == "RGBA":
-        canvas.paste(
-            img,
-            (
-                (WIDTH - img.width) // 2,
-                (HEIGHT - img.height) // 2,
-            ),
-            img,
-        )
-    else:
-        canvas.paste(
-            img,
-            (
-                (WIDTH - img.width) // 2,
-                (HEIGHT - img.height) // 2,
-            ),
-        )
-
-    canvas.save(output, quality=95)
-
-    return output
-
-
-# ============================================================
-# 静止画セグメント
-# ============================================================
-
-def create_image_segment(
-    image_path,
-    subtitle_path,
-    audio_path,
-    output_path,
-    duration,
+async def create_tts(
+    text,
+    output
 ):
 
-    prepared = prepare_image(
-        image_path,
-        random.randint(1, 999999),
+    communicate = edge_tts.Communicate(
+        text=text,
+        voice=VOICE,
+        rate=VOICE_RATE
     )
 
-    run_cmd(
-        [
-            "ffmpeg",
-            "-y",
-            "-loop",
-            "1",
-            "-i",
-            str(prepared),
-            "-i",
-            str(audio_path),
-            "-i",
-            str(subtitle_path),
-            "-filter_complex",
-            "[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,"
-            "pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=white,"
-            "format=yuv420p[base];"
-            "[base][2:v]overlay=0:0:format=auto[outv]",
-            "-map",
-            "[outv]",
-            "-map",
-            "1:a",
-            "-t",
-            f"{duration:.3f}",
-            "-r",
-            str(FPS),
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-crf",
-            "21",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "128k",
-            "-shortest",
-            str(output_path),
+    await communicate.save(
+        str(output)
+    )
+
+
+def generate_audio(
+    text,
+    output
+):
+
+    asyncio.run(
+        create_tts(
+            text,
+            output
+        )
+    )
+
+
+# =========================================================
+# PEXELS VIDEO SEARCH
+# =========================================================
+
+def search_pexels_videos(
+    query
+):
+
+    cache = load_json(
+        VIDEO_SEARCH_CACHE,
+        {}
+    )
+
+    cache_key = hashlib.md5(
+        query.encode(
+            "utf-8"
+        )
+    ).hexdigest()
+
+    if cache_key in cache:
+
+        return cache[
+            cache_key
+        ]
+
+    headers = {
+        "Authorization":
+            PEXELS_API_KEY,
+
+        "User-Agent":
+            "Mozilla/5.0"
+    }
+
+    response = requests.get(
+        "https://api.pexels.com/v1/videos/search",
+        headers=headers,
+        params={
+            "query": query,
+            "orientation": "landscape",
+            "size": "medium",
+            "locale": "en-US",
+            "per_page": 40,
+        },
+        timeout=REQUEST_TIMEOUT
+    )
+
+    response.raise_for_status()
+
+    videos = response.json().get(
+        "videos",
+        []
+    )
+
+    cache[
+        cache_key
+    ] = videos
+
+    save_json(
+        VIDEO_SEARCH_CACHE,
+        cache
+    )
+
+    return videos
+
+
+def choose_video(
+    topic,
+    used_video_ids
+):
+
+    all_results = []
+
+    queries = list(
+        topic["queries"]
+    )
+
+    random.shuffle(
+        queries
+    )
+
+    for query in queries:
+
+        try:
+
+            results = search_pexels_videos(
+                query
+            )
+
+            all_results.extend(
+                results
+            )
+
+        except Exception as e:
+
+            print(
+                "Pexels動画検索失敗:",
+                query,
+                e
+            )
+
+    unique = {}
+
+    for video in all_results:
+
+        video_id = str(
+            video.get("id")
+        )
+
+        if not video_id:
+            continue
+
+        if video_id in used_video_ids:
+            continue
+
+        unique[
+            video_id
+        ] = video
+
+    candidates = []
+
+    for video in unique.values():
+
+        files = video.get(
+            "video_files",
+            []
+        )
+
+        good_files = []
+
+        for file in files:
+
+            width = file.get(
+                "width",
+                0
+            )
+
+            height = file.get(
+                "height",
+                0
+            )
+
+            if (
+                width >= 1280
+                and height >= 720
+            ):
+
+                good_files.append(
+                    file
+                )
+
+        if not good_files:
+            continue
+
+        good_files.sort(
+            key=lambda x:
+                x.get(
+                    "width",
+                    0
+                )
+        )
+
+        selected_file = (
+            good_files[-1]
+        )
+
+        candidates.append(
+            {
+                "id": video.get(
+                    "id"
+                ),
+
+                "url": selected_file.get(
+                    "link"
+                ),
+
+                "width":
+                    selected_file.get(
+                        "width",
+                        0
+                    ),
+
+                "height":
+                    selected_file.get(
+                        "height",
+                        0
+                    )
+            }
+        )
+
+    if not candidates:
+
+        raise RuntimeError(
+            "Pexels動画が見つかりません: "
+            + topic["title"]
+        )
+
+    selected = random.choice(
+        candidates[
+            :min(
+                20,
+                len(candidates)
+            )
         ]
     )
 
+    used_video_ids.add(
+        str(
+            selected["id"]
+        )
+    )
 
-# ============================================================
-# 動画セグメント
-# ============================================================
+    return selected
 
-def create_video_segment(
-    video_path,
-    subtitle_path,
-    audio_path,
-    output_path,
-    duration,
+
+def download_file(
+    url,
+    output
 ):
 
-    run_cmd(
+    response = requests.get(
+        url,
+        headers={
+            "User-Agent":
+                "Mozilla/5.0"
+        },
+        timeout=REQUEST_TIMEOUT,
+        stream=True
+    )
+
+    response.raise_for_status()
+
+    with open(
+        output,
+        "wb"
+    ) as file:
+
+        for chunk in response.iter_content(
+            1024 * 1024
+        ):
+
+            if chunk:
+                file.write(
+                    chunk
+                )
+
+
+# =========================================================
+# VIDEO SCENE
+# =========================================================
+
+def create_scene(
+    video,
+    audio,
+    output,
+    duration
+):
+
+    filter_complex = (
+        f"[0:v]"
+        f"scale={WIDTH}:{HEIGHT}:"
+        "force_original_aspect_ratio=decrease,"
+        f"pad={WIDTH}:{HEIGHT}:"
+        "(ow-iw)/2:(oh-ih)/2,"
+        f"fps={FPS},"
+        "setsar=1,"
+        "format=yuv420p[v]"
+    )
+
+    run_command(
         [
             "ffmpeg",
             "-y",
+
             "-stream_loop",
             "-1",
+
             "-i",
-            str(video_path),
+            str(video),
+
             "-i",
-            str(audio_path),
-            "-i",
-            str(subtitle_path),
+            str(audio),
+
             "-filter_complex",
-            "[0:v]"
-            "scale=1920:1080:"
-            "force_original_aspect_ratio=decrease,"
-            "pad=1920:1080:"
-            "(ow-iw)/2:(oh-ih)/2:"
-            "color=black,"
-            "fps=30,"
-            "format=yuv420p"
-            "[base];"
-            "[base][2:v]"
-            "overlay=0:0:format=auto"
-            "[outv]",
+            filter_complex,
+
             "-map",
-            "[outv]",
+            "[v]",
+
             "-map",
             "1:a",
+
             "-t",
-            f"{duration:.3f}",
-            "-r",
-            str(FPS),
+            str(duration),
+
             "-c:v",
             "libx264",
+
             "-preset",
             "veryfast",
+
             "-crf",
-            "21",
+            "23",
+
             "-c:a",
             "aac",
+
             "-b:a",
             "128k",
+
             "-shortest",
-            str(output_path),
+
+            str(output)
         ]
     )
 
 
-# ============================================================
+# =========================================================
+# SUBTITLE
+# =========================================================
+
+def split_text(
+    text,
+    max_chars=20
+):
+
+    text = re.sub(
+        r"\s+",
+        "",
+        text
+    )
+
+    chunks = []
+
+    while len(text) > max_chars:
+
+        cut = max_chars
+
+        for mark in [
+            "。",
+            "、",
+            "！",
+            "？"
+        ]:
+
+            position = text.rfind(
+                mark,
+                0,
+                max_chars
+            )
+
+            if position > 5:
+
+                cut = (
+                    position +
+                    1
+                )
+
+                break
+
+        chunks.append(
+            text[:cut]
+        )
+
+        text = text[
+            cut:
+        ]
+
+    if text:
+
+        chunks.append(
+            text
+        )
+
+    return chunks
+
+
+def timestamp(
+    seconds
+):
+
+    milliseconds = int(
+        (seconds % 1) *
+        1000
+    )
+
+    total = int(
+        seconds
+    )
+
+    sec = total % 60
+
+    minute = (
+        total // 60
+    ) % 60
+
+    hour = (
+        total // 3600
+    )
+
+    return (
+        f"{hour:02d}:"
+        f"{minute:02d}:"
+        f"{sec:02d},"
+        f"{milliseconds:03d}"
+    )
+
+
+def create_srt(
+    items,
+    output
+):
+
+    lines = []
+
+    index = 1
+
+    current_time = 0.0
+
+    for item in items:
+
+        text = item[
+            "text"
+        ]
+
+        duration = item[
+            "duration"
+        ]
+
+        chunks = split_text(
+            text
+        )
+
+        if not chunks:
+            continue
+
+        chunk_duration = (
+            duration /
+            len(chunks)
+        )
+
+        for chunk in chunks:
+
+            start = current_time
+
+            end = (
+                current_time +
+                chunk_duration
+            )
+
+            lines.append(
+                str(index)
+            )
+
+            lines.append(
+                timestamp(start)
+                + " --> "
+                + timestamp(end)
+            )
+
+            lines.append(
+                chunk
+            )
+
+            lines.append("")
+
+            current_time = end
+
+            index += 1
+
+    output.write_text(
+        "\n".join(lines),
+        encoding="utf-8"
+    )
+
+
+# =========================================================
 # BGM
-# ============================================================
+# =========================================================
 
-def create_bgm(duration):
+def create_bgm(
+    duration,
+    output
+):
 
-    bgm = MEDIA_DIR / "bgm.wav"
-
-    run_cmd(
+    run_command(
         [
             "ffmpeg",
             "-y",
+
             "-f",
             "lavfi",
+
             "-i",
-            "sine=frequency=220:sample_rate=24000",
+            "sine=frequency=220:"
+            "sample_rate=44100",
+
+            "-f",
+            "lavfi",
+
+            "-i",
+            "sine=frequency=330:"
+            "sample_rate=44100",
+
+            "-filter_complex",
+
+            "[0:a]volume=0.025[a0];"
+            "[1:a]volume=0.018[a1];"
+            "[a0][a1]"
+            "amix=inputs=2:"
+            "duration=longest,"
+            "lowpass=f=1000",
+
             "-t",
-            f"{duration:.3f}",
-            "-af",
-            "volume=0.025",
+            str(duration),
+
             "-c:a",
-            "pcm_s16le",
-            str(bgm),
+            "aac",
+
+            "-b:a",
+            "96k",
+
+            str(output)
         ]
     )
 
-    return bgm
 
+# =========================================================
+# CONCAT
+# =========================================================
 
-# ============================================================
-# 動画結合
-# ============================================================
+def concat_scenes(
+    scenes,
+    output
+):
 
-def concat_segments(segment_files, output_path):
+    list_file = (
+        MEDIA_DIR /
+        "concat.txt"
+    )
 
-    concat_file = MEDIA_DIR / "concat.txt"
+    with open(
+        list_file,
+        "w",
+        encoding="utf-8"
+    ) as file:
 
-    with open(concat_file, "w", encoding="utf-8") as f:
-        for p in segment_files:
-            f.write(
+        for scene in scenes:
+
+            path = (
+                scene
+                .resolve()
+                .as_posix()
+            )
+
+            file.write(
                 "file '"
-                + str(Path(p).resolve()).replace("'", "'\\''")
+                + path.replace(
+                    "'",
+                    "'\\''"
+                )
                 + "'\n"
             )
 
-    run_cmd(
+    run_command(
         [
             "ffmpeg",
             "-y",
+
             "-f",
             "concat",
+
             "-safe",
             "0",
+
             "-i",
-            str(concat_file),
+            str(list_file),
+
             "-c",
             "copy",
-            str(output_path),
+
+            str(output)
         ]
     )
 
 
-# ============================================================
-# BGMを最終動画に追加
-# ============================================================
+# =========================================================
+# FINAL VIDEO
+# =========================================================
 
-def add_bgm(video_path, output_path):
+def add_subtitles_and_bgm(
+    video,
+    srt,
+    bgm,
+    output
+):
 
-    duration = get_audio_duration(video_path)
+    subtitle_path = (
+        str(srt)
+        .replace(
+            "\\",
+            "/"
+        )
+        .replace(
+            ":",
+            "\\:"
+        )
+        .replace(
+            "'",
+            "\\'"
+        )
+    )
 
-    bgm = create_bgm(duration)
+    subtitle_filter = (
+        "subtitles="
+        f"'{subtitle_path}':"
+        "force_style="
+        "'FontName=Noto Sans CJK JP,"
+        "FontSize=20,"
+        "Bold=1,"
+        "PrimaryColour=&H00FFFFFF,"
+        "OutlineColour=&H00000000,"
+        "Outline=3,"
+        "Shadow=1,"
+        "Alignment=2,"
+        "MarginV=55'"
+    )
 
-    run_cmd(
+    run_command(
         [
             "ffmpeg",
             "-y",
+
             "-i",
-            str(video_path),
-            "-stream_loop",
-            "-1",
+            str(video),
+
             "-i",
             str(bgm),
+
             "-filter_complex",
-            "[0:a]volume=1.0[voice];"
-            "[1:a]volume=0.018[bg];"
-            "[voice][bg]"
+
+            f"[0:v]"
+            f"{subtitle_filter}"
+            "[v];"
+            "[1:a]"
+            "volume=0.06"
+            "[bgm];"
+            "[0:a]"
+            "volume=1.0"
+            "[voice];"
+            "[voice][bgm]"
             "amix=inputs=2:"
             "duration=first:"
             "dropout_transition=2"
-            "[audio]",
+            "[a]",
+
             "-map",
-            "0:v",
+            "[v]",
+
             "-map",
-            "[audio]",
+            "[a]",
+
             "-c:v",
-            "copy",
+            "libx264",
+
+            "-preset",
+            "medium",
+
+            "-crf",
+            "21",
+
             "-c:a",
             "aac",
+
             "-b:a",
-            "128k",
-            "-shortest",
-            str(output_path),
+            "160k",
+
+            "-movflags",
+            "+faststart",
+
+            str(output)
         ]
     )
 
 
-# ============================================================
-# video_info.json
-# ============================================================
+# =========================================================
+# PEXELS PHOTO SEARCH
+# =========================================================
 
-def create_video_info(final_video):
+def search_pexels_photos(
+    query
+):
 
-    duration = get_audio_duration(final_video)
+    cache = load_json(
+        PHOTO_SEARCH_CACHE,
+        {}
+    )
 
-    info = {
-        "video_file": str(final_video),
-        "title": "なぜ人は他人の目が気になる？ 知ると面白い身近な雑学15選",
-        "description": (
-            "身近だけど意外と知らない、ちょっと気になる雑学を15個紹介します。\n\n"
-            "人間の心理、記憶、睡眠、音楽、食べ物など、"
-            "日常生活に関係する雑学をまとめました。\n\n"
-            "#雑学 #豆知識 #面白い雑学 #心理学 #人間心理"
-        ),
-        "tags": [
-            "雑学",
-            "豆知識",
-            "面白い雑学",
-            "身近な雑学",
-            "心理学",
-            "人間心理",
-            "睡眠",
-            "記憶",
-            "音楽",
-            "YouTube",
-        ],
-        "category_id": "27",
-        "privacy_status": "public",
-        "duration": round(duration, 1),
+    cache_key = hashlib.md5(
+        query.encode(
+            "utf-8"
+        )
+    ).hexdigest()
+
+    if cache_key in cache:
+
+        return cache[
+            cache_key
+        ]
+
+    headers = {
+        "Authorization":
+            PEXELS_API_KEY,
+
+        "User-Agent":
+            "Mozilla/5.0"
     }
 
-    path = OUTPUT_DIR / "video_info.json"
+    response = requests.get(
+        "https://api.pexels.com/v1/search",
+        headers=headers,
+        params={
+            "query": query,
 
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(
-            info,
-            f,
-            ensure_ascii=False,
-            indent=2,
+            "orientation":
+                "landscape",
+
+            "size":
+                "large",
+
+            "locale":
+                "en-US",
+
+            "per_page":
+                40
+        },
+
+        timeout=REQUEST_TIMEOUT
+    )
+
+    response.raise_for_status()
+
+    photos = response.json().get(
+        "photos",
+        []
+    )
+
+    cache[
+        cache_key
+    ] = photos
+
+    save_json(
+        PHOTO_SEARCH_CACHE,
+        cache
+    )
+
+    return photos
+
+
+# =========================================================
+# REAL PERSON THUMBNAIL SEARCH
+# =========================================================
+
+def get_thumbnail_queries(
+    topic
+):
+
+    category = topic[
+        "category"
+    ]
+
+    mapping = {
+
+        "心理": [
+            "surprised person portrait",
+            "thinking person portrait",
+            "confused person face",
+            "worried person portrait",
+            "shocked person"
+        ],
+
+        "脳": [
+            "thinking person portrait",
+            "confused person",
+            "surprised person portrait",
+            "sleepy person",
+            "thoughtful person"
+        ],
+
+        "人体": [
+            "surprised person",
+            "person drinking",
+            "person eating",
+            "healthy person portrait",
+            "shocked person"
+        ],
+
+        "日常": [
+            "surprised person portrait",
+            "thinking person",
+            "confused person",
+            "person reaction",
+            "curious person"
+        ],
+
+        "科学": [
+            "scientist portrait",
+            "curious person",
+            "surprised scientist",
+            "thinking person",
+            "science person"
+        ],
+
+        "哲学": [
+            "deep thinking person",
+            "thoughtful person portrait",
+            "person looking sky",
+            "thinking man",
+            "thinking woman"
+        ],
+
+        "SNS": [
+            "surprised person smartphone",
+            "person looking phone",
+            "shocked person phone",
+            "smartphone user portrait",
+            "person using smartphone"
+        ],
+
+        "食べ物": [
+            "surprised person eating",
+            "person eating food",
+            "happy person food",
+            "person drinking",
+            "food reaction"
+        ],
+
+        "人間関係": [
+            "people talking portrait",
+            "surprised person",
+            "friends talking",
+            "conversation person",
+            "human reaction"
+        ],
+
+        "仕事": [
+            "business person portrait",
+            "office worker surprised",
+            "thinking businessman",
+            "stressed worker",
+            "business woman portrait"
+        ],
+
+        "自然": [
+            "person looking sky",
+            "person looking nature",
+            "surprised person outdoors",
+            "person looking stars",
+            "person sunset"
+        ],
+    }
+
+    return mapping.get(
+        category,
+        [
+            "surprised person portrait",
+            "thinking person portrait",
+            "curious person"
+        ]
+    )
+
+
+def choose_thumbnail_photo(
+    topic
+):
+
+    queries = get_thumbnail_queries(
+        topic
+    )
+
+    random.shuffle(
+        queries
+    )
+
+    candidates = []
+
+    for query in queries:
+
+        try:
+
+            photos = search_pexels_photos(
+                query
+            )
+
+            candidates.extend(
+                photos
+            )
+
+        except Exception as e:
+
+            print(
+                "サムネ人物検索エラー:",
+                query,
+                e
+            )
+
+    if not candidates:
+
+        raise RuntimeError(
+            "Pexels人物写真を取得できませんでした。"
         )
 
-    return path
+    unique = {}
+
+    for photo in candidates:
+
+        photo_id = str(
+            photo.get(
+                "id",
+                ""
+            )
+        )
+
+        if photo_id:
+
+            unique[
+                photo_id
+            ] = photo
+
+    scored = []
+
+    for photo in unique.values():
+
+        width = photo.get(
+            "width",
+            0
+        )
+
+        height = photo.get(
+            "height",
+            0
+        )
+
+        score = 0
+
+        # 横長
+        if width > height:
+            score += 10
+
+        # 高解像度
+        if width >= 2500:
+            score += 10
+
+        if width >= 3500:
+            score += 5
+
+        alt = (
+            photo.get(
+                "alt",
+                ""
+            )
+            or ""
+        ).lower()
+
+        for word in [
+            "person",
+            "people",
+            "man",
+            "woman",
+            "portrait",
+            "face",
+            "thinking",
+            "surprised",
+            "shocked",
+            "phone",
+        ]:
+
+            if word in alt:
+
+                score += 3
+
+        # ランダム性
+        score += random.randint(
+            0,
+            10
+        )
+
+        scored.append(
+            (
+                score,
+                photo
+            )
+        )
+
+    scored.sort(
+        key=lambda x:
+            x[0],
+        reverse=True
+    )
+
+    top = [
+        photo
+        for _, photo
+        in scored[:20]
+    ]
+
+    return random.choice(
+        top
+    )
 
 
-# ============================================================
-# メイン
-# ============================================================
+def download_photo(
+    photo,
+    output
+):
+
+    src = photo.get(
+        "src",
+        {}
+    )
+
+    url = (
+        src.get("large2x")
+        or src.get("large")
+        or src.get("original")
+    )
+
+    if not url:
+
+        raise RuntimeError(
+            "Pexels写真URLがありません。"
+        )
+
+    response = requests.get(
+        url,
+        headers={
+            "User-Agent":
+                "Mozilla/5.0"
+        },
+        timeout=REQUEST_TIMEOUT
+    )
+
+    response.raise_for_status()
+
+    with open(
+        output,
+        "wb"
+    ) as file:
+
+        file.write(
+            response.content
+        )
+
+
+# =========================================================
+# THUMBNAIL IMAGE PROCESSING
+# =========================================================
+
+def crop_to_fill(
+    image,
+    width,
+    height
+):
+
+    source_ratio = (
+        image.width /
+        image.height
+    )
+
+    target_ratio = (
+        width /
+        height
+    )
+
+    if source_ratio > target_ratio:
+
+        new_height = height
+
+        new_width = int(
+            height *
+            source_ratio
+        )
+
+    else:
+
+        new_width = width
+
+        new_height = int(
+            width /
+            source_ratio
+        )
+
+    image = image.resize(
+        (
+            new_width,
+            new_height
+        ),
+        Image.Resampling.LANCZOS
+    )
+
+    left = (
+        new_width -
+        width
+    ) // 2
+
+    top = (
+        new_height -
+        height
+    ) // 2
+
+    return image.crop(
+        (
+            left,
+            top,
+            left + width,
+            top + height
+        )
+    )
+
+
+def make_thumbnail(
+    topic
+):
+
+    print(
+        "\n"
+        "======================================"
+    )
+
+    print(
+        "リアル人物サムネイル生成"
+    )
+
+    print(
+        "======================================"
+    )
+
+    photo = choose_thumbnail_photo(
+        topic
+    )
+
+    print(
+        "Pexels Photo ID:",
+        photo.get("id")
+    )
+
+    print(
+        "Photographer:",
+        photo.get(
+            "photographer"
+        )
+    )
+
+    photo_file = (
+        MEDIA_DIR /
+        "thumbnail_person.jpg"
+    )
+
+    download_photo(
+        photo,
+        photo_file
+    )
+
+    person = Image.open(
+        photo_file
+    ).convert(
+        "RGB"
+    )
+
+    # -----------------------------------------
+    # キャンバス
+    # -----------------------------------------
+
+    canvas = Image.new(
+        "RGB",
+        (
+            THUMB_WIDTH,
+            THUMB_HEIGHT
+        ),
+        (
+            8,
+            10,
+            18
+        )
+    )
+
+    # -----------------------------------------
+    # 人物写真を右側へ
+    # -----------------------------------------
+
+    person_height = int(
+        THUMB_HEIGHT *
+        1.08
+    )
+
+    person_ratio = (
+        person.width /
+        person.height
+    )
+
+    person_width = int(
+        person_height *
+        person_ratio
+    )
+
+    person = person.resize(
+        (
+            person_width,
+            person_height
+        ),
+        Image.Resampling.LANCZOS
+    )
+
+    # 右側へ配置
+    person_x = (
+        THUMB_WIDTH -
+        person_width +
+        150
+    )
+
+    person_y = (
+        THUMB_HEIGHT -
+        person_height
+    ) // 2
+
+    # -----------------------------------------
+    # 写真補正
+    # -----------------------------------------
+
+    person = ImageEnhance.Contrast(
+        person
+    ).enhance(
+        1.12
+    )
+
+    person = ImageEnhance.Color(
+        person
+    ).enhance(
+        1.08
+    )
+
+    person = ImageEnhance.Sharpness(
+        person
+    ).enhance(
+        1.15
+    )
+
+    canvas.paste(
+        person,
+        (
+            person_x,
+            person_y
+        )
+    )
+
+    # -----------------------------------------
+    # 左側暗幕
+    # -----------------------------------------
+
+    overlay = Image.new(
+        "RGBA",
+        canvas.size,
+        (
+            0,
+            0,
+            0,
+            0
+        )
+    )
+
+    overlay_draw = ImageDraw.Draw(
+        overlay
+    )
+
+    for x in range(
+        THUMB_WIDTH
+    ):
+
+        if x < 2500:
+
+            alpha = int(
+                190 *
+                (
+                    1 -
+                    x / 2500
+                )
+            )
+
+        else:
+
+            alpha = 0
+
+        overlay_draw.line(
+            [
+                (
+                    x,
+                    0
+                ),
+                (
+                    x,
+                    THUMB_HEIGHT
+                )
+            ],
+            fill=(
+                0,
+                0,
+                0,
+                alpha
+            )
+        )
+
+    canvas = Image.alpha_composite(
+        canvas.convert("RGBA"),
+        overlay
+    ).convert(
+        "RGB"
+    )
+
+    # -----------------------------------------
+    # カラーアクセント
+    # -----------------------------------------
+
+    accent = Image.new(
+        "RGBA",
+        canvas.size,
+        (
+            0,
+            0,
+            0,
+            0
+        )
+    )
+
+    accent_draw = ImageDraw.Draw(
+        accent
+    )
+
+    accent_draw.ellipse(
+        (
+            2600,
+            250,
+            4100,
+            1900
+        ),
+        fill=(
+            255,
+            180,
+            20,
+            38
+        )
+    )
+
+    accent = accent.filter(
+        ImageFilter.GaussianBlur(
+            160
+        )
+    )
+
+    canvas = Image.alpha_composite(
+        canvas.convert("RGBA"),
+        accent
+    ).convert(
+        "RGB"
+    )
+
+    draw = ImageDraw.Draw(
+        canvas
+    )
+
+    # -----------------------------------------
+    # フォント
+    # -----------------------------------------
+
+    font_path = find_font()
+
+    if font_path:
+
+        category_font = (
+            ImageFont.truetype(
+                font_path,
+                125
+            )
+        )
+
+        question_font = (
+            ImageFont.truetype(
+                font_path,
+                180
+            )
+        )
+
+        main_font = (
+            ImageFont.truetype(
+                font_path,
+                250
+            )
+        )
+
+        bottom_font = (
+            ImageFont.truetype(
+                font_path,
+                145
+            )
+        )
+
+    else:
+
+        category_font = (
+            ImageFont.load_default()
+        )
+
+        question_font = (
+            ImageFont.load_default()
+        )
+
+        main_font = (
+            ImageFont.load_default()
+        )
+
+        bottom_font = (
+            ImageFont.load_default()
+        )
+
+    # -----------------------------------------
+    # テキスト
+    # -----------------------------------------
+
+    category = topic[
+        "category"
+    ]
+
+    title = topic[
+        "title"
+    ]
+
+    main_text = title
+
+    if main_text.startswith(
+        "なぜ"
+    ):
+
+        main_text = (
+            main_text[2:]
+        )
+
+    main_text = (
+        main_text
+        .replace(
+            "？",
+            ""
+        )
+        .replace(
+            "。",
+            ""
+        )
+    )
+
+    if len(main_text) > 18:
+
+        main_text = (
+            main_text[:18]
+            + "…"
+        )
+
+    # -----------------------------------------
+    # カテゴリー
+    # -----------------------------------------
+
+    draw.text(
+        (
+            170,
+            160
+        ),
+        f"知ると面白い {category}",
+        font=category_font,
+        fill=(
+            255,
+            220,
+            45
+        ),
+        stroke_width=10,
+        stroke_fill=(
+            0,
+            0,
+            0
+        )
+    )
+
+    # -----------------------------------------
+    # 「なぜ？」
+    # -----------------------------------------
+
+    draw.text(
+        (
+            160,
+            390
+        ),
+        "なぜ？",
+        font=question_font,
+        fill=(
+            255,
+            255,
+            255
+        ),
+        stroke_width=12,
+        stroke_fill=(
+            0,
+            0,
+            0
+        )
+    )
+
+    # -----------------------------------------
+    # メインタイトル
+    # -----------------------------------------
+
+    if len(main_text) >= 9:
+
+        middle = (
+            len(main_text) // 2
+        )
+
+        line1 = (
+            main_text[:middle]
+        )
+
+        line2 = (
+            main_text[middle:]
+        )
+
+        draw.text(
+            (
+                150,
+                650
+            ),
+            line1,
+            font=main_font,
+            fill=(
+                255,
+                255,
+                255
+            ),
+            stroke_width=16,
+            stroke_fill=(
+                0,
+                0,
+                0
+            )
+        )
+
+        draw.text(
+            (
+                150,
+                970
+            ),
+            line2,
+            font=main_font,
+            fill=(
+                255,
+                225,
+                35
+            ),
+            stroke_width=16,
+            stroke_fill=(
+                0,
+                0,
+                0
+            )
+        )
+
+    else:
+
+        draw.text(
+            (
+                150,
+                780
+            ),
+            main_text,
+            font=main_font,
+            fill=(
+                255,
+                225,
+                35
+            ),
+            stroke_width=16,
+            stroke_fill=(
+                0,
+                0,
+                0
+            )
+        )
+
+    # -----------------------------------------
+    # 下部コピー
+    # -----------------------------------------
+
+    draw.text(
+        (
+            170,
+            1780
+        ),
+        "身近な雑学15選",
+        font=bottom_font,
+        fill=(
+            255,
+            255,
+            255
+        ),
+        stroke_width=8,
+        stroke_fill=(
+            0,
+            0,
+            0
+        )
+    )
+
+    # -----------------------------------------
+    # 黄色ライン
+    # -----------------------------------------
+
+    draw.rounded_rectangle(
+        (
+            160,
+            2020,
+            1550,
+            2060
+        ),
+        radius=20,
+        fill=(
+            255,
+            220,
+            40
+        )
+    )
+
+    # -----------------------------------------
+    # コントラスト
+    # -----------------------------------------
+
+    canvas = ImageEnhance.Contrast(
+        canvas
+    ).enhance(
+        1.12
+    )
+
+    canvas = ImageEnhance.Sharpness(
+        canvas
+    ).enhance(
+        1.25
+    )
+
+    # -----------------------------------------
+    # 保存
+    # -----------------------------------------
+
+    canvas.save(
+        THUMBNAIL,
+        "JPEG",
+        quality=95,
+        optimize=True
+    )
+
+    # -----------------------------------------
+    # Pexelsクレジット
+    # -----------------------------------------
+
+    photographer = photo.get(
+        "photographer",
+        "Unknown"
+    )
+
+    photo_url = photo.get(
+        "url",
+        ""
+    )
+
+    credit = (
+        "Photo by "
+        + photographer
+        + " on Pexels\n"
+        + photo_url
+        + "\n"
+        + "Photo ID: "
+        + str(
+            photo.get(
+                "id",
+                ""
+            )
+        )
+    )
+
+    CREDIT_FILE.write_text(
+        credit,
+        encoding="utf-8"
+    )
+
+    print(
+        "サムネイル完成:"
+    )
+
+    print(
+        THUMBNAIL
+    )
+
+
+# =========================================================
+# TITLE
+# =========================================================
+
+def make_title(
+    topics
+):
+
+    first = topics[0][
+        "title"
+    ]
+
+    first = (
+        first
+        .replace(
+            "なぜ",
+            ""
+        )
+        .replace(
+            "？",
+            ""
+        )
+        .replace(
+            "。",
+            ""
+        )
+    )
+
+    choices = [
+
+        f"なぜ{first}？ 知ると面白い身近な雑学15選",
+
+        "知らないと気になる身近な雑学15選",
+
+        "実は理由があった！身近な雑学15選",
+
+        "知ると見方が変わる身近な雑学15選",
+
+    ]
+
+    return random.choice(
+        choices
+    )
+
+
+# =========================================================
+# MAIN
+# =========================================================
 
 def main():
 
-    print("=" * 70)
-    print("5分雑学動画 自動生成")
-    print("1920x1080 / 15雑学 / 抽象検索ビジュアル")
-    print("=" * 70)
+    print(
+        "=" * 70
+    )
+
+    print(
+        "LONG VIDEO GENERATOR"
+    )
+
+    print(
+        "REALISTIC PEXELS THUMBNAIL"
+    )
+
+    print(
+        "=" * 70
+    )
 
     if not PEXELS_API_KEY:
-        print(
-            "[WARNING] PEXELS_API_KEY がありません。"
-            "イラスト屋中心になります。"
-        )
 
-    visual_manager = VisualManager()
-
-    segment_files = []
-
-    scene_number = 0
-
-    total_facts = len(FACTS)
-
-    print(f"雑学数: {total_facts}")
-
-    for fact_index, fact in enumerate(FACTS, start=1):
-
-        print()
-        print("=" * 70)
-        print(
-            f"[FACT {fact_index}/{total_facts}] "
-            f"{fact['title']}"
-        )
-        print("=" * 70)
-
-        chunks = fact["chunks"]
-        visuals = fact["visuals"]
-
-        for chunk_index, text in enumerate(chunks):
-
-            scene_number += 1
-
-            print()
-            print(
-                f"--- SCENE {scene_number} "
-                f"(Fact {fact_index}, "
-                f"{chunk_index + 1}/4) ---"
-            )
-
-            # ------------------------------------------------
-            # 音声
-            # ------------------------------------------------
-
-            audio_path = AUDIO_DIR / (
-                f"fact_{fact_index:02d}_"
-                f"scene_{chunk_index + 1:02d}.mp3"
-            )
-
-            create_tts(
-                text,
-                audio_path,
-            )
-
-            duration = get_audio_duration(audio_path)
-
-            # 少しだけ余裕
-            duration += 0.05
-
-            print(
-                f"[AUDIO] {duration:.2f}s"
-            )
-
-            # ------------------------------------------------
-            # 字幕
-            # ------------------------------------------------
-
-            subtitle_path = make_subtitle_png(
-                text,
-                scene_number,
-            )
-
-            # ------------------------------------------------
-            # ビジュアル
-            # ------------------------------------------------
-
-            scene_data = visuals[
-                min(
-                    chunk_index,
-                    len(visuals) - 1,
-                )
-            ]
-
-            visual = visual_manager.get_visual(
-                scene_data
-            )
-
-            # ------------------------------------------------
-            # セグメント生成
-            # ------------------------------------------------
-
-            segment_path = MEDIA_DIR / (
-                f"segment_{scene_number:04d}.mp4"
-            )
-
-            if visual["type"] == "image":
-
-                create_image_segment(
-                    visual["path"],
-                    subtitle_path,
-                    audio_path,
-                    segment_path,
-                    duration,
-                )
-
-            elif visual["type"] == "video":
-
-                create_video_segment(
-                    visual["path"],
-                    subtitle_path,
-                    audio_path,
-                    segment_path,
-                    duration,
-                )
-
-            else:
-                raise RuntimeError(
-                    "不明なvisual type"
-                )
-
-            if not segment_path.exists():
-                raise RuntimeError(
-                    f"セグメント生成失敗: "
-                    f"{segment_path}"
-                )
-
-            segment_files.append(segment_path)
-
-            print(
-                f"[SEGMENT OK] {segment_path}"
-            )
-
-    # ========================================================
-    # 全セグメント結合
-    # ========================================================
-
-    print()
-    print("=" * 70)
-    print("全セグメントを結合")
-    print("=" * 70)
-
-    silent_video = OUTPUT_DIR / "silent_video.mp4"
-
-    concat_segments(
-        segment_files,
-        silent_video,
-    )
-
-    # ========================================================
-    # BGM
-    # ========================================================
-
-    print()
-    print("=" * 70)
-    print("BGM追加")
-    print("=" * 70)
-
-    final_video = OUTPUT_DIR / "final_video.mp4"
-
-    add_bgm(
-        silent_video,
-        final_video,
-    )
-
-    # ========================================================
-    # video_info.json
-    # ========================================================
-
-    info_path = create_video_info(
-        final_video
-    )
-
-    # ========================================================
-    # 最終確認
-    # ========================================================
-
-    duration = get_audio_duration(
-        final_video
-    )
-
-    image_count = visual_manager.ira.count
-    video_count = visual_manager.pexels.count
-
-    print()
-    print("=" * 70)
-    print("完成！")
-    print("=" * 70)
-
-    print(
-        f"Output: {final_video}"
-    )
-
-    print(
-        f"Duration: {duration:.1f} seconds"
-    )
-
-    print(
-        f"Duration: {duration / 60:.2f} minutes"
-    )
-
-    print(
-        f"Irasutoya unique images: "
-        f"{image_count}"
-    )
-
-    print(
-        f"Pexels videos: "
-        f"{video_count}"
-    )
-
-    print(
-        f"Scenes: "
-        f"{len(segment_files)}"
-    )
-
-    print(
-        f"Video info: "
-        f"{info_path}"
-    )
-
-    if not final_video.exists():
         raise RuntimeError(
-            "final_video.mp4 が生成されていません"
+            "PEXELS_API_KEY がありません。"
+            "GitHub Secretsを確認してください。"
         )
 
-    if not info_path.exists():
-        raise RuntimeError(
-            "video_info.json が生成されていません"
+    # -----------------------------------------
+    # 1. TOPICS
+    # -----------------------------------------
+
+    topics = select_topics()
+
+    print(
+        "\n今回の15ネタ:"
+    )
+
+    for i, topic in enumerate(
+        topics,
+        1
+    ):
+
+        print(
+            f"{i:02d}. "
+            f"[{topic['category']}] "
+            f"{topic['title']}"
         )
 
-    print()
-    print("YouTubeアップロード用ファイル確認OK")
+    # -----------------------------------------
+    # 2. TITLE
+    # -----------------------------------------
+
+    title = make_title(
+        topics
+    )
+
+    TITLE_FILE.write_text(
+        title,
+        encoding="utf-8"
+    )
+
+    print(
+        "\nタイトル:"
+    )
+
+    print(
+        title
+    )
+
+    # -----------------------------------------
+    # 3. VIDEO
+    # -----------------------------------------
+
+    used_video_ids = set(
+        load_json(
+            USED_VIDEOS_FILE,
+            []
+        )
+    )
+
+    scenes = []
+
+    subtitle_items = []
+
+    for index, topic in enumerate(
+        topics
+    ):
+
+        print(
+            "\n"
+            + "=" * 60
+        )
+
+        print(
+            f"{index + 1}/"
+            f"{len(topics)}"
+        )
+
+        print(
+            topic["title"]
+        )
+
+        print(
+            "=" * 60
+        )
+
+        # -------------------------------------
+        # SCRIPT
+        # -------------------------------------
+
+        script = make_script(
+            topic
+        )
+
+        # -------------------------------------
+        # AUDIO
+        # -------------------------------------
+
+        audio_file = (
+            AUDIO_DIR /
+            f"{index:02d}.mp3"
+        )
+
+        if audio_file.exists():
+
+            audio_file.unlink()
+
+        generate_audio(
+            script,
+            audio_file
+        )
+
+        duration = get_duration(
+            audio_file
+        )
+
+        print(
+            f"音声時間: "
+            f"{duration:.2f}秒"
+        )
+
+        # -------------------------------------
+        # PEXELS VIDEO
+        # -------------------------------------
+
+        selected = choose_video(
+            topic,
+            used_video_ids
+        )
+
+        video_file = (
+            VIDEO_DIR /
+            f"{index:02d}_"
+            f"{selected['id']}.mp4"
+        )
+
+        print(
+            "Pexels Video ID:",
+            selected["id"]
+        )
+
+        download_file(
+            selected["url"],
+            video_file
+        )
+
+        # -------------------------------------
+        # SCENE
+        # -------------------------------------
+
+        scene_file = (
+            MEDIA_DIR /
+            f"scene_{index:02d}.mp4"
+        )
+
+        create_scene(
+            video_file,
+            audio_file,
+            scene_file,
+            duration
+        )
+
+        scenes.append(
+            scene_file
+        )
+
+        subtitle_items.append(
+            {
+                "text":
+                    script,
+
+                "duration":
+                    duration
+            }
+        )
+
+    save_json(
+        USED_VIDEOS_FILE,
+        list(
+            used_video_ids
+        )[-500:]
+    )
+
+    # -----------------------------------------
+    # 4. CONCAT
+    # -----------------------------------------
+
+    raw_video = (
+        MEDIA_DIR /
+        "raw_video.mp4"
+    )
+
+    concat_scenes(
+        scenes,
+        raw_video
+    )
+
+    # -----------------------------------------
+    # 5. SUBTITLES
+    # -----------------------------------------
+
+    subtitle_file = (
+        MEDIA_DIR /
+        "subtitles.srt"
+    )
+
+    create_srt(
+        subtitle_items,
+        subtitle_file
+    )
+
+    # -----------------------------------------
+    # 6. BGM
+    # -----------------------------------------
+
+    total_duration = get_duration(
+        raw_video
+    )
+
+    bgm_file = (
+        MEDIA_DIR /
+        "bgm.m4a"
+    )
+
+    create_bgm(
+        total_duration,
+        bgm_file
+    )
+
+    # -----------------------------------------
+    # 7. FINAL VIDEO
+    # -----------------------------------------
+
+    if FINAL_VIDEO.exists():
+
+        FINAL_VIDEO.unlink()
+
+    add_subtitles_and_bgm(
+        raw_video,
+        subtitle_file,
+        bgm_file,
+        FINAL_VIDEO
+    )
+
+    # -----------------------------------------
+    # 8. REALISTIC THUMBNAIL
+    # -----------------------------------------
+
+    make_thumbnail(
+        topics[0]
+    )
+
+    # -----------------------------------------
+    # 9. CHECK
+    # -----------------------------------------
+
+    final_duration = get_duration(
+        FINAL_VIDEO
+    )
+
+    print(
+        "\n"
+        + "=" * 70
+    )
+
+    print(
+        "COMPLETE"
+    )
+
+    print(
+        "=" * 70
+    )
+
+    print(
+        "VIDEO:"
+    )
+
+    print(
+        FINAL_VIDEO
+    )
+
+    print(
+        "THUMBNAIL:"
+    )
+
+    print(
+        THUMBNAIL
+    )
+
+    print(
+        "TITLE:"
+    )
+
+    print(
+        title
+    )
+
+    print(
+        f"DURATION: "
+        f"{final_duration:.1f} sec"
+    )
+
+    print(
+        f"DURATION: "
+        f"{final_duration / 60:.2f} min"
+    )
+
+    print(
+        "PEXELS CREDIT:"
+    )
+
+    print(
+        CREDIT_FILE
+    )
+
+    print(
+        "=" * 70
+    )
 
 
 if __name__ == "__main__":
+
     main()
