@@ -654,7 +654,6 @@ jobs:
 
           text = f"{hook}。{base}。{ending}。"
 
-          # 長すぎる場合は15秒に収まりやすいように短縮
           if len(text) > 95:
               text = f"{hook}。{base}。{ending}。"
 
@@ -1059,11 +1058,7 @@ jobs:
             TOTAL_CHUNKS=1
           else
             CHUNK_SIZE="$MAX_CHUNK_SIZE"
-            TOTAL_CHUNKS=$(
-              (
-                VIDEO_SIZE + CHUNK_SIZE - 1
-              ) / CHUNK_SIZE
-            )
+            TOTAL_CHUNKS=$(( (VIDEO_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE ))
           fi
 
           echo "VIDEO_SIZE=$VIDEO_SIZE"
@@ -1181,13 +1176,23 @@ jobs:
               count="$LENGTH" \
               status=none
 
-            curl -sS \
+            HTTP_CODE=$(curl -sS \
+              -o "upload_response_${i}.txt" \
+              -w "%{http_code}" \
               -X PUT \
               "$UPLOAD_URL" \
               -H "Content-Type: video/mp4" \
               -H "Content-Length: $LENGTH" \
               -H "Content-Range: bytes ${START}-${END}/${VIDEO_SIZE}" \
-              --data-binary "@chunk_${i}.bin"
+              --data-binary "@chunk_${i}.bin")
+
+            echo "HTTP_CODE=$HTTP_CODE"
+
+            if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+              echo "TikTok video upload failed."
+              cat "upload_response_${i}.txt"
+              exit 1
+            fi
 
             rm -f "chunk_${i}.bin"
 
