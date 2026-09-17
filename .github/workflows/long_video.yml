@@ -51,6 +51,7 @@ jobs:
           pip install \
             edge-tts \
             requests \
+            pillow \
             google-api-python-client \
             google-auth-oauthlib \
             google-auth-httplib2
@@ -63,7 +64,6 @@ jobs:
       - name: Generate massive variation content
         env:
           GITHUB_RUN_ID: ${{ github.run_id }}
-          TZ: Asia/Tokyo
         run: |
 
           cat > generate_content.py <<'PY'
@@ -73,14 +73,16 @@ jobs:
           import secrets
           import time
           import os
-          from datetime import datetime
 
 
-          # ==========================================================
-          # UNIQUE RANDOM SEED
-          # ==========================================================
+          # ========================================================
+          # RANDOM SEED
+          # ========================================================
 
-          run_id = os.environ.get("GITHUB_RUN_ID", "0")
+          run_id = os.environ.get(
+              "GITHUB_RUN_ID",
+              "0"
+          )
 
           seed = (
               int(time.time() * 1000000)
@@ -90,285 +92,202 @@ jobs:
 
           random.seed(seed)
 
-          print("======================================")
-          print("RANDOM SEED:", seed)
-          print("RUN ID:", run_id)
-          print("======================================")
+          print("SEED:", seed)
 
 
-          # ==========================================================
+          # ========================================================
           # HOOKS
-          # ==========================================================
+          # ========================================================
 
           hooks = [
-
               "実は今日、知っているだけで少し得をする話を紹介します。",
               "これ、意外と知らない人が多い話です。",
               "最後まで見ると、誰かに話したくなるかもしれません。",
               "今日は、頭に残る雑学と少しだけ心が軽くなる話です。",
-              "知っているようで知らないことを、12個紹介します。",
+              "知っているようで知らないことを紹介します。",
               "たった5分で、いくつ新しい発見があるでしょうか。",
-              "最初は普通の話ですが、後半に意外な話が出てきます。",
+              "最初は普通の話ですが、意外な話が出てきます。",
               "あなたはいくつ知っていますか？",
-              "身近なところにある不思議を、今日は少しだけ覗いてみましょう。",
+              "身近なところにある不思議を覗いてみましょう。",
               "学校ではあまり教えてくれない話を集めました。",
               "知識だけではなく、最後に少し元気になれる話も入っています。",
               "今日という日が少しだけ面白くなる話を始めます。",
               "誰かとの会話で使える話を集めました。",
-              "『え、そうなの？』と思う話がいくつか登場します。",
+              "え、そうなの？と思う話が登場します。",
               "知らなくても困らない。でも知ると面白い。そんな話です。",
               "今回は雑学だけで終わりません。",
               "世界の不思議から、日々を頑張るあなたへの言葉まで。",
               "少し疲れている人にも聞いてほしい5分間です。",
               "暇つぶしのつもりで、最後まで聞いてみてください。",
-              "今日一つでも新しい発見があれば、それだけで十分です."
-
+              "今日一つでも新しい発見があれば、それだけで十分です。"
           ]
 
 
-          # ==========================================================
+          # ========================================================
           # FACTS
-          # ==========================================================
+          # ========================================================
 
           facts = [
 
-              {
-                  "title": "バナナ",
-                  "text": "バナナは一般的には果物ですが、植物学ではベリーの仲間に分類されます。普段のイメージと植物学上の分類が違う代表的な食べ物です。",
-                  "query": "banana tropical fruit plantation"
-              },
+              ("バナナ",
+               "バナナは一般的には果物ですが、植物学ではベリーの仲間に分類されます。普段のイメージと植物学上の分類が違う代表的な食べ物です。",
+               "banana tropical fruit plantation"),
 
-              {
-                  "title": "タコ",
-                  "text": "タコには三つの心臓があります。二つはえらに血液を送り、もう一つが全身に血液を送ります。海の生き物には驚く仕組みがあります。",
-                  "query": "octopus underwater ocean"
-              },
+              ("タコ",
+               "タコには三つの心臓があります。二つはえらに血液を送り、もう一つが全身に血液を送ります。海の生き物には驚く仕組みがあります。",
+               "octopus underwater ocean"),
 
-              {
-                  "title": "ハチミツ",
-                  "text": "ハチミツは水分が少なく酸性でもあるため、微生物が増えにくい食品です。昔から保存性の高い食品として知られてきました。",
-                  "query": "honey jar golden food"
-              },
+              ("ハチミツ",
+               "ハチミツは水分が少なく酸性でもあるため、微生物が増えにくい食品です。昔から保存性の高い食品として知られてきました。",
+               "honey jar golden food"),
 
-              {
-                  "title": "カカオ",
-                  "text": "チョコレートの原料になるカカオは、木になる大きな実の中に入っています。普段食べているチョコからは想像しにくい姿です。",
-                  "query": "cacao fruit tropical farm"
-              },
+              ("カカオ",
+               "チョコレートの原料になるカカオは、木になる大きな実の中に入っています。普段食べているチョコからは想像しにくい姿です。",
+               "cacao fruit tropical farm"),
 
-              {
-                  "title": "ペンギン",
-                  "text": "ペンギンにも膝があります。ただ、体の中に隠れるような構造になっているため、立っている姿だけを見ると膝がないように見えます。",
-                  "query": "penguin antarctica walking"
-              },
+              ("ペンギン",
+               "ペンギンにも膝があります。ただ、体の中に隠れるような構造になっているため、立っている姿だけを見ると膝がないように見えます。",
+               "penguin antarctica walking"),
 
-              {
-                  "title": "雨の匂い",
-                  "text": "雨が降ったときに感じる独特の匂いには、植物由来の成分や土壌の微生物が作る成分などが関係しています。",
-                  "query": "rain street umbrella city"
-              },
+              ("雨の匂い",
+               "雨が降ったときに感じる独特の匂いには、植物由来の成分や土壌の微生物が作る成分などが関係しています。",
+               "rain street umbrella city"),
 
-              {
-                  "title": "雲",
-                  "text": "ふわふわに見える雲ですが、大きな雲には大量の水滴が含まれています。見た目の軽さと実際の重さには大きな差があります。",
-                  "query": "dramatic clouds sky"
-              },
+              ("雲",
+               "ふわふわに見える雲ですが、大きな雲には大量の水滴が含まれています。見た目の軽さと実際の重さには大きな差があります。",
+               "dramatic clouds sky"),
 
-              {
-                  "title": "宇宙",
-                  "text": "音は空気などの物質を振動させて伝わります。そのため、大気がほとんどない宇宙空間では普通の音はそのまま伝わりません。",
-                  "query": "space galaxy stars"
-              },
+              ("宇宙",
+               "音は空気などの物質を振動させて伝わります。そのため、大気がほとんどない宇宙空間では普通の音はそのまま伝わりません。",
+               "space galaxy stars"),
 
-              {
-                  "title": "猫",
-                  "text": "猫は人間とは違い、甘味を感じる受容体が十分に機能しません。そのため、人間とは甘いものへの反応が大きく違います。",
-                  "query": "cute cat close up"
-              },
+              ("猫",
+               "猫は人間とは違い、甘味を感じる受容体が十分に機能しません。そのため、人間とは甘いものへの反応が大きく違います。",
+               "cute cat close up"),
 
-              {
-                  "title": "虹",
-                  "text": "虹は太陽の光が水滴の中で屈折や反射、分散をすることで見えます。雨上がりに太陽が出ると見つけやすいのはそのためです。",
-                  "query": "rainbow sky rain"
-              },
+              ("虹",
+               "虹は太陽の光が水滴の中で屈折や反射、分散をすることで見えます。雨上がりに太陽が出ると見つけやすいのはそのためです。",
+               "rainbow sky rain"),
 
-              {
-                  "title": "月",
-                  "text": "月そのものが光っているわけではありません。太陽の光を反射していて、地球から見える明るい部分が変化することで満ち欠けが起こります。",
-                  "query": "moon night sky"
-              },
+              ("月",
+               "月そのものが光っているわけではありません。太陽の光を反射していて、地球から見える明るい部分が変化することで満ち欠けが起こります。",
+               "moon night sky"),
 
-              {
-                  "title": "夕焼け",
-                  "text": "夕焼けが赤く見えるのは、太陽の光が大気の中を長い距離通るためです。短い波長の光が散らばり、赤い光が届きやすくなります。",
-                  "query": "beautiful sunset sky"
-              },
+              ("夕焼け",
+               "夕焼けが赤く見えるのは、太陽の光が大気の中を長い距離通るためです。短い波長の光が散らばり、赤い光が届きやすくなります。",
+               "beautiful sunset sky"),
 
-              {
-                  "title": "深海",
-                  "text": "深海には太陽の光がほとんど届きません。それでも多くの生物が暮らしていて、暗く高圧な環境に適応しています。",
-                  "query": "deep sea underwater"
-              },
+              ("深海",
+               "深海には太陽の光がほとんど届きません。それでも多くの生物が暮らしていて、暗く高圧な環境に適応しています。",
+               "deep sea underwater"),
 
-              {
-                  "title": "イルカ",
-                  "text": "イルカは睡眠するとき、脳の左右を同時に完全に休ませるのではなく、片側ずつ休ませるような睡眠をすることが知られています。",
-                  "query": "dolphin ocean swimming"
-              },
+              ("イルカ",
+               "イルカは睡眠するとき、脳の左右を同時に完全に休ませるのではなく、片側ずつ休ませるような睡眠をすることが知られています。",
+               "dolphin ocean swimming"),
 
-              {
-                  "title": "カラス",
-                  "text": "カラスは高い学習能力を持つ鳥として研究されています。道具を使う行動など、複雑な問題解決能力も観察されています。",
-                  "query": "crow intelligent bird city"
-              },
+              ("カラス",
+               "カラスは高い学習能力を持つ鳥として研究されています。道具を使う行動など、複雑な問題解決能力も観察されています。",
+               "crow intelligent bird city"),
 
-              {
-                  "title": "ゾウ",
-                  "text": "ゾウは大きな体だけではなく、非常に発達した社会性を持っています。群れの中で複雑なコミュニケーションを行います。",
-                  "query": "elephant herd safari"
-              },
+              ("ゾウ",
+               "ゾウは大きな体だけではなく、非常に発達した社会性を持っています。群れの中で複雑なコミュニケーションを行います。",
+               "elephant herd safari"),
 
-              {
-                  "title": "キリン",
-                  "text": "キリンの首はとても長いですが、首の骨の数は人間などと同じ七個です。一つ一つの骨が大きく発達しています。",
-                  "query": "giraffe safari"
-              },
+              ("キリン",
+               "キリンの首はとても長いですが、首の骨の数は人間などと同じ七個です。一つ一つの骨が大きく発達しています。",
+               "giraffe safari"),
 
-              {
-                  "title": "蝶",
-                  "text": "蝶は足で味を感じる能力を持っています。植物に止まったとき、足にある感覚器官から情報を得ることができます。",
-                  "query": "butterfly flower macro"
-              },
+              ("蝶",
+               "蝶は足で味を感じる能力を持っています。植物に止まったとき、足にある感覚器官から情報を得ることができます。",
+               "butterfly flower macro"),
 
-              {
-                  "title": "ミツバチ",
-                  "text": "ミツバチは仲間に餌場の方向を伝えるため、特徴的な動きを使ったコミュニケーションを行います。",
-                  "query": "honey bee flowers hive"
-              },
+              ("ミツバチ",
+               "ミツバチは仲間に餌場の方向を伝えるため、特徴的な動きを使ったコミュニケーションを行います。",
+               "honey bee flowers hive"),
 
-              {
-                  "title": "植物",
-                  "text": "植物は光のエネルギーを使って二酸化炭素と水から有機物を作ります。この働きが光合成です。",
-                  "query": "green leaves sunlight"
-              },
+              ("植物",
+               "植物は光のエネルギーを使って二酸化炭素と水から有機物を作ります。この働きが光合成です。",
+               "green leaves sunlight"),
 
-              {
-                  "title": "ひまわり",
-                  "text": "ひまわりは成長段階によって太陽の方向に合わせるような動きを見せます。植物にも環境に応じた動きがあります。",
-                  "query": "sunflower field sunlight"
-              },
+              ("ひまわり",
+               "ひまわりは成長段階によって太陽の方向に合わせるような動きを見せます。植物にも環境に応じた動きがあります。",
+               "sunflower field sunlight"),
 
-              {
-                  "title": "竹",
-                  "text": "竹には非常に速く成長する種類があります。地下茎を広げながら成長する種類もあり、独特な増え方をします。",
-                  "query": "bamboo forest"
-              },
+              ("竹",
+               "竹には非常に速く成長する種類があります。地下茎を広げながら成長する種類もあり、独特な増え方をします。",
+               "bamboo forest"),
 
-              {
-                  "title": "キノコ",
-                  "text": "普段見えているキノコは、菌類の体の一部です。土や木の中には、目に見えない菌糸が広がっています。",
-                  "query": "mushroom forest macro"
-              },
+              ("キノコ",
+               "普段見えているキノコは、菌類の体の一部です。土や木の中には、目に見えない菌糸が広がっています。",
+               "mushroom forest macro"),
 
-              {
-                  "title": "トマト",
-                  "text": "トマトは料理では野菜として扱われることが多いですが、植物学的には果実です。分類の基準によって呼び方が変わります。",
-                  "query": "tomato garden"
-              },
+              ("トマト",
+               "トマトは料理では野菜として扱われることが多いですが、植物学的には果実です。分類の基準によって呼び方が変わります。",
+               "tomato garden"),
 
-              {
-                  "title": "イチゴ",
-                  "text": "イチゴは、普段食べている部分と植物学上の果実の扱いが少し違います。食べ物には意外な分類がたくさんあります。",
-                  "query": "strawberry farm"
-              },
+              ("イチゴ",
+               "イチゴは、普段食べている部分と植物学上の果実の扱いが少し違います。食べ物には意外な分類がたくさんあります。",
+               "strawberry farm"),
 
-              {
-                  "title": "睡眠",
-                  "text": "眠っている間も脳が完全に停止しているわけではありません。睡眠中にも記憶の整理など、さまざまな活動が行われています。",
-                  "query": "person sleeping bedroom"
-              },
+              ("睡眠",
+               "眠っている間も脳が完全に停止しているわけではありません。睡眠中にも記憶の整理など、さまざまな活動が行われています。",
+               "person sleeping bedroom"),
 
-              {
-                  "title": "まばたき",
-                  "text": "私たちは無意識のうちに何度もまばたきをしています。まばたきには目の表面を潤し、守る役割があります。",
-                  "query": "human eye close up"
-              },
+              ("まばたき",
+               "私たちは無意識のうちに何度もまばたきをしています。まばたきには目の表面を潤し、守る役割があります。",
+               "human eye close up"),
 
-              {
-                  "title": "指紋",
-                  "text": "指紋の模様は人によって異なり、同じ人でも指ごとに違います。長い間、個人を識別する手がかりとして利用されてきました。",
-                  "query": "fingerprint hand close up"
-              },
+              ("指紋",
+               "指紋の模様は人によって異なり、同じ人でも指ごとに違います。長い間、個人を識別する手がかりとして利用されてきました。",
+               "fingerprint hand close up"),
 
-              {
-                  "title": "香り",
-                  "text": "特定の香りを嗅いだ瞬間、昔の記憶を思い出すことがあります。香りと記憶の結びつきは日常でも体験しやすい現象です。",
-                  "query": "perfume memory person"
-              },
+              ("香り",
+               "特定の香りを嗅いだ瞬間、昔の記憶を思い出すことがあります。香りと記憶の結びつきは日常でも体験しやすい現象です。",
+               "perfume memory person"),
 
-              {
-                  "title": "音楽",
-                  "text": "音楽を聴くと感情が動くことがあります。テンポや音の高さ、過去の経験など、さまざまな要素が関係しています。",
-                  "query": "headphones music city night"
-              },
+              ("音楽",
+               "音楽を聴くと感情が動くことがあります。テンポや音の高さ、過去の経験など、さまざまな要素が関係しています。",
+               "headphones music city night"),
 
-              {
-                  "title": "海",
-                  "text": "海が青く見えるのは、光が水の中で吸収や散乱を受けるためです。空の色がそのまま海に映っているだけではありません。",
-                  "query": "blue ocean aerial"
-              },
+              ("海",
+               "海が青く見えるのは、光が水の中で吸収や散乱を受けるためです。空の色がそのまま海に映っているだけではありません。",
+               "blue ocean aerial"),
 
-              {
-                  "title": "砂漠",
-                  "text": "砂漠は必ずしも一面が砂で覆われている場所ではありません。雨が非常に少ない地域という気候的な特徴で分類されます。",
-                  "query": "desert landscape dunes"
-              },
+              ("砂漠",
+               "砂漠は必ずしも一面が砂で覆われている場所ではありません。雨が非常に少ない地域という気候的な特徴で分類されます。",
+               "desert landscape dunes"),
 
-              {
-                  "title": "地球",
-                  "text": "地球は私たちが気づかない速度で自転しています。そのため太陽が東から昇り、西へ沈むように見えます。",
-                  "query": "earth space sunrise"
-              },
+              ("地球",
+               "地球は私たちが気づかない速度で自転しています。そのため太陽が東から昇り、西へ沈むように見えます。",
+               "earth space sunrise"),
 
-              {
-                  "title": "季節",
-                  "text": "季節の変化には、地球の地軸が傾いたまま太陽の周りを公転していることが大きく関係しています。",
-                  "query": "earth seasons orbit"
-              },
+              ("季節",
+               "季節の変化には、地球の地軸が傾いたまま太陽の周りを公転していることが大きく関係しています。",
+               "earth seasons orbit"),
 
-              {
-                  "title": "心拍",
-                  "text": "心臓は休んでいるときにも動き続けています。運動すると心拍数が上がるのは、体がより多くの酸素を必要とするためです。",
-                  "query": "running athlete fitness"
-              },
+              ("心拍",
+               "心臓は休んでいるときにも動き続けています。運動すると心拍数が上がるのは、体がより多くの酸素を必要とするためです。",
+               "running athlete fitness"),
 
-              {
-                  "title": "味覚",
-                  "text": "食べ物の味は舌だけで決まるわけではありません。香りや温度、食感なども組み合わさって味を感じています。",
-                  "query": "food restaurant close up"
-              },
+              ("味覚",
+               "食べ物の味は舌だけで決まるわけではありません。香りや温度、食感なども組み合わさって味を感じています。",
+               "food restaurant close up"),
 
-              {
-                  "title": "皮膚",
-                  "text": "皮膚は体の表面を覆うだけではありません。外部からの刺激を防ぎ、体内の水分を保つなど重要な役割を持っています。",
-                  "query": "human skin close up"
-              },
+              ("皮膚",
+               "皮膚は体の表面を覆うだけではありません。外部からの刺激を防ぎ、体内の水分を保つなど重要な役割を持っています。",
+               "human skin close up"),
 
-              {
-                  "title": "髪",
-                  "text": "髪の毛は毛根にある細胞の働きによって伸びます。見えている髪そのものが伸びるというより、根元で新しい細胞が作られます。",
-                  "query": "hair close up person"
-              }
-
+              ("髪",
+               "髪の毛は毛根にある細胞の働きによって伸びます。見えている髪そのものが伸びるというより、根元で新しい細胞が作られます。",
+               "hair close up person")
           ]
 
 
-          # ==========================================================
+          # ========================================================
           # ENCOURAGEMENT
-          # ==========================================================
+          # ========================================================
 
           encouragements = [
-
               "もし今日うまくいかなかったとしても、それだけであなたの価値が決まるわけではありません。明日はまた別の日です。",
               "頑張っているのに結果が出ない日もあります。でも、見えないところで積み重なっているものまで消えるわけではありません。",
               "誰かと同じ速さで進む必要はありません。自分のペースで進んでいるなら、それもちゃんと前進です。",
@@ -383,50 +302,20 @@ jobs:
               "昨日の自分と今日の自分を比べてみてください。ほんの少しでも変わっていれば、それは前進です。",
               "頑張れない日があるからといって、頑張ってきた時間までなくなるわけではありません。",
               "誰かに認めてもらえない日でも、自分が積み重ねた時間は消えません。",
-              "今は遠回りに見えることも、後から振り返ると必要だったと思えることがあります。",
               "焦らなくて大丈夫です。人生には、急がなくてもいい時間があります。",
-              "何歳だから遅い、ということはありません。始めるタイミングは人それぞれです。",
               "今日できたことが一つでもあるなら、それをちゃんと数えてあげてください。",
               "自信がなくても始めることはできます。自信は、始めた後についてくることもあります。",
               "明日の自分を少し楽にするために、今日は一つだけ片付けてみる。それくらいで十分です。",
-              "うまく話せなかった日も、うまく笑えなかった日も、それだけで悪い一日になるわけではありません。",
               "人生は一日で決まりません。今日の結果だけで、自分の未来まで決めなくて大丈夫です。",
-              "できなかったことより、できたことを一つ探してみてください。",
-              "あなたのペースは、他人の時計では測れません。",
-              "疲れているときは、頑張るより休むほうが必要なこともあります。",
-              "一度立ち止まったからといって、振り出しに戻ったわけではありません。",
-              "小さな変化は気づきにくいものです。でも、小さな変化が積み重なって大きな変化になります。",
-              "今日を乗り越えたなら、それだけでも一つの仕事を終えています。",
-              "自分に厳しすぎる日は、親しい人にかける言葉を自分にもかけてみてください。",
-              "すぐに結果が出なくても、やったことには意味があります。",
-              "未来のことを全部決めなくて大丈夫です。まず今日を終えることだけ考えてもいい。",
-              "嫌なことがあった日は、自分まで嫌いにならなくて大丈夫です。",
-              "何度でもやり直していいです。人生にはリセットボタンはなくても、方向を変えることはできます。",
-              "自分の弱さを知っていることは、それだけで悪いことではありません。",
-              "誰かの成功を見て落ち込んだら、その画面を閉じて自分の時間に戻ってきてもいいです。",
-              "まだ途中なら、結論を出すには早いかもしれません。",
-              "今日の自分にできることを一つだけ。それで十分な日もあります。",
-              "頑張った自分に気づけるのは、自分自身です。",
-              "明日が怖くても、明日の全部を今日考えなくて大丈夫です。",
-              "今の自分を好きになれなくても、嫌いになる必要まではありません。",
-              "できないことがあるからといって、できることまで見えなくなる必要はありません。",
-              "一歩進んで、疲れたら休む。それを繰り返していけばいいんです。",
-              "人生には、何も起こらないように見える時期もあります。でも、その時間が無意味とは限りません。",
-              "焦って答えを出すより、少し時間を置いたほうが見えるものもあります。",
-              "今日の失敗は、今日という一日の一部でしかありません。",
-              "自分の人生を、誰かのハイライトと比べなくて大丈夫です。",
-              "ゆっくりでも続けているなら、それは立派な前進です。",
               "今日を頑張った自分に、最後くらい優しい言葉をかけてあげてください。"
-
           ]
 
 
-          # ==========================================================
+          # ========================================================
           # TRANSITIONS
-          # ==========================================================
+          # ========================================================
 
           transitions = [
-
               "ここからは、少しだけ自分自身の話に置き換えてみましょう。",
               "そして、これは私たちの日常にも少し似ています。",
               "実は、この話から一つだけ大切なことを考えられます。",
@@ -440,23 +329,20 @@ jobs:
               "次の話も、意外と知られていません。",
               "では、もう一ついきましょう。",
               "ここから少しだけ話を変えます。",
-              "次は『なるほど』と思うかもしれません。",
-              "そして最後には、今日を少し楽にする言葉を持ってきます。",
+              "次は、なるほどと思うかもしれません。",
               "まだまだ意外な話があります。",
               "次は、私たちの身近なところにある話です。",
               "ここから後半戦です。",
               "まだ終わりません。もう少しだけ付き合ってください。",
               "最後まで、気楽に聞いていってください。"
-
           ]
 
 
-          # ==========================================================
+          # ========================================================
           # CLOSINGS
-          # ==========================================================
+          # ========================================================
 
           closings = [
-
               "今日が完璧じゃなくても大丈夫です。明日はまた別の日。自分のペースでいきましょう。",
               "ここまで見たあなたへ。今日も一日お疲れさまでした。明日は今日より少しだけ楽になりますように。",
               "全部頑張らなくて大丈夫です。できることを一つずつ。それで十分です。",
@@ -477,222 +363,40 @@ jobs:
               "今は答えが出なくても大丈夫。時間がくれる答えもあります。",
               "今日のあなたに必要なのが努力ではなく休息なら、ちゃんと休んでください。",
               "明日が少しでも楽しみになるような夜になりますように。今日もお疲れさまでした。"
-
           ]
 
 
-          # ==========================================================
+          # ========================================================
           # VISUAL THEMES
-          # ==========================================================
+          # ========================================================
 
           visual_themes = [
-
-              {
-                  "name": "朝焼け",
-                  "queries": [
-                      "sunrise morning city",
-                      "sunrise mountain landscape",
-                      "morning sunlight person",
-                      "beautiful dawn sky"
-                  ]
-              },
-
-              {
-                  "name": "夜の街",
-                  "queries": [
-                      "Tokyo night city",
-                      "city lights night walking",
-                      "urban night street",
-                      "person walking city night"
-                  ]
-              },
-
-              {
-                  "name": "雨",
-                  "queries": [
-                      "rain street night",
-                      "rain window city",
-                      "umbrella walking rain",
-                      "rainy city cinematic"
-                  ]
-              },
-
-              {
-                  "name": "海",
-                  "queries": [
-                      "ocean waves cinematic",
-                      "blue ocean aerial",
-                      "person beach sunset",
-                      "calm sea horizon"
-                  ]
-              },
-
-              {
-                  "name": "宇宙",
-                  "queries": [
-                      "space galaxy stars",
-                      "earth from space",
-                      "milky way night",
-                      "deep space stars"
-                  ]
-              },
-
-              {
-                  "name": "山",
-                  "queries": [
-                      "mountain sunrise",
-                      "mountain landscape cinematic",
-                      "hiking mountain",
-                      "misty mountain"
-                  ]
-              },
-
-              {
-                  "name": "自然",
-                  "queries": [
-                      "forest sunlight",
-                      "green forest cinematic",
-                      "nature sunlight trees",
-                      "beautiful nature landscape"
-                  ]
-              },
-
-              {
-                  "name": "都会",
-                  "queries": [
-                      "modern city skyline",
-                      "Tokyo street daytime",
-                      "urban buildings",
-                      "city traffic aerial"
-                  ]
-              },
-
-              {
-                  "name": "一人時間",
-                  "queries": [
-                      "person alone city",
-                      "person sitting window",
-                      "person thinking sunset",
-                      "lonely person cinematic"
-                  ]
-              },
-
-              {
-                  "name": "前向き",
-                  "queries": [
-                      "person walking sunrise",
-                      "person running sunrise",
-                      "success journey",
-                      "man walking mountain"
-                  ]
-              },
-
-              {
-                  "name": "カフェ",
-                  "queries": [
-                      "coffee cafe morning",
-                      "person coffee window",
-                      "cozy cafe",
-                      "coffee close up"
-                  ]
-              },
-
-              {
-                  "name": "仕事",
-                  "queries": [
-                      "person working laptop",
-                      "office work",
-                      "working desk night",
-                      "focused person computer"
-                  ]
-              },
-
-              {
-                  "name": "スポーツ",
-                  "queries": [
-                      "running athlete",
-                      "training gym",
-                      "athlete motivation",
-                      "running city"
-                  ]
-              },
-
-              {
-                  "name": "動物",
-                  "queries": [
-                      "cute animals nature",
-                      "wildlife cinematic",
-                      "animal close up",
-                      "animals forest"
-                  ]
-              },
-
-              {
-                  "name": "海岸",
-                  "queries": [
-                      "beach sunset",
-                      "ocean beach walking",
-                      "waves shore",
-                      "coastline aerial"
-                  ]
-              },
-
-              {
-                  "name": "夕焼け",
-                  "queries": [
-                      "beautiful sunset",
-                      "orange sunset city",
-                      "sunset person silhouette",
-                      "sunset landscape"
-                  ]
-              },
-
-              {
-                  "name": "電車",
-                  "queries": [
-                      "train station Japan",
-                      "train window landscape",
-                      "commuter train",
-                      "train night city"
-                  ]
-              },
-
-              {
-                  "name": "道路",
-                  "queries": [
-                      "road sunrise",
-                      "highway night",
-                      "driving road cinematic",
-                      "empty road landscape"
-                  ]
-              },
-
-              {
-                  "name": "星空",
-                  "queries": [
-                      "starry sky night",
-                      "milky way landscape",
-                      "night sky stars",
-                      "person looking stars"
-                  ]
-              },
-
-              {
-                  "name": "花",
-                  "queries": [
-                      "flowers macro",
-                      "flower field sunset",
-                      "spring flowers",
-                      "beautiful flowers"
-                  ]
-              }
-
+              ["朝焼け", "sunrise morning city"],
+              ["夜の街", "Tokyo night city"],
+              ["雨", "rain street night"],
+              ["海", "ocean waves cinematic"],
+              ["宇宙", "space galaxy stars"],
+              ["山", "mountain sunrise"],
+              ["自然", "forest sunlight"],
+              ["都会", "modern city skyline"],
+              ["一人時間", "person alone city"],
+              ["前向き", "person walking sunrise"],
+              ["カフェ", "coffee cafe morning"],
+              ["仕事", "person working laptop"],
+              ["スポーツ", "running athlete"],
+              ["動物", "wildlife cinematic"],
+              ["海岸", "beach sunset"],
+              ["夕焼け", "beautiful sunset"],
+              ["電車", "train station Japan"],
+              ["道路", "road sunrise"],
+              ["星空", "starry sky night"],
+              ["花", "flowers macro"]
           ]
 
 
-          # ==========================================================
-          # TITLE PREFIXES
-          # ==========================================================
+          # ========================================================
+          # TITLES
+          # ========================================================
 
           title_prefixes = [
               "【5分】",
@@ -706,7 +410,6 @@ jobs:
               "【雑学＋激励】",
               "【今日の5分】"
           ]
-
 
           title_suffixes = [
               "雑学と心が軽くなる話12選",
@@ -722,9 +425,34 @@ jobs:
           ]
 
 
-          # ==========================================================
-          # SCENE ROLES
-          # ==========================================================
+          # ========================================================
+          # SELECT
+          # ========================================================
+
+          random.shuffle(facts)
+
+          selected_facts = facts[:8]
+
+          selected_encouragements = random.sample(
+              encouragements,
+              3
+          )
+
+          selected_visuals = random.sample(
+              visual_themes,
+              12
+          )
+
+          hook = random.choice(hooks)
+
+          closing = random.choice(
+              closings
+          )
+
+
+          # ========================================================
+          # ROLES
+          # ========================================================
 
           roles = [
               "hook_fact",
@@ -742,88 +470,84 @@ jobs:
           ]
 
 
-          # ==========================================================
-          # SELECT CONTENT
-          # ==========================================================
-
-          selected_facts = random.sample(
-              facts,
-              min(8, len(facts))
-          )
-
-          selected_encouragements = random.sample(
-              encouragements,
-              min(3, len(encouragements))
-          )
-
-          hook = random.choice(hooks)
-
-          closing = random.choice(closings)
-
-          selected_visuals = random.sample(
-              visual_themes,
-              12
-          )
-
-
-          # ==========================================================
-          # BUILD SCENES
-          # ==========================================================
-
           scenes = []
 
           fact_index = 0
           encouragement_index = 0
 
+
+          # ========================================================
+          # BUILD
+          # ========================================================
+
           for i, role in enumerate(roles):
 
-              visual = selected_visuals[i]
+              visual_name, visual_query = (
+                  selected_visuals[i]
+              )
 
               if role == "hook_fact":
 
-                  fact = selected_facts[fact_index % len(selected_facts)]
+                  title, fact_text, fact_query = (
+                      selected_facts[
+                          fact_index
+                          % len(selected_facts)
+                      ]
+                  )
+
                   fact_index += 1
 
                   text = (
                       hook
                       + " "
-                      + fact["title"]
+                      + title
                       + "について知っていますか？ "
-                      + fact["text"]
+                      + fact_text
                   )
 
                   scene_type = "hook"
 
-                  query = random.choice(visual["queries"])
-
               elif role == "fact":
 
-                  fact = selected_facts[fact_index % len(selected_facts)]
+                  title, fact_text, fact_query = (
+                      selected_facts[
+                          fact_index
+                          % len(selected_facts)
+                      ]
+                  )
+
                   fact_index += 1
 
-                  transition = random.choice(transitions)
+                  transition = random.choice(
+                      transitions
+                  )
 
                   text = (
                       transition
                       + " "
-                      + fact["title"]
+                      + title
                       + "の話です。"
-                      + fact["text"]
+                      + fact_text
                   )
 
                   scene_type = "trivia"
 
-                  query = random.choice(visual["queries"])
-
               elif role == "encouragement":
 
-                  message = selected_encouragements[
-                      encouragement_index % len(selected_encouragements)
-                  ]
+                  message = (
+                      selected_encouragements[
+                          encouragement_index
+                          % len(
+                              selected_encouragements
+                          )
+                      ]
+                  )
 
                   encouragement_index += 1
 
-                  transition = random.choice(transitions)
+                  transition = random.choice(
+                      transitions
+                  )
 
                   text = (
                       transition
@@ -833,26 +557,11 @@ jobs:
 
                   scene_type = "encouragement"
 
-                  query = random.choice(visual["queries"])
-
-              elif role == "closing":
+              else:
 
                   text = closing
 
                   scene_type = "closing"
-
-                  query = random.choice(visual["queries"])
-
-              else:
-
-                  fact = selected_facts[fact_index % len(selected_facts)]
-                  fact_index += 1
-
-                  text = fact["text"]
-
-                  scene_type = "trivia"
-
-                  query = random.choice(visual["queries"])
 
 
               scenes.append({
@@ -860,14 +569,14 @@ jobs:
                   "role": role,
                   "scene_type": scene_type,
                   "text": text,
-                  "visual_theme": visual["name"],
-                  "query": query
+                  "visual_theme": visual_name,
+                  "query": visual_query
               })
 
 
-          # ==========================================================
+          # ========================================================
           # TITLE
-          # ==========================================================
+          # ========================================================
 
           title = (
               random.choice(title_prefixes)
@@ -875,9 +584,9 @@ jobs:
           )
 
 
-          # ==========================================================
+          # ========================================================
           # DESCRIPTION
-          # ==========================================================
+          # ========================================================
 
           description = f"""
           {title}
@@ -899,9 +608,9 @@ jobs:
           """
 
 
-          # ==========================================================
+          # ========================================================
           # SAVE
-          # ==========================================================
+          # ========================================================
 
           data = {
               "seed": seed,
@@ -915,6 +624,7 @@ jobs:
               "w",
               encoding="utf-8"
           ) as f:
+
               json.dump(
                   data,
                   f,
@@ -922,18 +632,10 @@ jobs:
                   indent=2
               )
 
-          print("======================================")
+          print("================================")
           print("TITLE:", title)
           print("SCENES:", len(scenes))
-          print("======================================")
-
-          for scene in scenes:
-              print(
-                  scene["index"],
-                  scene["scene_type"],
-                  scene["visual_theme"],
-                  scene["query"]
-              )
+          print("================================")
 
           PY
 
@@ -958,22 +660,32 @@ jobs:
 
           python - <<'PY'
 
+          import asyncio
           import json
           import os
-          import subprocess
-          import requests
           import random
-          import math
+          import subprocess
           from pathlib import Path
+
+          import edge_tts
+          import requests
 
 
           TARGET = 25.0
+
+          VOICE = "ja-JP-NanamiNeural"
+
+
+          # ========================================================
+          # LOAD
+          # ========================================================
 
           with open(
               "segments.json",
               "r",
               encoding="utf-8"
           ) as f:
+
               data = json.load(f)
 
 
@@ -986,18 +698,25 @@ jobs:
 
 
           # ========================================================
-          # HELPERS
+          # RUN
           # ========================================================
 
           def run(cmd):
 
-              print("RUN:", " ".join(map(str, cmd)))
+              print(
+                  "RUN:",
+                  " ".join(map(str, cmd))
+              )
 
               subprocess.run(
                   cmd,
                   check=True
               )
 
+
+          # ========================================================
+          # DURATION
+          # ========================================================
 
           def duration(path):
 
@@ -1017,8 +736,47 @@ jobs:
                   check=True
               )
 
-              return float(result.stdout.strip())
+              return float(
+                  result.stdout.strip()
+              )
 
+
+          # ========================================================
+          # TIMESTAMP
+          # ========================================================
+
+          def ts(seconds):
+
+              ms = int(
+                  round(
+                      max(0, seconds)
+                      * 1000
+                  )
+              )
+
+              h = ms // 3600000
+
+              ms %= 3600000
+
+              m = ms // 60000
+
+              ms %= 60000
+
+              s = ms // 1000
+
+              ms %= 1000
+
+              return (
+                  f"{h:02d}:"
+                  f"{m:02d}:"
+                  f"{s:02d},"
+                  f"{ms:03d}"
+              )
+
+
+          # ========================================================
+          # FALLBACK
+          # ========================================================
 
           def make_fallback(path):
 
@@ -1038,43 +796,50 @@ jobs:
               ])
 
 
-          def download_pexels(query, output):
+          # ========================================================
+          # PEXELS
+          # ========================================================
+
+          def download_pexels(
+              query,
+              output
+          ):
 
               if not pexels_key:
                   return False
-
-              headers = {
-                  "Authorization": pexels_key
-              }
-
-              params = {
-                  "query": query,
-                  "orientation": "landscape",
-                  "size": "medium",
-                  "per_page": 10
-              }
 
               try:
 
                   response = requests.get(
                       "https://api.pexels.com/videos/search",
-                      headers=headers,
-                      params=params,
+                      headers={
+                          "Authorization":
+                          pexels_key
+                      },
+                      params={
+                          "query": query,
+                          "orientation": "landscape",
+                          "size": "medium",
+                          "per_page": 10
+                      },
                       timeout=30
                   )
 
                   if response.status_code != 200:
+
                       print(
-                          "Pexels error:",
+                          "PEXELS ERROR:",
                           response.status_code
                       )
+
                       return False
 
-                  payload = response.json()
-
-                  videos = payload.get(
-                      "videos",
-                      []
+                  videos = (
+                      response.json()
+                      .get(
+                          "videos",
+                          []
+                      )
                   )
 
                   if not videos:
@@ -1084,26 +849,24 @@ jobs:
 
                   for video in videos:
 
-                      files = video.get(
-                          "video_files",
-                          []
-                      )
-
                       candidates = []
 
-                      for item in files:
+                      for vf in video.get(
+                          "video_files",
+                          []
+                      ):
 
-                          width = item.get(
+                          width = vf.get(
                               "width",
                               0
                           )
 
-                          height = item.get(
+                          height = vf.get(
                               "height",
                               0
                           )
 
-                          link = item.get(
+                          link = vf.get(
                               "link"
                           )
 
@@ -1112,6 +875,7 @@ jobs:
                               and width >= 720
                               and height >= 400
                           ):
+
                               candidates.append(
                                   (
                                       width * height,
@@ -1140,136 +904,273 @@ jobs:
                           output,
                           "wb"
                       ) as f:
-                          f.write(r.content)
 
-                      if output.stat().st_size > 50000:
+                          f.write(
+                              r.content
+                          )
+
+                      if (
+                          output.stat().st_size
+                          > 50000
+                      ):
+
                           return True
 
               except Exception as e:
 
                   print(
-                      "Pexels exception:",
+                      "PEXELS EXCEPTION:",
                       e
                   )
 
               return False
 
 
-          def create_srt(text, output):
+          # ========================================================
+          # TTS WITH WORD TIMING
+          # ========================================================
 
-              # ----------------------------------------------------
-              # Split text into readable chunks
-              # ----------------------------------------------------
+          async def create_tts(
+              text,
+              audio_path
+          ):
 
-              clean = (
-                  text
-                  .replace("。", "。\n")
-                  .replace("！", "！\n")
-                  .replace("？", "？\n")
+              communicate = edge_tts.Communicate(
+                  text,
+                  VOICE,
+                  rate="+0%",
+                  volume="+0%"
               )
 
-              pieces = [
-                  x.strip()
-                  for x in clean.splitlines()
-                  if x.strip()
-              ]
+              boundaries = []
 
-              if not pieces:
-                  pieces = [text]
+              with open(
+                  audio_path,
+                  "wb"
+              ) as audio_file:
 
-              # Limit very small/large chunks
+                  async for chunk in (
+                      communicate.stream()
+                  ):
 
-              final_pieces = []
+                      if chunk["type"] == "audio":
 
-              for piece in pieces:
+                          audio_file.write(
+                              chunk["data"]
+                          )
 
-                  if len(piece) <= 24:
+                      elif (
+                          chunk["type"]
+                          == "WordBoundary"
+                      ):
 
-                      final_pieces.append(piece)
+                          boundaries.append({
+                              "start":
+                                  chunk["offset"]
+                                  / 10000000,
+                              "duration":
+                                  chunk["duration"]
+                                  / 10000000,
+                              "text":
+                                  chunk.get(
+                                      "text",
+                                      ""
+                                  )
+                          })
+
+              return boundaries
+
+
+          # ========================================================
+          # CREATE SRT FROM REAL TIMING
+          # ========================================================
+
+          def create_srt(
+              boundaries,
+              raw_duration,
+              final_duration,
+              output
+          ):
+
+              if not boundaries:
+
+                  print(
+                      "WARNING: No TTS boundaries"
+                  )
+
+                  return
+
+
+              blocks = []
+
+              current_text = ""
+
+              current_start = None
+              current_end = None
+
+              MAX_CHARS = 18
+              MAX_SECONDS = 3.2
+
+
+              for item in boundaries:
+
+                  word = (
+                      item["text"]
+                      .strip()
+                  )
+
+                  if not word:
+                      continue
+
+                  start = item["start"]
+
+                  end = (
+                      start
+                      + item["duration"]
+                  )
+
+
+                  if current_start is None:
+
+                      current_start = start
+                      current_end = end
+                      current_text = word
+
+                      continue
+
+
+                  candidate = (
+                      current_text
+                      + word
+                  )
+
+                  elapsed = (
+                      end
+                      - current_start
+                  )
+
+
+                  # Split at Japanese punctuation
+                  # or when subtitle becomes too long.
+
+                  should_split = (
+                      len(candidate)
+                      > MAX_CHARS
+                      or elapsed
+                      > MAX_SECONDS
+                      or any(
+                          current_text.endswith(x)
+                          for x in [
+                              "。",
+                              "！",
+                              "？"
+                          ]
+                      )
+                  )
+
+
+                  if should_split:
+
+                      blocks.append({
+                          "start":
+                              current_start,
+                          "end":
+                              current_end,
+                          "text":
+                              current_text
+                      })
+
+                      current_start = start
+                      current_end = end
+                      current_text = word
 
                   else:
 
-                      start = 0
+                      current_text = candidate
+                      current_end = end
 
-                      while start < len(piece):
 
-                          final_pieces.append(
-                              piece[
-                                  start:start + 24
-                              ]
-                          )
+              if current_text:
 
-                          start += 24
+                  blocks.append({
+                      "start":
+                          current_start,
+                      "end":
+                          current_end,
+                      "text":
+                          current_text
+                  })
 
-              pieces = final_pieces
 
-              total_chars = sum(
-                  len(x)
-                  for x in pieces
+              # ====================================================
+              # AUDIO SPEED SCALE
+              # ====================================================
+
+              scale = (
+                  final_duration
+                  / max(
+                      raw_duration,
+                      0.001
+                  )
               )
+
 
               lines = []
 
-              current = 0.0
 
-              for i, piece in enumerate(pieces):
+              for i, block in enumerate(
+                  blocks,
+                  start=1
+              ):
 
-                  ratio = (
-                      len(piece)
-                      / max(total_chars, 1)
+                  start = (
+                      block["start"]
+                      * scale
                   )
 
-                  seg_duration = TARGET * ratio
-
-                  start = current
-
-                  end = min(
-                      TARGET,
-                      current + seg_duration
+                  end = (
+                      block["end"]
+                      * scale
                   )
 
-                  def ts(seconds):
-
-                      ms = int(
-                          round(
-                              seconds * 1000
-                          )
+                  start = max(
+                      0,
+                      min(
+                          start,
+                          final_duration
                       )
+                  )
 
-                      h = ms // 3600000
-                      ms %= 3600000
-
-                      m = ms // 60000
-                      ms %= 60000
-
-                      s = ms // 1000
-                      ms %= 1000
-
-                      return (
-                          f"{h:02d}:"
-                          f"{m:02d}:"
-                          f"{s:02d},"
-                          f"{ms:03d}"
+                  end = max(
+                      start + 0.05,
+                      min(
+                          end,
+                          final_duration
                       )
+                  )
+
 
                   lines.append(
-                      f"{i + 1}\n"
-                      f"{ts(start)} --> {ts(end)}\n"
-                      f"{piece}\n"
+                      f"{i}\n"
+                      f"{ts(start)} --> "
+                      f"{ts(end)}\n"
+                      f"{block['text']}\n"
                   )
 
-                  current = end
 
               with open(
                   output,
                   "w",
                   encoding="utf-8"
               ) as f:
-                  f.write("\n".join(lines))
+
+                  f.write(
+                      "\n".join(lines)
+                  )
 
 
           # ========================================================
-          # RENDER EACH SCENE
+          # RENDER 12 SCENES
           # ========================================================
 
           for scene in scenes:
@@ -1277,6 +1178,7 @@ jobs:
               index = scene["index"]
 
               base = f"{index:02d}"
+
 
               audio_raw = Path(
                   f"audio/{base}_raw.mp3"
@@ -1290,8 +1192,8 @@ jobs:
                   f"media/{base}_source.mp4"
               )
 
-              fixed_video = Path(
-                  f"media/{base}.mp4"
+              normalized = Path(
+                  f"media/{base}_normalized.mp4"
               )
 
               subtitle = Path(
@@ -1303,18 +1205,16 @@ jobs:
               )
 
 
-              # ====================================================
-              # TTS
-              # ====================================================
-
               script = scene["text"]
+
 
               print(
                   "================================"
               )
 
               print(
-                  f"SCENE {index}"
+                  "SCENE:",
+                  index
               )
 
               print(script)
@@ -1323,42 +1223,45 @@ jobs:
                   "================================"
               )
 
-              run([
-                  "edge-tts",
-                  "--voice",
-                  "ja-JP-NanamiNeural",
-                  "--rate",
-                  "+0%",
-                  "--volume",
-                  "+0%",
-                  "--text",
-                  script,
-                  "--write-media",
-                  str(audio_raw)
-              ])
-
 
               # ====================================================
-              # AUDIO DURATION
+              # TTS
               # ====================================================
+
+              boundaries = asyncio.run(
+                  create_tts(
+                      script,
+                      audio_raw
+                  )
+              )
+
 
               raw_duration = duration(
                   audio_raw
               )
+
 
               print(
                   "RAW AUDIO:",
                   raw_duration
               )
 
+              print(
+                  "BOUNDARIES:",
+                  len(boundaries)
+              )
+
 
               # ====================================================
-              # FIT AUDIO TO 25 SEC
+              # FIT TO 25 SEC
               # ====================================================
 
-              if raw_duration > 25.0:
+              if raw_duration > TARGET:
 
-                  speed = raw_duration / TARGET
+                  speed = (
+                      raw_duration
+                      / TARGET
+                  )
 
                   speed = max(
                       0.80,
@@ -1367,6 +1270,7 @@ jobs:
                           1.35
                       )
                   )
+
 
                   run([
                       "ffmpeg",
@@ -1382,9 +1286,11 @@ jobs:
                       str(audio_fixed)
                   ])
 
+
                   fixed_duration = duration(
                       audio_fixed
                   )
+
 
                   if fixed_duration > TARGET:
 
@@ -1401,9 +1307,11 @@ jobs:
                           )
                       )
 
+
                       temp_audio = Path(
                           f"audio/{base}_temp.wav"
                       )
+
 
                       run([
                           "ffmpeg",
@@ -1419,6 +1327,7 @@ jobs:
                           str(temp_audio)
                       ])
 
+
                       temp_audio.replace(
                           audio_fixed
                       )
@@ -1426,8 +1335,10 @@ jobs:
               else:
 
                   silence = (
-                      TARGET - raw_duration
+                      TARGET
+                      - raw_duration
                   )
+
 
                   run([
                       "ffmpeg",
@@ -1452,34 +1363,37 @@ jobs:
                   ])
 
 
+              final_audio_duration = duration(
+                  audio_fixed
+              )
+
+
               # ====================================================
-              # SUBTITLE
+              # REAL SUBTITLE
               # ====================================================
 
               create_srt(
-                  script,
+                  boundaries,
+                  raw_duration,
+                  final_audio_duration,
                   subtitle
               )
 
 
               # ====================================================
-              # VIDEO SEARCH
+              # PEXELS
               # ====================================================
-
-              print(
-                  "VIDEO QUERY:",
-                  scene["query"]
-              )
 
               found = download_pexels(
                   scene["query"],
                   source_video
               )
 
+
               if not found:
 
                   print(
-                      "Pexels video not found."
+                      "PEXELS NOT FOUND - FALLBACK"
                   )
 
                   make_fallback(
@@ -1488,12 +1402,8 @@ jobs:
 
 
               # ====================================================
-              # VIDEO NORMALIZE
+              # NORMALIZE VIDEO
               # ====================================================
-
-              normalized = Path(
-                  f"media/{base}_normalized.mp4"
-              )
 
               run([
                   "ffmpeg",
@@ -1522,7 +1432,7 @@ jobs:
 
 
               # ====================================================
-              # BURN SUBTITLES + AUDIO
+              # SUBTITLE PATH
               # ====================================================
 
               subtitle_path = str(
@@ -1545,6 +1455,11 @@ jobs:
                   )
               )
 
+
+              # ====================================================
+              # SUBTITLE STYLE
+              # ====================================================
+
               vf = (
                   f"subtitles='{subtitle_path}'"
                   ":force_style="
@@ -1558,6 +1473,11 @@ jobs:
                   "Alignment=2,"
                   "MarginV=45'"
               )
+
+
+              # ====================================================
+              # FINAL SCENE
+              # ====================================================
 
               run([
                   "ffmpeg",
@@ -1596,22 +1516,27 @@ jobs:
               ])
 
 
-              # ====================================================
-              # CHECK
-              # ====================================================
-
-              d = duration(
-                  output
-              )
-
               print(
-                  f"SCENE {index} FINAL:",
-                  d
+                  "SCENE FINAL:",
+                  index,
+                  duration(output)
               )
 
 
           print(
+              "================================"
+          )
+
+          print(
               "ALL 12 SCENES RENDERED"
+          )
+
+          print(
+              "REAL TTS SUBTITLES: ENABLED"
+          )
+
+          print(
+              "================================"
           )
 
           PY
@@ -1642,7 +1567,7 @@ jobs:
 
 
       # ============================================================
-      # FORCE FINAL 300 SEC
+      # FINAL 300 SEC
       # ============================================================
 
       - name: Normalize final video to 300 seconds
@@ -1692,12 +1617,12 @@ jobs:
 
           if duration < 295:
               raise SystemExit(
-                  "ERROR: Video is shorter than approximately 5 minutes."
+                  "ERROR: Video shorter than 5 minutes."
               )
 
           if duration > 305:
               raise SystemExit(
-                  "ERROR: Video is longer than approximately 5 minutes."
+                  "ERROR: Video longer than 5 minutes."
               )
 
           print(
@@ -1708,19 +1633,441 @@ jobs:
 
 
       # ============================================================
-      # THUMBNAIL
+      # AUTOMATIC THUMBNAIL
       # ============================================================
 
-      - name: Create thumbnail
+      - name: Create automatic thumbnail
         run: |
 
-          ffmpeg \
-            -y \
-            -ss 8 \
-            -i trivia_video.mp4 \
-            -frames:v 1 \
-            -vf "scale=1280:720" \
-            thumbnail.jpg
+          cat > create_thumbnail.py <<'PY'
+
+          import json
+          import os
+          import subprocess
+
+          from PIL import Image
+          from PIL import ImageDraw
+          from PIL import ImageFont
+
+
+          # ========================================================
+          # LOAD TITLE
+          # ========================================================
+
+          with open(
+              "segments.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
+
+              data = json.load(f)
+
+
+          title = data["title"]
+
+
+          # ========================================================
+          # THUMBNAIL TEXT
+          # ========================================================
+
+          texts = [
+              "知らないと損する雑学12選",
+              "へぇが止まらない雑学",
+              "思わず話したくなる雑学",
+              "知っていると得する話",
+              "5分で楽しめる雑学",
+              "雑学＋心が軽くなる話",
+              "最後に少し元気になる話"
+          ]
+
+
+          index = (
+              sum(
+                  ord(c)
+                  for c in title
+              )
+              % len(texts)
+          )
+
+
+          thumbnail_text = texts[index]
+
+
+          # ========================================================
+          # EXTRACT FRAME
+          # ========================================================
+
+          subprocess.run(
+              [
+                  "ffmpeg",
+                  "-y",
+                  "-ss",
+                  "8",
+                  "-i",
+                  "trivia_video.mp4",
+                  "-frames:v",
+                  "1",
+                  "-q:v",
+                  "2",
+                  "thumbnail_bg.jpg"
+              ],
+              check=True
+          )
+
+
+          image = Image.open(
+              "thumbnail_bg.jpg"
+          ).convert("RGB")
+
+
+          # ========================================================
+          # CROP
+          # ========================================================
+
+          W = 1280
+          H = 720
+
+          sw, sh = image.size
+
+          source_ratio = sw / sh
+          target_ratio = W / H
+
+
+          if source_ratio > target_ratio:
+
+              nw = int(
+                  sh * target_ratio
+              )
+
+              left = (
+                  sw - nw
+              ) // 2
+
+              image = image.crop(
+                  (
+                      left,
+                      0,
+                      left + nw,
+                      sh
+                  )
+              )
+
+          else:
+
+              nh = int(
+                  sw / target_ratio
+              )
+
+              top = (
+                  sh - nh
+              ) // 2
+
+              image = image.crop(
+                  (
+                      0,
+                      top,
+                      sw,
+                      top + nh
+                  )
+              )
+
+
+          image = image.resize(
+              (
+                  W,
+                  H
+              ),
+              Image.Resampling.LANCZOS
+          )
+
+
+          # ========================================================
+          # DARKEN
+          # ========================================================
+
+          overlay = Image.new(
+              "RGBA",
+              (
+                  W,
+                  H
+              ),
+              (
+                  0,
+                  0,
+                  0,
+                  115
+              )
+          )
+
+
+          image = Image.alpha_composite(
+              image.convert("RGBA"),
+              overlay
+          )
+
+
+          draw = ImageDraw.Draw(
+              image
+          )
+
+
+          # ========================================================
+          # FONT
+          # ========================================================
+
+          fonts = [
+              "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+              "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+          ]
+
+
+          font_path = None
+
+          for path in fonts:
+
+              if os.path.exists(path):
+
+                  font_path = path
+
+                  break
+
+
+          if not font_path:
+
+              raise SystemExit(
+                  "Japanese font not found."
+              )
+
+
+          font = ImageFont.truetype(
+              font_path,
+              70
+          )
+
+
+          small_font = ImageFont.truetype(
+              font_path,
+              34
+          )
+
+
+          # ========================================================
+          # WRAP
+          # ========================================================
+
+          lines = []
+
+          current = ""
+
+          max_width = 1080
+
+
+          for char in thumbnail_text:
+
+              test = (
+                  current
+                  + char
+              )
+
+              bbox = draw.textbbox(
+                  (
+                      0,
+                      0
+                  ),
+                  test,
+                  font=font
+              )
+
+              width = (
+                  bbox[2]
+                  - bbox[0]
+              )
+
+
+              if (
+                  width > max_width
+                  and current
+              ):
+
+                  lines.append(
+                      current
+                  )
+
+                  current = char
+
+              else:
+
+                  current = test
+
+
+          if current:
+
+              lines.append(
+                  current
+              )
+
+
+          # ========================================================
+          # MAIN TEXT
+          # ========================================================
+
+          line_height = 95
+
+          total_height = (
+              len(lines)
+              * line_height
+          )
+
+          start_y = (
+              H / 2
+              - total_height / 2
+          )
+
+
+          for i, line in enumerate(lines):
+
+              bbox = draw.textbbox(
+                  (
+                      0,
+                      0
+                  ),
+                  line,
+                  font=font
+              )
+
+              text_w = (
+                  bbox[2]
+                  - bbox[0]
+              )
+
+              x = (
+                  W - text_w
+              ) / 2
+
+              y = (
+                  start_y
+                  + i * line_height
+              )
+
+
+              # Shadow
+
+              draw.text(
+                  (
+                      x + 6,
+                      y + 6
+                  ),
+                  line,
+                  font=font,
+                  fill=(0, 0, 0),
+                  stroke_width=8,
+                  stroke_fill=(0, 0, 0)
+              )
+
+
+              # Main
+
+              draw.text(
+                  (
+                      x,
+                      y
+                  ),
+                  line,
+                  font=font,
+                  fill=(255, 255, 255),
+                  stroke_width=4,
+                  stroke_fill=(0, 0, 0)
+              )
+
+
+          # ========================================================
+          # LABEL
+          # ========================================================
+
+          label = "5分で楽しめる雑学"
+
+
+          bbox = draw.textbbox(
+              (
+                  0,
+                  0
+              ),
+              label,
+              font=small_font
+          )
+
+
+          label_w = (
+              bbox[2]
+              - bbox[0]
+          )
+
+
+          draw.text(
+              (
+                  (W - label_w) / 2,
+                  610
+              ),
+              label,
+              font=small_font,
+              fill=(255, 255, 255),
+              stroke_width=2,
+              stroke_fill=(0, 0, 0)
+          )
+
+
+          # ========================================================
+          # SAVE
+          # ========================================================
+
+          quality = 90
+
+
+          while quality >= 50:
+
+              image.convert(
+                  "RGB"
+              ).save(
+                  "thumbnail.jpg",
+                  "JPEG",
+                  quality=quality,
+                  optimize=True
+              )
+
+
+              size = os.path.getsize(
+                  "thumbnail.jpg"
+              )
+
+
+              print(
+                  "THUMBNAIL:",
+                  size,
+                  "bytes",
+                  "QUALITY:",
+                  quality
+              )
+
+
+              if size <= 1900000:
+
+                  break
+
+
+              quality -= 5
+
+
+          print(
+              "THUMBNAIL CREATED"
+          )
+
+
+          PY
+
+
+          python create_thumbnail.py
+
+          ls -lh thumbnail.jpg
 
 
       # ============================================================
@@ -1756,7 +2103,7 @@ jobs:
 
 
       # ============================================================
-      # YOUTUBE UPLOAD
+      # YOUTUBE UPLOAD + THUMBNAIL
       # ============================================================
 
       - name: Upload to YouTube
@@ -1768,6 +2115,7 @@ jobs:
 
           cat > upload_youtube.py <<'PY'
 
+          import json
           import os
           import sys
 
@@ -1792,6 +2140,10 @@ jobs:
           )
 
 
+          # ========================================================
+          # CHECK SECRETS
+          # ========================================================
+
           if not all([
               CLIENT_ID,
               CLIENT_SECRET,
@@ -1805,15 +2157,17 @@ jobs:
               sys.exit(0)
 
 
+          # ========================================================
+          # LOAD CONTENT
+          # ========================================================
+
           with open(
               "segments.json",
               "r",
               encoding="utf-8"
           ) as f:
 
-              data = __import__(
-                  "json"
-              ).load(f)
+              data = json.load(f)
 
 
           title = data["title"]
@@ -1821,10 +2175,16 @@ jobs:
           description = data["description"]
 
 
+          # ========================================================
+          # AUTH
+          # ========================================================
+
           creds = Credentials(
               None,
               refresh_token=REFRESH_TOKEN,
-              token_uri="https://oauth2.googleapis.com/token",
+              token_uri=(
+                  "https://oauth2.googleapis.com/token"
+              ),
               client_id=CLIENT_ID,
               client_secret=CLIENT_SECRET,
               scopes=[
@@ -1845,6 +2205,10 @@ jobs:
           )
 
 
+          # ========================================================
+          # VIDEO BODY
+          # ========================================================
+
           body = {
 
               "snippet": {
@@ -1862,8 +2226,8 @@ jobs:
                       "モチベーション",
                       "人生",
                       "5分",
-                      "short trivia",
-                      "knowledge"
+                      "知識",
+                      "トリビア"
                   ]
 
               },
@@ -1878,6 +2242,10 @@ jobs:
 
           }
 
+
+          # ========================================================
+          # VIDEO UPLOAD
+          # ========================================================
 
           media = MediaFileUpload(
               "trivia_video.mp4",
@@ -1897,11 +2265,13 @@ jobs:
 
               response = None
 
+
               while response is None:
 
                   status, response = (
                       request.next_chunk()
                   )
+
 
                   if status:
 
@@ -1915,6 +2285,11 @@ jobs:
                       )
 
 
+              video_id = response.get(
+                  "id"
+              )
+
+
               print(
                   "================================"
               )
@@ -1925,7 +2300,46 @@ jobs:
 
               print(
                   "VIDEO ID:",
-                  response.get("id")
+                  video_id
+              )
+
+              print(
+                  "================================"
+              )
+
+
+              # ====================================================
+              # SET THUMBNAIL
+              # ====================================================
+
+              print(
+                  "SETTING AUTOMATIC THUMBNAIL..."
+              )
+
+
+              thumbnail_media = MediaFileUpload(
+                  "thumbnail.jpg",
+                  mimetype="image/jpeg"
+              )
+
+
+              youtube.thumbnails().set(
+                  videoId=video_id,
+                  media_body=thumbnail_media
+              ).execute()
+
+
+              print(
+                  "================================"
+              )
+
+              print(
+                  "THUMBNAIL SET SUCCESS"
+              )
+
+              print(
+                  "VIDEO ID:",
+                  video_id
               )
 
               print(
@@ -1937,11 +2351,15 @@ jobs:
 
               error_text = str(e)
 
+
               print(
-                  "YOUTUBE UPLOAD ERROR:"
+                  "YOUTUBE ERROR:"
               )
 
-              print(error_text)
+              print(
+                  error_text
+              )
+
 
               if (
                   "uploadLimitExceeded"
@@ -1953,11 +2371,32 @@ jobs:
                   )
 
                   print(
-                      "The generated video is still saved "
-                      "as a GitHub Actions artifact."
+                      "Video was generated successfully."
                   )
 
                   sys.exit(0)
+
+
+              # ----------------------------------------------------
+              # Thumbnail-only failure should not erase
+              # successful video upload.
+              # ----------------------------------------------------
+
+              if (
+                  "thumbnails.set"
+                  in error_text
+              ):
+
+                  print(
+                      "VIDEO UPLOAD SUCCEEDED,"
+                  )
+
+                  print(
+                      "BUT THUMBNAIL SET FAILED."
+                  )
+
+                  sys.exit(0)
+
 
               raise
 
