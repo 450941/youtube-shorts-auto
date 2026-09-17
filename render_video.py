@@ -9,23 +9,25 @@ from urllib.parse import quote_plus, urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
-from PIL import Image, ImageOps, ImageFilter
+from PIL import Image, ImageFilter
 
 # ============================================================
-# CONFIG
+# SETTINGS
 # ============================================================
 
-WIDTH = 1080
-HEIGHT = 1920
+WIDTH = 1920
+HEIGHT = 1080
 FPS = 30
 
 VOICE = "ja-JP-NanamiNeural"
-VOICE_RATE = "+6%"
+VOICE_RATE = "+5%"
 
-MAX_FACTS = 10
-IMAGES_PER_FACT = 2
+FACT_COUNT = 15
 
-BG_COLOR = (247, 243, 235)
+# いらすとやの使用素材数を最大20種類に抑える
+MAX_UNIQUE_IMAGES = 20
+
+BGM_VOLUME = 0.035
 
 IMAGE_DIR = Path("media/images")
 VOICE_DIR = Path("media/voice")
@@ -33,165 +35,283 @@ CUT_DIR = Path("media/cuts")
 SUB_DIR = Path("media/subtitles")
 OUTPUT_DIR = Path("output")
 
-for p in [IMAGE_DIR, VOICE_DIR, CUT_DIR, SUB_DIR, OUTPUT_DIR]:
-    p.mkdir(parents=True, exist_ok=True)
+for folder in [
+    IMAGE_DIR,
+    VOICE_DIR,
+    CUT_DIR,
+    SUB_DIR,
+    OUTPUT_DIR,
+]:
+    folder.mkdir(parents=True, exist_ok=True)
 
 session = requests.Session()
+
 session.headers.update({
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) "
-        "AppleWebKit/537.36 Chrome/126 Safari/537.36"
-    )
+    "User-Agent":
+        "Mozilla/5.0 "
+        "(X11; Linux x86_64) "
+        "AppleWebKit/537.36 "
+        "Chrome/126 Safari/537.36"
 })
 
+
 # ============================================================
-# FACT DATA
+# FACTS
 # ============================================================
 
 FACTS = [
+
     {
         "title": "なぜ人は他人の目が気になる？",
         "hook": "人に見られている気がして、つい気にしてしまうことありませんか？",
         "answer": "実は人間の脳は、自分が思っている以上に他人から見られていると思いやすいんです。",
-        "reason": "心理学では、実際よりも自分の存在や行動が周囲から注目されていると感じる現象が知られています。",
-        "punch": "つまり、あなたが思っているほど、周りはあなたを見ていないかもしれません。",
-        "keywords": ["人", "見る", "考える", "悩む"]
+        "reason": "自分の行動を周囲がどのように見ているかを考えることで、人間関係を保とうとする働きが関係しています。",
+        "punch": "つまり、あなたが思っているほど周りはあなたを見ていないかもしれません。",
+        "scenes": [
+            ["人", "見られる", "視線", "注目"],
+            ["悩む", "考える", "緊張", "人"],
+            ["周りを見る", "人", "見る"]
+        ]
     },
+
     {
         "title": "なぜあくびはうつる？",
         "hook": "誰かがあくびをすると、自分まであくびをしたくなりませんか？",
         "answer": "あくびがうつる現象には、他人の行動を無意識に読み取る脳の働きが関係していると考えられています。",
         "reason": "人は周囲の表情や動きを自然にまねる傾向があり、あくびでも同じような反応が起きることがあります。",
         "punch": "だから、この記事を読んでいる今、あくびした人はちょっと危険です。",
-        "keywords": ["あくび", "眠い", "人", "顔"]
+        "scenes": [
+            ["あくび", "眠い", "眠る"],
+            ["人", "あくび", "顔"],
+            ["眠い", "人", "寝る"]
+        ]
     },
+
     {
         "title": "なぜ昔の恥ずかしい記憶を思い出す？",
         "hook": "寝る前に突然、昔の恥ずかしい記憶が蘇ることありませんか？",
         "answer": "強い感情を伴った出来事は、普通の出来事より記憶に残りやすいからです。",
         "reason": "特に恥ずかしさや不安などの感情は、その出来事を重要な情報として脳に残しやすくします。",
         "punch": "数年前の自分から突然ダメージを受けるのは、このせいかもしれません。",
-        "keywords": ["恥ずかしい", "思い出す", "悩む", "人"]
+        "scenes": [
+            ["恥ずかしい", "顔を隠す", "人"],
+            ["思い出す", "考える", "悩む"],
+            ["寝る", "考える", "布団"]
+        ]
     },
+
     {
-        "title": "なぜスマホを触ると時間が早い？",
+        "title": "なぜスマホを見ると時間が早い？",
         "hook": "少しだけスマホを見るつもりが、気づいたら30分経っていたことありませんか？",
         "answer": "スマホには次々と新しい刺激が入ってくるため、時間そのものへの注意がそれやすくなります。",
-        "reason": "短い動画や通知など、変化のある情報が連続すると、時間を細かく意識しにくくなります。",
+        "reason": "短い動画や通知など、変化のある情報が連続すると時間を細かく意識しにくくなります。",
         "punch": "5分だけのつもりが、気づけば夜。スマホあるあるです。",
-        "keywords": ["スマホ", "見る", "驚く", "人"]
+        "scenes": [
+            ["スマホ", "見る", "携帯電話"],
+            ["スマホ", "夢中", "人"],
+            ["時計", "時間", "驚く"]
+        ]
     },
+
     {
         "title": "なぜ好きな曲は何度も聴きたくなる？",
         "hook": "同じ曲を何十回も聴いてしまったことありませんか？",
         "answer": "好きな音楽を聴くと、脳の報酬系が刺激されることがあります。",
         "reason": "さらに曲の展開を知っていることで、次に何が来るか予測する楽しさも生まれます。",
         "punch": "だからお気に入りの曲は、何回聴いても飽きにくいんです。",
-        "keywords": ["音楽", "聞く", "楽しい", "人"]
+        "scenes": [
+            ["音楽", "聞く", "イヤホン"],
+            ["歌う", "音楽", "楽しい"],
+            ["イヤホン", "スマホ", "音楽"]
+        ]
     },
+
     {
         "title": "なぜ寝る前に色々考えてしまう？",
         "hook": "布団に入った瞬間、急に色々なことを考え始めませんか？",
         "answer": "日中は仕事やスマホなどに注意が向いていますが、静かになると頭の中の考えに意識が向きやすくなります。",
         "reason": "周囲からの刺激が減ることで、未処理の考えや明日の予定などが浮かびやすくなるんです。",
         "punch": "布団に入ってから脳だけが元気になるのは、珍しいことではありません。",
-        "keywords": ["寝る", "考える", "布団", "悩む"]
+        "scenes": [
+            ["布団", "寝る", "人"],
+            ["考える", "悩む", "人"],
+            ["夜", "寝る", "時計"]
+        ]
     },
+
     {
         "title": "なぜ初対面の印象は強く残る？",
         "hook": "初めて会った人の印象って、意外と覚えていませんか？",
         "answer": "人間は最初に得た情報を、その後の判断の基準にしやすい傾向があります。",
-        "reason": "最初の表情や話し方、服装などから相手について素早く判断しようとするためです。",
+        "reason": "最初の表情や話し方などから、相手について素早く判断しようとするためです。",
         "punch": "最初の数秒が意外と記憶に残る理由はここにあります。",
-        "keywords": ["初対面", "人", "話す", "笑う"]
+        "scenes": [
+            ["初対面", "人", "挨拶"],
+            ["話す", "人", "会話"],
+            ["笑う", "人", "笑顔"]
+        ]
     },
+
     {
         "title": "なぜ名前が出てこない？",
         "hook": "顔は分かるのに、名前だけ出てこないことありませんか？",
         "answer": "記憶そのものが消えたというより、保存された情報をうまく取り出せない場合があります。",
         "reason": "名前と顔の情報が別々に処理されることもあり、知っているのに言葉だけ出てこない状態が起こります。",
         "punch": "だから名前が出てこなくても、記憶力が悪いとは限りません。",
-        "keywords": ["名前", "忘れる", "人", "考える"]
+        "scenes": [
+            ["名前", "人", "考える"],
+            ["忘れる", "悩む", "人"],
+            ["思い出す", "考える", "人"]
+        ]
     },
+
     {
         "title": "なぜ他人の失敗は覚えている？",
         "hook": "自分の失敗は忘れたいのに、他人の失敗は妙に覚えていませんか？",
         "answer": "他人の行動は自分にとって重要な情報として記憶されることがあります。",
         "reason": "同じ失敗を避けるために、他人の行動を観察して学習する働きがあるからです。",
         "punch": "つまり、人の失敗を覚えてしまう脳にも理由があるんです。",
-        "keywords": ["人", "失敗", "見る", "考える"]
+        "scenes": [
+            ["失敗", "人", "困る"],
+            ["見る", "人", "注目"],
+            ["考える", "人", "悩む"]
+        ]
     },
+
     {
         "title": "なぜ休日は一瞬で終わる？",
         "hook": "休みの日って、平日より時間が早く感じませんか？",
         "answer": "楽しい時間や刺激の多い時間は、あとから振り返ると短く感じられることがあります。",
-        "reason": "一方で新しい体験が多いと、記憶にはたくさんの出来事が残り、時間感覚が変わることもあります。",
+        "reason": "楽しいことに集中していると、時計を意識する時間が少なくなるからです。",
         "punch": "楽しい時間だけ一瞬なの、ちょっとずるいですよね。",
-        "keywords": ["休日", "楽しい", "時間", "人"]
+        "scenes": [
+            ["休日", "休む", "人"],
+            ["楽しい", "笑う", "人"],
+            ["時計", "時間", "驚く"]
+        ]
     },
+
     {
         "title": "なぜ炭酸を飲むとスッキリする？",
         "hook": "疲れたときに炭酸飲料を飲むとスッキリしませんか？",
         "answer": "炭酸の刺激が口や喉に伝わることで、強い感覚刺激として感じられます。",
         "reason": "冷たさや酸味などが組み合わさることで、爽快感として感じやすくなります。",
         "punch": "あのシュワシュワ感、ちゃんと刺激だったんです。",
-        "keywords": ["炭酸", "飲む", "笑う", "人"]
+        "scenes": [
+            ["炭酸飲料", "飲み物", "ジュース"],
+            ["飲む", "コップ", "飲み物"],
+            ["スッキリ", "飲む", "人"]
+        ]
     },
+
     {
         "title": "なぜ辛いものを食べたくなる？",
         "hook": "辛いものが苦手なのに、なぜかまた食べたくなることありませんか？",
         "answer": "辛さによる強い刺激のあとに、爽快感や満足感を感じる人がいます。",
-        "reason": "唐辛子の辛味成分は痛みに近い刺激として感じられ、その刺激への反応が独特の快感につながることがあります。",
+        "reason": "唐辛子の辛味成分は痛みに近い刺激として感じられ、その刺激への反応が独特の感覚につながります。",
         "punch": "辛いのにもう一口。これにはちゃんと理由があります。",
-        "keywords": ["辛い", "食べる", "驚く", "人"]
+        "scenes": [
+            ["辛い", "唐辛子", "食べる"],
+            ["辛いもの", "料理", "食事"],
+            ["水を飲む", "飲む", "辛い"]
+        ]
     },
+
     {
         "title": "なぜ物を探すと見つからない？",
         "hook": "目の前にあるのに、探している物が見つからないことありませんか？",
         "answer": "探すことに集中しすぎると、目に入っている情報を正しく認識できないことがあります。",
         "reason": "脳は必要な情報を優先して処理するため、探している物以外の情報を無視しやすくなります。",
         "punch": "そして誰かに『そこにあるよ』と言われた瞬間、急に見えるんです。",
-        "keywords": ["探す", "見つける", "人", "驚く"]
+        "scenes": [
+            ["探す", "探し物", "人"],
+            ["見つからない", "困る", "人"],
+            ["見つける", "驚く", "人"]
+        ]
     },
+
     {
         "title": "なぜ応援されると頑張れる？",
         "hook": "誰かに『頑張って』と言われるだけで、少し元気になることありませんか？",
         "answer": "人は自分が誰かに支えられていると感じることで、心理的な負担が軽くなることがあります。",
         "reason": "一人で抱えている感覚が減ると、行動を続ける力につながることがあります。",
         "punch": "たった一言が、人を動かすことって本当にあります。",
-        "keywords": ["応援", "頑張る", "人", "笑う"]
+        "scenes": [
+            ["応援", "人", "頑張る"],
+            ["励ます", "話す", "人"],
+            ["笑顔", "人", "応援"]
+        ]
     },
+
+    {
+        "title": "なぜ返信を待つと長く感じる？",
+        "hook": "メッセージを送ったあと、返信が来るまでが妙に長く感じませんか？",
+        "answer": "気になっている出来事には注意が向きやすく、時間を強く意識しやすくなります。",
+        "reason": "スマホを何度も確認すると、そのたびに『まだ来ていない』と時間を意識することになります。",
+        "punch": "1分が長い。返信待ちのときだけ時間が別人になります。",
+        "scenes": [
+            ["スマホ", "メッセージ", "見る"],
+            ["返信", "待つ", "人"],
+            ["スマホ", "時計", "悩む"]
+        ]
+    },
+
+    {
+        "title": "なぜあと5分だけ寝たくなる？",
+        "hook": "朝、あと5分だけ……と思ったことありませんか？",
+        "answer": "眠気が残った状態では、起きることより眠りを続けることが魅力的に感じられます。",
+        "reason": "睡眠不足や睡眠の途中で起きた状態では、脳がまだ休息を求めている場合があります。",
+        "punch": "そして『あと5分』が30分になる。朝の5分は信用できません。",
+        "scenes": [
+            ["目覚まし", "朝", "寝る"],
+            ["布団", "眠い", "人"],
+            ["時計", "驚く", "朝"]
+        ]
+    },
+
 ]
 
+
 # ============================================================
-# COMMAND
+# HELPERS
 # ============================================================
 
 def run(cmd):
     print("\n$", " ".join(map(str, cmd)))
-    subprocess.run(cmd, check=True)
+
+    subprocess.run(
+        cmd,
+        check=True
+    )
 
 
-def duration(path):
+def probe_duration(path):
     result = subprocess.run(
         [
-            "ffprobe", "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            str(path)
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(path),
         ],
         capture_output=True,
         text=True,
-        check=True
+        check=True,
     )
-    return float(result.stdout.strip())
+
+    return float(
+        result.stdout.strip()
+    )
 
 
 # ============================================================
-# IRASUTOYA
+# IRASUTOYA SEARCH
 # ============================================================
 
-ALLOWED_IMAGE_HOSTS = {
+ALLOWED_HOSTS = {
     "blogger.googleusercontent.com",
     "bp.blogspot.com",
     "www.irasutoya.com",
@@ -205,601 +325,1141 @@ def valid_image_url(url):
 
     try:
         host = urlparse(url).hostname
+
         if not host:
             return False
 
-        return (
-            host in ALLOWED_IMAGE_HOSTS
-            and url.lower().split("?")[0].endswith(
-                (".png", ".jpg", ".jpeg", ".webp")
+        if host not in ALLOWED_HOSTS:
+            return False
+
+        return bool(
+            re.search(
+                r"\.(png|jpg|jpeg|webp)(\?.*)?$",
+                url,
+                re.I,
             )
         )
+
     except Exception:
         return False
 
 
-def extract_image_from_page(page_url):
+def get_page_image(page_url):
+
     try:
-        r = session.get(page_url, timeout=20)
-        r.raise_for_status()
+        response = session.get(
+            page_url,
+            timeout=20,
+        )
 
-        soup = BeautifulSoup(r.text, "html.parser")
+        response.raise_for_status()
 
-        og = soup.find("meta", property="og:image")
-        if og and og.get("content"):
-            image_url = urljoin(page_url, og["content"])
+        soup = BeautifulSoup(
+            response.text,
+            "html.parser",
+        )
+
+        og = soup.find(
+            "meta",
+            property="og:image",
+        )
+
+        if og:
+            image_url = og.get("content")
+
+            image_url = urljoin(
+                page_url,
+                image_url,
+            )
+
             if valid_image_url(image_url):
                 return image_url
 
         candidates = []
 
-        for img in soup.find_all("img"):
-            src = img.get("src") or img.get("data-src")
-            if not src:
-                continue
+        for img in soup.find_all(
+            "img",
+            src=True,
+        ):
 
-            src = urljoin(page_url, src)
+            src = urljoin(
+                page_url,
+                img["src"],
+            )
 
             if not valid_image_url(src):
                 continue
 
-            width = img.get("width", "0")
-            height = img.get("height", "0")
+            width = 0
+            height = 0
 
             try:
-                score = int(width) * int(height)
-            except Exception:
-                score = 0
+                width = int(
+                    re.sub(
+                        r"\D",
+                        "",
+                        img.get("width", "0"),
+                    ) or 0
+                )
 
-            candidates.append((score, src))
+                height = int(
+                    re.sub(
+                        r"\D",
+                        "",
+                        img.get("height", "0"),
+                    ) or 0
+                )
+
+            except Exception:
+                pass
+
+            score = width * height
+
+            candidates.append(
+                (score, src)
+            )
+
+        candidates.sort(
+            reverse=True
+        )
 
         if candidates:
-            candidates.sort(reverse=True)
             return candidates[0][1]
 
     except Exception as e:
-        print("image extraction failed:", e)
+        print(
+            "page image error:",
+            e
+        )
 
     return None
 
 
 def search_irasutoya(term):
-    print("Irasutoya search:", term)
 
-    url = (
+    print(
+        "Searching:",
+        term
+    )
+
+    search_url = (
         "https://www.irasutoya.com/search?q="
         + quote_plus(term)
     )
 
     try:
-        r = session.get(url, timeout=20)
-        r.raise_for_status()
+        response = session.get(
+            search_url,
+            timeout=20,
+        )
 
-        soup = BeautifulSoup(r.text, "html.parser")
+        response.raise_for_status()
+
+        soup = BeautifulSoup(
+            response.text,
+            "html.parser",
+        )
 
         pages = []
 
-        for a in soup.find_all("a", href=True):
-            href = urljoin(url, a["href"])
+        for a in soup.find_all(
+            "a",
+            href=True,
+        ):
+
+            href = urljoin(
+                search_url,
+                a["href"],
+            )
 
             if "irasutoya.com" not in href:
                 continue
 
-            if not re.search(r"/20\d{2}/", href):
+            if not re.search(
+                r"/20\d{2}/",
+                href,
+            ):
                 continue
 
             if href not in pages:
                 pages.append(href)
 
-        for page in pages[:12]:
-            image_url = extract_image_from_page(page)
+        for page in pages[:15]:
+
+            image_url = get_page_image(
+                page
+            )
 
             if image_url:
                 return {
-                    "term": term,
                     "page": page,
-                    "image": image_url
+                    "image": image_url,
+                    "term": term,
                 }
 
     except Exception as e:
-        print("Irasutoya search failed:", e)
+        print(
+            "search error:",
+            e
+        )
 
     return None
 
 
-def download_image(item, index):
+# ============================================================
+# IMAGE QUALITY
+# ============================================================
+
+def inspect_image(path):
+
     try:
-        r = session.get(item["image"], timeout=30)
-        r.raise_for_status()
+        image = Image.open(path)
 
-        path = IMAGE_DIR / f"image_{index:03d}.png"
+        width, height = image.size
 
-        with open(path, "wb") as f:
-            f.write(r.content)
+        if width < 150 or height < 150:
+            return False
 
-        im = Image.open(path).convert("RGBA")
+        # 極端に細長い素材は避ける
+        ratio = width / height
 
-        if im.width < 100 or im.height < 100:
+        if ratio < 0.12:
+            return False
+
+        if ratio > 8.0:
+            return False
+
+        return True
+
+    except Exception:
+        return False
+
+
+def download_image(item, index):
+
+    path = (
+        IMAGE_DIR
+        / f"source_{index:02d}.png"
+    )
+
+    try:
+
+        response = session.get(
+            item["image"],
+            timeout=30,
+        )
+
+        response.raise_for_status()
+
+        with open(
+            path,
+            "wb",
+        ) as f:
+            f.write(
+                response.content
+            )
+
+        image = Image.open(
+            path
+        ).convert("RGBA")
+
+        image.save(path)
+
+        if not inspect_image(path):
+            path.unlink(
+                missing_ok=True
+            )
             return None
-
-        im.save(path)
 
         return path
 
     except Exception as e:
-        print("download failed:", e)
+
+        print(
+            "download error:",
+            e
+        )
+
+        path.unlink(
+            missing_ok=True
+        )
+
         return None
 
 
-def get_images_for_fact(fact, fact_index):
-    results = []
+# ============================================================
+# IMAGE LIBRARY
+# ============================================================
 
-    for keyword in fact["keywords"]:
-        if len(results) >= IMAGES_PER_FACT:
-            break
+class ImageLibrary:
 
-        item = search_irasutoya(keyword)
+    def __init__(self):
+        self.items = []
+        self.by_term = {}
 
-        if not item:
-            continue
+    def find(self, term):
 
-        if any(x["image"] == item["image"] for x in results):
-            continue
+        for item in self.items:
 
-        path = download_image(
-            item,
-            fact_index * 10 + len(results)
+            if item["term"] == term:
+                return item
+
+        return None
+
+    def search(self, term):
+
+        existing = self.find(term)
+
+        if existing:
+            return existing
+
+        if len(self.items) >= MAX_UNIQUE_IMAGES:
+            return None
+
+        result = search_irasutoya(
+            term
         )
 
-        if path:
-            results.append({
-                "path": path,
-                "term": keyword,
-                "page": item["page"],
-                "image": item["image"]
-            })
+        if not result:
+            return None
 
-    return results
+        # 同一画像を重複登録しない
+        for item in self.items:
+
+            if item["url"] == result["image"]:
+                return item
+
+        path = download_image(
+            result,
+            len(self.items),
+        )
+
+        if not path:
+            return None
+
+        item = {
+            "term": term,
+            "url": result["image"],
+            "page": result["page"],
+            "path": path,
+        }
+
+        self.items.append(
+            item
+        )
+
+        return item
+
+
+library = ImageLibrary()
+
+
+def get_scene_images(scene_terms):
+
+    # 優先順位順に探す
+    for term in scene_terms:
+
+        result = library.search(
+            term
+        )
+
+        if result:
+            return result
+
+    return None
 
 
 # ============================================================
-# IMAGE PROCESSING
+# IMAGE FIT
 # ============================================================
 
-def make_visual(src, out_path, seed):
-    random.seed(seed)
+def make_background():
 
-    canvas = Image.new(
+    image = Image.new(
         "RGB",
         (WIDTH, HEIGHT),
-        BG_COLOR
+        (248, 245, 239),
     )
 
-    img = Image.open(src).convert("RGBA")
+    return image
 
-    # 少し柔らかく
-    if img.width > 1600 or img.height > 1600:
-        img.thumbnail((1500, 1500), Image.Resampling.LANCZOS)
 
-    max_w = 900
-    max_h = 1350
+def fit_full_image(
+    source_path,
+    output_path,
+    variant,
+):
 
-    scale = min(
-        max_w / img.width,
-        max_h / img.height,
-        1.0
+    source = Image.open(
+        source_path
+    ).convert("RGBA")
+
+    # 元画像を絶対にcropしない
+    source.thumbnail(
+        (1450, 820),
+        Image.Resampling.LANCZOS,
     )
 
-    nw = max(1, int(img.width * scale))
-    nh = max(1, int(img.height * scale))
-
-    img = img.resize(
-        (nw, nh),
-        Image.Resampling.LANCZOS
-    )
+    canvas = make_background()
 
     # 影
     shadow = Image.new(
         "RGBA",
-        (nw + 50, nh + 50),
-        (0, 0, 0, 0)
+        (
+            source.width + 50,
+            source.height + 50,
+        ),
+        (0, 0, 0, 0),
     )
 
-    alpha = img.getchannel("A")
-
-    shadow_alpha = Image.new(
-        "L",
-        alpha.size,
-        0
+    alpha = source.getchannel(
+        "A"
     )
 
-    shadow_alpha.paste(
-        alpha,
-        (18, 18)
-    )
-
-    shadow_alpha = shadow_alpha.filter(
-        ImageFilter.GaussianBlur(15)
+    blurred = alpha.filter(
+        ImageFilter.GaussianBlur(12)
     )
 
     shadow.paste(
-        (0, 0, 0, 60),
-        (0, 0),
-        shadow_alpha
+        (0, 0, 0, 45),
+        (18, 18),
+        blurred,
     )
 
-    x = (WIDTH - nw) // 2
-    y = 360 + random.randint(-80, 80)
+    x = (
+        WIDTH - shadow.width
+    ) // 2
+
+    # 場面ごとに少し位置を変える
+    y_base = (
+        HEIGHT
+        - source.height
+    ) // 2
+
+    offsets = [
+        -20,
+        10,
+        35,
+        -5,
+    ]
+
+    y = y_base + offsets[
+        variant % len(offsets)
+    ]
 
     canvas.paste(
         shadow,
-        (x - 25, y - 25),
-        shadow
+        (x, y),
+        shadow,
     )
 
+    x2 = (
+        WIDTH - source.width
+    ) // 2
+
+    y2 = y_base + offsets[
+        variant % len(offsets)
+    ]
+
     canvas.paste(
-        img,
-        (x, y),
-        img
+        source,
+        (x2, y2),
+        source,
     )
 
     canvas.save(
-        out_path,
-        quality=95
+        output_path,
+        quality=95,
     )
-
-
-# ============================================================
-# TEXT / SUBTITLE
-# ============================================================
-
-def clean_text(text):
-    text = re.sub(r"\s+", "", text)
-    return text.strip()
-
-
-def split_subtitle(text):
-    text = clean_text(text)
-
-    if len(text) <= 18:
-        return text
-
-    if "。" in text:
-        parts = text.split("。")
-        parts = [x for x in parts if x]
-
-        if len(parts) >= 2:
-            return "\n".join(parts[:2])
-
-    mid = len(text) // 2
-
-    return (
-        text[:mid]
-        + "\n"
-        + text[mid:]
-    )
-
-
-def ass_time(seconds):
-    cs = int(round(seconds * 100))
-    h = cs // 360000
-    cs %= 360000
-    m = cs // 6000
-    cs %= 6000
-    s = cs // 100
-    cs %= 100
-
-    return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
-
-
-def write_ass(segments):
-    lines = [
-        "[Script Info]",
-        "ScriptType: v4.00+",
-        "PlayResX: 1080",
-        "PlayResY: 1920",
-        "",
-        "[V4+ Styles]",
-        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        "Style: Main,Noto Sans CJK JP,55,&H00FFF9EF,&H00FFF9EF,&H66000000,&H00000000,0,0,0,0,100,100,0,0,1,2,1,2,80,80,170,1",
-        "",
-        "[Events]",
-        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
-    ]
-
-    for seg in segments:
-        start = seg["start"]
-        end = seg["end"]
-        text = split_subtitle(seg["text"])
-
-        lines.append(
-            f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Main,,0,0,0,,{text}"
-        )
-
-    path = SUB_DIR / "main.ass"
-
-    path.write_text(
-        "\n".join(lines),
-        encoding="utf-8"
-    )
-
-    return path
 
 
 # ============================================================
 # TTS
 # ============================================================
 
-async def tts(text, output):
+async def generate_tts(
+    text,
+    output_path,
+):
+
     import edge_tts
 
-    communicate = edge_tts.Communicate(
+    voice = edge_tts.Communicate(
         text,
         VOICE,
-        rate=VOICE_RATE
+        rate=VOICE_RATE,
     )
 
-    await communicate.save(str(output))
+    await voice.save(
+        str(output_path)
+    )
 
 
-def make_voice(text, index):
-    path = VOICE_DIR / f"voice_{index:03d}.mp3"
+def make_voice(
+    text,
+    index,
+):
+
+    path = (
+        VOICE_DIR
+        / f"voice_{index:03d}.mp3"
+    )
 
     if not path.exists():
+
         import asyncio
-        asyncio.run(tts(text, path))
+
+        asyncio.run(
+            generate_tts(
+                text,
+                path,
+            )
+        )
 
     return path
 
 
 # ============================================================
-# VIDEO SEGMENTS
+# SUBTITLE
 # ============================================================
 
-def create_segment(image, voice, output):
-    d = duration(voice)
+def clean_text(text):
 
-    if d < 0.4:
-        d = 0.4
+    return re.sub(
+        r"\s+",
+        "",
+        text,
+    ).strip()
+
+
+def split_subtitle(text):
+
+    text = clean_text(
+        text
+    )
+
+    if len(text) <= 22:
+        return text
+
+    # 句読点で優先的に改行
+    punctuation = [
+        "。",
+        "？",
+        "！",
+        "、",
+    ]
+
+    for mark in punctuation:
+
+        position = text.find(
+            mark,
+            8,
+        )
+
+        if 8 <= position <= 24:
+
+            return (
+                text[:position + 1]
+                + "\\N"
+                + text[position + 1:]
+            )
+
+    mid = len(text) // 2
+
+    return (
+        text[:mid]
+        + "\\N"
+        + text[mid:]
+    )
+
+
+def ass_time(seconds):
+
+    total = int(
+        round(
+            seconds * 100
+        )
+    )
+
+    hour = total // 360000
+
+    total %= 360000
+
+    minute = total // 6000
+
+    total %= 6000
+
+    second = total // 100
+
+    centisecond = total % 100
+
+    return (
+        f"{hour}:"
+        f"{minute:02d}:"
+        f"{second:02d}."
+        f"{centisecond:02d}"
+    )
+
+
+def create_ass(segments):
+
+    lines = [
+
+        "[Script Info]",
+
+        "ScriptType: v4.00+",
+
+        "PlayResX: 1920",
+
+        "PlayResY: 1080",
+
+        "",
+
+        "[V4+ Styles]",
+
+        (
+            "Format: Name, Fontname, Fontsize, "
+            "PrimaryColour, SecondaryColour, "
+            "OutlineColour, BackColour, Bold, "
+            "Italic, Underline, StrikeOut, "
+            "ScaleX, ScaleY, Spacing, Angle, "
+            "BorderStyle, Outline, Shadow, "
+            "Alignment, MarginL, MarginR, "
+            "MarginV, Encoding"
+        ),
+
+        (
+            "Style: Main,"
+            "Noto Sans CJK JP,"
+            "52,"
+            "&H00FFF9EF,"
+            "&H00FFF9EF,"
+            "&H66000000,"
+            "&H00000000,"
+            "0,0,0,0,"
+            "100,100,0,0,"
+            "1,2,1,"
+            "2,80,80,70,1"
+        ),
+
+        "",
+
+        "[Events]",
+
+        (
+            "Format: Layer, Start, End, "
+            "Style, Name, MarginL, "
+            "MarginR, MarginV, Effect, Text"
+        ),
+    ]
+
+    for seg in segments:
+
+        start = ass_time(
+            seg["start"]
+        )
+
+        end = ass_time(
+            seg["end"]
+        )
+
+        text = split_subtitle(
+            seg["text"]
+        )
+
+        lines.append(
+            "Dialogue: 0,"
+            f"{start},"
+            f"{end},"
+            "Main,,0,0,0,,"
+            f"{text}"
+        )
+
+    path = (
+        SUB_DIR
+        / "main.ass"
+    )
+
+    path.write_text(
+        "\n".join(lines),
+        encoding="utf-8",
+    )
+
+    return path
+
+
+# ============================================================
+# VIDEO SEGMENT
+# ============================================================
+
+def create_segment(
+    image,
+    voice,
+    output,
+    variant,
+):
+
+    seconds = probe_duration(
+        voice
+    )
+
+    seconds = max(
+        1.0,
+        seconds,
+    )
+
+    # 16:9
+    # cropしない
+    # 緩やかなズームのみ
+    if variant % 2 == 0:
+
+        zoom = (
+            "zoompan="
+            "z='min(zoom+0.00045,1.06)':"
+            "x='iw/2-(iw/zoom/2)':"
+            "y='ih/2-(ih/zoom/2)':"
+            "d=1:"
+            "s=1920x1080:"
+            "fps=30"
+        )
+
+    else:
+
+        zoom = (
+            "zoompan="
+            "z='if(lte(zoom,1.0),1.06,max(zoom-0.00045,1.0))':"
+            "x='iw/2-(iw/zoom/2)':"
+            "y='ih/2-(ih/zoom/2)':"
+            "d=1:"
+            "s=1920x1080:"
+            "fps=30"
+        )
+
+    vf = (
+        "scale=1920:1080:"
+        "force_original_aspect_ratio=decrease,"
+        "pad=1920:1080:"
+        "(ow-iw)/2:"
+        "(oh-ih)/2:"
+        "color=0xF8F5EF,"
+        + zoom
+    )
 
     run([
         "ffmpeg",
         "-y",
-        "-loop", "1",
-        "-i", str(image),
-        "-t", str(d),
+        "-loop",
+        "1",
+        "-i",
+        str(image),
+        "-t",
+        str(seconds),
         "-vf",
-        (
-            "scale=1080:1920:force_original_aspect_ratio=increase,"
-            "crop=1080:1920,"
-            "zoompan="
-            "z='min(zoom+0.0008,1.08)':"
-            "x='iw/2-(iw/zoom/2)':"
-            "y='ih/2-(ih/zoom/2)':"
-            "d=1:"
-            "s=1080x1920:"
-            "fps=30"
-        ),
+        vf,
         "-an",
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-crf", "24",
-        "-pix_fmt", "yuv420p",
-        str(output)
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "23",
+        "-pix_fmt",
+        "yuv420p",
+        str(output),
     ])
 
-    return d
+    return seconds
 
 
 # ============================================================
-# MAIN RENDER
+# MAIN
 # ============================================================
 
 def main():
+
     random.seed(
-        int(time.time()) ^
-        os.getpid()
+        int(time.time())
+        ^ os.getpid()
     )
 
     facts = random.sample(
         FACTS,
-        min(MAX_FACTS, len(FACTS))
+        FACT_COUNT,
     )
 
-    print("\nSelected facts:")
+    print("")
+    print("====================================")
+    print("15 FACT LONG VIDEO")
+    print("1920x1080")
+    print("====================================")
 
-    for i, fact in enumerate(facts, 1):
-        print(i, fact["title"])
+    for i, fact in enumerate(
+        facts,
+        1,
+    ):
+
+        print(
+            f"{i:02d}.",
+            fact["title"],
+        )
+
+    segments = []
+
+    total_time = 0.0
+
+    segment_index = 0
 
     source_log = []
 
-    all_segments = []
-    total_time = 0.0
+    # ========================================================
+    # GENERATE
+    # ========================================================
 
-    visual_index = 0
+    for fact_index, fact in enumerate(
+        facts
+    ):
 
-    for fact_index, fact in enumerate(facts):
-        print("\n==============================")
-        print("FACT", fact_index + 1)
-        print(fact["title"])
-        print("==============================")
-
-        images = get_images_for_fact(
-            fact,
-            fact_index
+        print("")
+        print(
+            "========== FACT",
+            fact_index + 1,
+            "=========="
         )
-
-        if not images:
-            print("No Irasutoya image found. Skipping fact.")
-            continue
-
-        for item in images:
-            source_log.append({
-                "fact": fact["title"],
-                "search_term": item["term"],
-                "page": item["page"],
-                "image": item["image"]
-            })
 
         texts = [
             fact["hook"],
             fact["answer"],
             fact["reason"],
-            fact["punch"]
+            fact["punch"],
         ]
 
-        for local_index, text in enumerate(texts):
-            voice = make_voice(
-                text,
-                visual_index
+        for scene_index, text in enumerate(
+            texts
+        ):
+
+            scene_terms = fact[
+                "scenes"
+            ][
+                scene_index
+                % len(fact["scenes"])
+            ]
+
+            print(
+                "Scene:",
+                scene_terms,
             )
 
-            prepared = CUT_DIR / (
-                f"visual_{visual_index:03d}.jpg"
+            image_item = get_scene_images(
+                scene_terms
             )
 
-            source_image = images[
-                local_index % len(images)
-            ]["path"]
+            # 見つからなかったら汎用候補
+            if image_item is None:
 
-            make_visual(
-                source_image,
-                prepared,
-                visual_index
-            )
+                fallback_terms = [
+                    "人",
+                    "考える",
+                    "生活",
+                ]
 
-            segment = CUT_DIR / (
-                f"segment_{visual_index:03d}.mp4"
-            )
+                for fallback in fallback_terms:
 
-            d = create_segment(
-                prepared,
-                voice,
-                segment
-            )
+                    image_item = library.search(
+                        fallback
+                    )
 
-            all_segments.append({
-                "video": segment,
-                "audio": voice,
-                "text": text,
-                "duration": d,
-                "start": total_time,
-                "end": total_time + d
+                    if image_item:
+                        break
+
+            if image_item is None:
+
+                raise RuntimeError(
+                    "画像を取得できませんでした: "
+                    + str(scene_terms)
+                )
+
+            source_log.append({
+                "fact": fact["title"],
+                "scene": scene_terms,
+                "used_term": image_item["term"],
+                "page": image_item["page"],
+                "image": image_item["url"],
             })
 
-            total_time += d
-            visual_index += 1
+            # =================================================
+            # IMAGE
+            # =================================================
 
-    if not all_segments:
-        raise RuntimeError(
-            "No video segments were generated."
-        )
+            visual_path = (
+                CUT_DIR
+                / f"visual_{segment_index:03d}.jpg"
+            )
 
-    # subtitles
-    write_ass(all_segments)
+            fit_full_image(
+                image_item["path"],
+                visual_path,
+                segment_index,
+            )
 
-    # concat video
-    video_list = Path("media/video_concat.txt")
+            # =================================================
+            # VOICE
+            # =================================================
 
-    with video_list.open("w", encoding="utf-8") as f:
-        for seg in all_segments:
+            voice_path = make_voice(
+                text,
+                segment_index,
+            )
+
+            # =================================================
+            # VIDEO
+            # =================================================
+
+            segment_path = (
+                CUT_DIR
+                / f"segment_{segment_index:03d}.mp4"
+            )
+
+            seconds = create_segment(
+                visual_path,
+                voice_path,
+                segment_path,
+                segment_index,
+            )
+
+            segments.append({
+                "video": segment_path,
+                "audio": voice_path,
+                "text": text,
+                "start": total_time,
+                "end": total_time + seconds,
+                "duration": seconds,
+            })
+
+            total_time += seconds
+
+            segment_index += 1
+
+    # ========================================================
+    # CONCAT VIDEO
+    # ========================================================
+
+    video_list = (
+        Path("media")
+        / "video_concat.txt"
+    )
+
+    with video_list.open(
+        "w",
+        encoding="utf-8",
+    ) as f:
+
+        for seg in segments:
+
             f.write(
                 "file '"
-                + str(seg["video"].resolve())
+                + str(
+                    seg["video"]
+                    .resolve()
+                )
                 + "'\n"
             )
 
     run([
         "ffmpeg",
         "-y",
-        "-f", "concat",
-        "-safe", "0",
-        "-i", str(video_list),
-        "-c", "copy",
-        "media/video_no_audio.mp4"
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        str(video_list),
+        "-c",
+        "copy",
+        "media/video_no_audio.mp4",
     ])
 
-    # concat voice
-    audio_list = Path("media/audio_concat.txt")
+    # ========================================================
+    # CONCAT VOICE
+    # ========================================================
 
-    with audio_list.open("w", encoding="utf-8") as f:
-        for seg in all_segments:
+    audio_list = (
+        Path("media")
+        / "audio_concat.txt"
+    )
+
+    with audio_list.open(
+        "w",
+        encoding="utf-8",
+    ) as f:
+
+        for seg in segments:
+
             f.write(
                 "file '"
-                + str(seg["audio"].resolve())
+                + str(
+                    seg["audio"]
+                    .resolve()
+                )
                 + "'\n"
             )
 
     run([
         "ffmpeg",
         "-y",
-        "-f", "concat",
-        "-safe", "0",
-        "-i", str(audio_list),
-        "-c:a", "aac",
-        "-b:a", "192k",
-        "media/narration.m4a"
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        str(audio_list),
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "media/narration.m4a",
     ])
 
-    # BGM + narration + subtitles
+    # ========================================================
+    # SUBTITLE
+    # ========================================================
+
+    ass_path = create_ass(
+        segments
+    )
+
+    # ========================================================
+    # FINAL VIDEO
+    # ========================================================
+
     run([
         "ffmpeg",
         "-y",
-        "-i", "media/video_no_audio.mp4",
-        "-i", "media/narration.m4a",
-        "-stream_loop", "-1",
-        "-i", "media/bgm.ogg",
+
+        "-i",
+        "media/video_no_audio.mp4",
+
+        "-i",
+        "media/narration.m4a",
+
+        "-stream_loop",
+        "-1",
+        "-i",
+        "media/bgm.ogg",
+
         "-filter_complex",
+
         (
-            "[2:a]volume=0.035[bgm];"
-            "[1:a]volume=1.0[narr];"
-            "[narr][bgm]amix="
+            "[2:a]"
+            f"volume={BGM_VOLUME}"
+            "[bgm];"
+
+            "[1:a]"
+            "volume=1.0"
+            "[voice];"
+
+            "[voice][bgm]"
+            "amix="
             "inputs=2:"
             "duration=first:"
-            "dropout_transition=2[a]"
+            "dropout_transition=2"
+            "[audio]"
         ),
-        "-map", "0:v",
-        "-map", "[a]",
+
+        "-map",
+        "0:v",
+
+        "-map",
+        "[audio]",
+
         "-vf",
-        "subtitles=media/subtitles/main.ass",
-        "-c:v", "libx264",
-        "-preset", "medium",
-        "-crf", "23",
-        "-c:a", "aac",
-        "-b:a", "192k",
-        "-pix_fmt", "yuv420p",
-        "-movflags", "+faststart",
-        "output/final_video.mp4"
+        f"subtitles={ass_path}",
+
+        "-c:v",
+        "libx264",
+
+        "-preset",
+        "medium",
+
+        "-crf",
+        "22",
+
+        "-c:a",
+        "aac",
+
+        "-b:a",
+        "192k",
+
+        "-pix_fmt",
+        "yuv420p",
+
+        "-movflags",
+        "+faststart",
+
+        "output/final_video.mp4",
     ])
 
-    # thumbnail
-    first_image = CUT_DIR / "visual_000.jpg"
+    # ========================================================
+    # THUMBNAIL
+    # ========================================================
 
-    if first_image.exists():
-        Image.open(first_image).save(
-            "output/thumbnail.jpg",
-            quality=95
+    if segments:
+
+        first_visual = (
+            CUT_DIR
+            / "visual_000.jpg"
         )
 
-    # metadata
-    first_title = facts[0]["title"]
+        if first_visual.exists():
+
+            Image.open(
+                first_visual
+            ).save(
+                "output/thumbnail.jpg",
+                quality=95,
+            )
+
+    # ========================================================
+    # METADATA
+    # ========================================================
 
     title = (
-        first_title
-        + " 知ると面白い身近な雑学10選"
+        facts[0]["title"]
+        + " 知ると面白い身近な雑学15選"
     )
 
     info = {
         "title": title,
-        "facts": [f["title"] for f in facts],
-        "duration": total_time,
-        "segments": len(all_segments),
+
+        "format": "1920x1080",
+
+        "facts": [
+            fact["title"]
+            for fact in facts
+        ],
+
+        "fact_count": len(facts),
+
+        "duration_seconds": total_time,
+
+        "duration_minutes": (
+            total_time / 60
+        ),
+
+        "segment_count": len(
+            segments
+        ),
+
+        "image_count": len(
+            library.items
+        ),
+
         "style": {
-            "image": "Irasutoya",
-            "subtitle": "soft transparent background",
-            "bgm": True,
-            "multiple_cuts": True
-        }
+            "orientation": "landscape",
+            "subtitle": "transparent",
+            "image_fit": "full",
+            "image_crop": False,
+            "multiple_scenes": True,
+        },
     }
 
     Path(
@@ -808,9 +1468,9 @@ def main():
         json.dumps(
             info,
             ensure_ascii=False,
-            indent=2
+            indent=2,
         ),
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     Path(
@@ -819,16 +1479,35 @@ def main():
         json.dumps(
             source_log,
             ensure_ascii=False,
-            indent=2
+            indent=2,
         ),
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
-    print("\n================================")
+    print("")
+    print("====================================")
     print("VIDEO COMPLETE")
-    print("Duration:", round(total_time, 2), "seconds")
-    print("Segments:", len(all_segments))
-    print("================================")
+    print(
+        "Duration:",
+        round(
+            total_time / 60,
+            2
+        ),
+        "minutes",
+    )
+    print(
+        "Facts:",
+        len(facts),
+    )
+    print(
+        "Segments:",
+        len(segments),
+    )
+    print(
+        "Unique images:",
+        len(library.items),
+    )
+    print("====================================")
 
 
 if __name__ == "__main__":
