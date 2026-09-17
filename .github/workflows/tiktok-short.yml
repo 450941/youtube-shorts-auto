@@ -15,14 +15,13 @@ jobs:
     steps:
 
       # ============================================================
-      # 1. CHECKOUT
+      # CHECKOUT
       # ============================================================
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
       # ============================================================
-      # 2. INSTALL DEPENDENCIES
+      # INSTALL DEPENDENCIES
       # ============================================================
       - name: Install dependencies
         run: |
@@ -42,26 +41,26 @@ jobs:
             edge-tts \
             requests
 
-
       # ============================================================
-      # 3. GENERATE CONTENT
+      # GENERATE CONTENT
       # ============================================================
-      - name: Generate TikTok content
+      - name: Generate randomized TikTok content
         run: |
           set -e
-
-          mkdir -p media
 
           python <<'PY'
           import json
           import random
+          import hashlib
           import time
-          import os
 
           random.seed(
-              int(time.time())
-              + int(os.environ.get("GITHUB_RUN_ID", "0"))
-              + int(os.environ.get("GITHUB_RUN_ATTEMPT", "0"))
+              int(
+                  hashlib.sha256(
+                      f"{time.time_ns()}-{random.random()}".encode()
+                  ).hexdigest(),
+                  16
+              )
           )
 
           categories = [
@@ -98,114 +97,142 @@ jobs:
           ]
 
           hooks = [
-              "3秒で答えて",
-              "直感で選んで",
-              "考えすぎないで",
+              "3秒だけ考えてみて",
+              "直感で答えて",
+              "最初に浮かんだ方でOK",
               "あなたならどっち？",
+              "ここで選んでみて",
+              "考えすぎないで",
               "今の気分で選んで",
-              "最初に思った方でOK",
-              "コメントするならどっち？",
-              "最後まで見て答えて",
-              "これ意外と迷う",
-              "あなたのタイプはどっち？",
-              "10秒だけ挑戦",
-              "今すぐできる",
-              "一発で当ててみて",
-              "答えを予想して",
-              "あなたは分かる？",
-              "これできたらすごい",
-              "一瞬で選んで",
-              "今日はこれだけ",
-              "寝る前にやってみて",
-              "朝一番にやってみて",
-              "疲れてる人ほどやってみて",
-              "今のあなたに当てはまる？",
-              "最後に答えが出ます",
-              "友達にも出してみて",
-              "コメント欄で教えて",
-              "どっちを選ぶ？",
-              "あなたの直感を試します",
+              "答えを見る前に決めて",
+              "一瞬で決めてみて",
+              "あなたの直感を信じて",
               "これは意外と難しい",
+              "最後まで見て",
+              "10秒だけ付き合って",
+              "今すぐ選んで",
+              "コメントで教えて",
+              "あなたの答えは？",
+              "本当に分かる？",
+              "どちらを選ぶ？",
+              "今のあなたに当てはまる？",
               "一緒にやってみよう",
-              "今日の小さな挑戦"
+              "今日だけ挑戦",
+              "ちょっとしたゲームです",
+              "脳を一瞬だけ使ってみよう",
+              "これは感覚でOK",
+              "迷ったら最初の答え",
+              "正解より直感が大事",
+              "あなたならどうする？",
+              "一回だけ考えて",
+              "最後に答えを出すよ",
+              "それではスタート"
           ]
 
           endings = [
+              "どうだった？",
+              "当たった？",
               "コメントで教えてね",
-              "あなたはどっちだった？",
-              "当たったらすごい",
-              "答えはコメント欄へ",
-              "また明日挑戦してね",
-              "できた人はすごい",
-              "無理なら今日は休んでOK",
-              "一歩できたら十分",
+              "もう一回やってみる？",
+              "あなたの答えも聞かせて",
+              "意外だった人いる？",
+              "直感って面白いよね",
+              "次も挑戦してみて",
               "今日もお疲れさま",
-              "明日はもっと気楽に",
-              "自分のペースで大丈夫",
               "ここまで見たあなたはえらい",
+              "無理しなくて大丈夫",
+              "今日はここまででOK",
+              "少し休んでいこう",
+              "また次の動画で",
+              "明日も一歩ずつ",
+              "自分のペースでいこう",
               "焦らなくて大丈夫",
-              "小さな一歩でOK",
-              "また遊びに来てね",
-              "保存して後でもう一回",
-              "友達にも試してみて",
-              "あなたの答えを残してね",
-              "今日も無理しすぎないで",
-              "明日も一緒にやろう"
+              "あなたはそのままで大丈夫",
+              "今日もよく頑張った",
+              "ゆっくりいこう"
           ]
 
           quiz_templates = [
-              "AとB、今の直感ならどっち？",
-              "1、2、3ならどれを選ぶ？",
-              "一番最初に見えたものは？",
-              "この中で一つだけ選ぶなら？",
-              "今の気分に近いのはどれ？",
-              "あなたならどれを選択する？",
-              "一瞬で答えるならどれ？",
-              "迷ったら最初の答えでOK",
-              "あなたの予想は当たる？",
-              "最後まで考えずに答えてみて"
+              [
+                  "今から2択。",
+                  "AとB、直感で選んで。",
+                  "Aを選んだ？それともB？"
+              ],
+              [
+                  "3秒で答えて。",
+                  "赤、青、黄色。",
+                  "今の直感ならどれ？"
+              ],
+              [
+                  "あなたならどっち？",
+                  "すぐ答えるか、少し考えるか。",
+                  "直感で決めてみて。"
+              ],
+              [
+                  "小さな心理ゲーム。",
+                  "最初に浮かんだ数字を覚えて。",
+                  "その数字は何だった？"
+              ],
+              [
+                  "予想してみて。",
+                  "次に出てくるのはAかBか。",
+                  "決めた？"
+              ],
+              [
+                  "一瞬だけ集中。",
+                  "画面の中央を見て。",
+                  "何か変化に気づいた？"
+              ],
+              [
+                  "記憶チャレンジ。",
+                  "この瞬間だけ覚えて。",
+                  "あとで思い出せる？"
+              ],
+              [
+                  "10秒チャレンジ。",
+                  "今から10秒だけ集中。",
+                  "できたら成功。"
+              ],
+              [
+                  "直感テスト。",
+                  "最初に思った答えを信じて。",
+                  "考え直さなくてOK。"
+              ],
+              [
+                  "コメント参加型。",
+                  "あなたならどれを選ぶ？",
+                  "理由も書いてみて。"
+              ]
           ]
 
           encouragement = [
-              "今日は何もできなくても大丈夫。",
+              "疲れているなら、今日は頑張りすぎなくていい。",
+              "何もできない日があっても大丈夫。",
               "少し休むことも前に進むこと。",
-              "全部完璧にしなくていい。",
-              "今日を乗り越えた。それだけで十分。",
+              "昨日より少しだけ進めば十分。",
+              "焦らなくていい。あなたのペースでいい。",
+              "うまくいかない日も、ちゃんと一日だよ。",
+              "今日ここまで来た。それだけでも十分。",
               "誰かと比べなくていい。",
-              "自分のペースで進めばいい。",
-              "疲れたら立ち止まっていい。",
-              "明日の自分に任せてもいい。",
-              "小さな一歩でも一歩。",
-              "今は休む時間でもいい。",
-              "頑張り続けなくても大丈夫。",
-              "今日は自分を少しだけ大切に。",
-              "うまくいかない日があってもいい。",
-              "焦らなくて大丈夫。",
-              "またやり直せばいい。",
-              "ここまで来た自分を責めなくていい。",
-              "何も決めない日があってもいい。",
-              "少しだけ深呼吸してみよう。",
-              "今できることだけで十分。",
-              "明日は明日のペースでいい。"
+              "今できる小さなことだけでいい。",
+              "休んでからまた始めればいい。",
+              "全部完璧じゃなくていい。",
+              "今日は自分に優しくしてあげて。",
+              "立ち止まっても、後退ではないよ。",
+              "少しずつで大丈夫。",
+              "明日の自分に任せてもいいことがある。",
+              "無理して笑わなくてもいい。",
+              "疲れたら一度深呼吸。",
+              "あなたの時間はあなたのもの。",
+              "一歩進めたら、それで十分。",
+              "今日もよく頑張ったね。"
           ]
 
           category = random.choice(categories)
           hook = random.choice(hooks)
+          ending = random.choice(endings)
 
           if category in [
-              "夜メッセージ",
-              "応援",
-              "夜の安心",
-              "自己肯定",
-              "再スタート",
-              "リセット",
-              "自分時間"
-          ]:
-              message = random.choice(encouragement)
-
-              text = f"{hook}。\n{message}\n{random.choice(endings)}"
-
-          elif category in [
               "2択クイズ",
               "3択クイズ",
               "心理ゲーム",
@@ -215,6 +242,9 @@ jobs:
               "ミニ謎解き",
               "記憶チャレンジ",
               "直感チャレンジ",
+              "コメント参加",
+              "集中チャレンジ",
+              "観察チャレンジ",
               "選択ゲーム",
               "タイミングゲーム",
               "予測チャレンジ",
@@ -223,37 +253,52 @@ jobs:
           ]:
               template = random.choice(quiz_templates)
 
-              text = (
-                  f"{hook}。\n"
-                  f"{template}\n"
-                  f"3秒だけ考えて。\n"
-                  f"{random.choice(endings)}"
-              )
+              text = "\n".join([
+                  hook,
+                  *template,
+                  ending
+              ])
+
+          elif category in [
+              "夜メッセージ",
+              "応援",
+              "小さな挑戦",
+              "リセット",
+              "自分時間",
+              "再スタート",
+              "夜の安心",
+              "朝チャレンジ",
+              "一歩チャレンジ",
+              "自己肯定",
+              "気分チェック",
+              "10秒チャレンジ",
+              "勇気チャレンジ"
+          ]:
+              message = random.choice(encouragement)
+
+              text = "\n".join([
+                  hook,
+                  message,
+                  ending
+              ])
 
           else:
-              text = (
-                  f"{hook}。\n"
-                  f"今から10秒だけ、自分の感覚を試してみて。\n"
-                  f"{random.choice(endings)}"
-              )
+              text = "\n".join([
+                  hook,
+                  random.choice(encouragement),
+                  ending
+              ])
 
-          text = text.replace("。", "。\n")
-
-          text = "\n".join(
-              line.strip()
-              for line in text.splitlines()
-              if line.strip()
-          )
-
-          content = {
+          data = {
               "category": category,
-              "text": text,
-              "hook": hook
+              "hook": hook,
+              "ending": ending,
+              "text": text
           }
 
           with open("content.json", "w", encoding="utf-8") as f:
               json.dump(
-                  content,
+                  data,
                   f,
                   ensure_ascii=False,
                   indent=2
@@ -262,16 +307,12 @@ jobs:
           print("================================")
           print("CONTENT GENERATED")
           print("================================")
-          print(json.dumps(
-              content,
-              ensure_ascii=False,
-              indent=2
-          ))
+          print(text)
+          print("================================")
           PY
 
-
       # ============================================================
-      # 4. SEARCH PEXELS PORTRAIT VIDEO
+      # SEARCH PEXELS PORTRAIT VIDEO
       # ============================================================
       - name: Search Pexels portrait video
         env:
@@ -465,13 +506,13 @@ jobs:
           fi
 
           echo "PEXELS VIDEO READY"
+
           ls -lh media/background.mp4
 
-
       # ============================================================
-      # 5. GENERATE JAPANESE NARRATION
+      # GENERATE TTS
       # ============================================================
-      - name: Generate narration
+      - name: Generate Japanese narration
         run: |
           set -e
 
@@ -483,181 +524,187 @@ jobs:
 
           echo "$TEXT"
 
+          rm -f media/narration.mp3
+
           edge-tts \
             --voice "ja-JP-NanamiNeural" \
             --rate "+10%" \
             --text "$TEXT" \
             --write-media media/narration.mp3
 
-          test -s media/narration.mp3
+          if [ ! -f media/narration.mp3 ]; then
+            echo "ERROR: narration.mp3 was not created."
+            exit 1
+          fi
 
-          echo "Narration generated."
-
-          ffprobe \
-            -v error \
-            -show_entries format=duration \
-            -of default=noprint_wrappers=1 \
-            media/narration.mp3
-
+          ls -lh media/narration.mp3
 
       # ============================================================
-      # 6. FIT NARRATION TO 15 SECONDS
+      # FIT NARRATION TO 15 SECONDS
       # ============================================================
       - name: Fit narration to 15 seconds
         run: |
           set -e
 
-          DURATION=$(ffprobe \
-            -v error \
-            -show_entries format=duration \
-            -of csv=p=0 \
-            media/narration.mp3)
+          echo "================================"
+          echo "FITTING NARRATION TO 15 SECONDS"
+          echo "================================"
 
-          echo "ORIGINAL AUDIO DURATION: ${DURATION}"
-
-          SPEED=$(python - <<PY
-          duration=float("${DURATION}")
-          target=15.0
-
-          if duration <= target:
-              print("1.0")
-          else:
-              speed=duration/target
-
-              if speed < 0.5:
-                  speed=0.5
-
-              if speed > 2.0:
-                  speed=2.0
-
-              print(f"{speed:.6f}")
-          PY
+          DURATION=$(
+            ffprobe \
+              -v error \
+              -show_entries format=duration \
+              -of default=noprint_wrappers=1:nokey=1 \
+              media/narration.mp3
           )
 
-          echo "AUDIO SPEED: ${SPEED}"
+          echo "ORIGINAL AUDIO DURATION=${DURATION}"
+
+          python <<PY
+          duration = float("${DURATION}")
+          target = 15.0
+
+          if duration <= target:
+              speed = 1.0
+          else:
+              speed = duration / target
+
+          speed = max(0.5, min(speed, 2.0))
+
+          print(f"SPEED={speed}")
+          with open("speed.txt", "w") as f:
+              f.write(str(speed))
+          PY
+
+          SPEED=$(cat speed.txt)
+
+          echo "FINAL SPEED=${SPEED}"
+
+          rm -f media/narration_fit.mp3
 
           if [ "$SPEED" = "1.0" ]; then
             cp media/narration.mp3 media/narration_fit.mp3
           else
-            ffmpeg -y \
+            ffmpeg \
+              -y \
               -i media/narration.mp3 \
               -filter:a "atempo=${SPEED}" \
-              -c:a libmp3lame \
-              -b:a 128k \
+              -vn \
               media/narration_fit.mp3
           fi
 
-          test -s media/narration_fit.mp3
+          if [ ! -f media/narration_fit.mp3 ]; then
+            echo "ERROR: narration_fit.mp3 was not created."
+            exit 1
+          fi
 
-          echo "FITTED AUDIO"
+          FIT_DURATION=$(
+            ffprobe \
+              -v error \
+              -show_entries format=duration \
+              -of default=noprint_wrappers=1:nokey=1 \
+              media/narration_fit.mp3
+          )
 
-          ffprobe \
-            -v error \
-            -show_entries format=duration \
-            -of default=noprint_wrappers=1 \
-            media/narration_fit.mp3
+          echo "FITTED AUDIO DURATION=${FIT_DURATION}"
 
+          ls -lh media/narration_fit.mp3
 
       # ============================================================
-      # 7. CREATE SUBTITLES
+      # CREATE SUBTITLES
       # ============================================================
       - name: Create subtitles
         run: |
           set -e
 
-          TEXT=$(jq -r '.text' content.json)
+          echo "================================"
+          echo "CREATING SUBTITLES"
+          echo "================================"
 
-          DURATION=$(ffprobe \
-            -v error \
-            -show_entries format=duration \
-            -of csv=p=0 \
-            media/narration_fit.mp3)
+          python <<'PY'
+          import json
+          import subprocess
 
-          python <<PY
-          import re
+          with open("content.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
 
-          text = """$TEXT"""
-          duration = float("$DURATION")
+          text = data["text"].strip()
+
+          duration = float(
+              subprocess.check_output(
+                  [
+                      "ffprobe",
+                      "-v",
+                      "error",
+                      "-show_entries",
+                      "format=duration",
+                      "-of",
+                      "default=noprint_wrappers=1:nokey=1",
+                      "media/narration_fit.mp3"
+                  ],
+                  text=True
+              ).strip()
+          )
 
           lines = [
-              x.strip()
-              for x in re.split(r"[\\n]+", text)
-              if x.strip()
+              line.strip()
+              for line in text.splitlines()
+              if line.strip()
           ]
 
           if not lines:
-              lines = [text.strip()]
+              lines = [text]
 
-          total_chars = sum(len(x) for x in lines)
+          total_chars = sum(len(line) for line in lines)
 
           if total_chars <= 0:
               total_chars = 1
 
+          def timestamp(seconds):
+              ms = int(round(seconds * 1000))
+              h = ms // 3600000
+              ms %= 3600000
+              m = ms // 60000
+              ms %= 60000
+              s = ms // 1000
+              ms %= 1000
+              return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
           current = 0.0
+          subtitles = []
 
-          def timestamp(sec):
-              sec = max(0.0, sec)
+          for index, line in enumerate(lines, start=1):
+              portion = len(line) / total_chars
+              end = duration if index == len(lines) else current + duration * portion
 
-              hours = int(sec // 3600)
-              minutes = int((sec % 3600) // 60)
-              seconds = int(sec % 60)
-              millis = int(round((sec - int(sec)) * 1000))
+              subtitles.append(
+                  f"{index}\n"
+                  f"{timestamp(current)} --> {timestamp(end)}\n"
+                  f"{line}\n"
+              )
 
-              if millis >= 1000:
-                  millis -= 1000
-                  seconds += 1
-
-              if seconds >= 60:
-                  seconds -= 60
-                  minutes += 1
-
-              if minutes >= 60:
-                  minutes -= 60
-                  hours += 1
-
-              return f"{hours:02d}:{minutes:02d}:{seconds:02d},{millis:03d}"
+              current = end
 
           with open(
               "media/subtitles.srt",
               "w",
               encoding="utf-8"
           ) as f:
+              f.write("\n".join(subtitles))
 
-              for i, line in enumerate(lines, 1):
-
-                  weight = len(line) / total_chars
-
-                  start = current
-                  end = current + duration * weight
-
-                  if i == len(lines):
-                      end = duration
-
-                  if end <= start:
-                      end = start + 0.1
-
-                  f.write(f"{i}\\n")
-                  f.write(
-                      f"{timestamp(start)} --> "
-                      f"{timestamp(end)}\\n"
-                  )
-                  f.write(f"{line}\\n\\n")
-
-                  current = end
-
-          print("SUBTITLES CREATED")
-
-          print(
-              open(
-                  "media/subtitles.srt",
-                  encoding="utf-8"
-              ).read()
-          )
+          print("SUBTITLE DURATION:", duration)
+          print("SUBTITLE COUNT:", len(subtitles))
+          print("================================")
+          print(open("media/subtitles.srt", encoding="utf-8").read())
           PY
 
+          if [ ! -f media/subtitles.srt ]; then
+            echo "ERROR: subtitles.srt was not created."
+            exit 1
+          fi
 
       # ============================================================
-      # 8. RENDER 15 SECOND VIDEO
+      # RENDER 15 SECOND VIDEO
       # ============================================================
       - name: Render 15 second TikTok video
         run: |
@@ -667,7 +714,10 @@ jobs:
           echo "RENDERING 15 SECOND VIDEO"
           echo "================================"
 
-          ffmpeg -y \
+          rm -f output.mp4
+
+          ffmpeg \
+            -y \
             -stream_loop -1 \
             -i media/background.mp4 \
             -i media/narration_fit.mp3 \
@@ -683,13 +733,17 @@ jobs:
             -movflags +faststart \
             output.mp4
 
-          test -s output.mp4
+          if [ ! -f output.mp4 ]; then
+            echo "ERROR: output.mp4 was not created."
+            exit 1
+          fi
+
+          VIDEO_SIZE=$(stat -c%s output.mp4)
 
           echo "================================"
           echo "VIDEO CREATED"
+          echo "VIDEO_SIZE=${VIDEO_SIZE}"
           echo "================================"
-
-          ls -lh output.mp4
 
           ffprobe \
             -v error \
@@ -698,9 +752,10 @@ jobs:
             -of default=noprint_wrappers=1 \
             output.mp4
 
+          ls -lh output.mp4
 
       # ============================================================
-      # 9. GET TIKTOK ACCESS TOKEN
+      # GET TIKTOK ACCESS TOKEN
       # ============================================================
       - name: Get TikTok access token
         env:
@@ -716,7 +771,7 @@ jobs:
           echo "GETTING TIKTOK ACCESS TOKEN"
           echo "================================"
 
-          TOKEN_URL="https://open.tiktokapis.com/v2/oauth/token/"
+          rm -f token.json
 
           if [ -n "${TIKTOK_REFRESH_TOKEN:-}" ]; then
 
@@ -728,13 +783,13 @@ jobs:
               --show-error \
               --location \
               -X POST \
-              "$TOKEN_URL" \
+              "https://open.tiktokapis.com/v2/oauth/token/" \
               -H "Content-Type: application/x-www-form-urlencoded" \
               --data-urlencode "client_key=${TIKTOK_CLIENT_KEY}" \
               --data-urlencode "client_secret=${TIKTOK_CLIENT_SECRET}" \
               --data-urlencode "grant_type=refresh_token" \
               --data-urlencode "refresh_token=${TIKTOK_REFRESH_TOKEN}" \
-              -o token.json
+              > token.json
 
           elif [ -n "${TIKTOK_AUTH_CODE_TEMP:-}" ]; then
 
@@ -746,32 +801,30 @@ jobs:
               --show-error \
               --location \
               -X POST \
-              "$TOKEN_URL" \
+              "https://open.tiktokapis.com/v2/oauth/token/" \
               -H "Content-Type: application/x-www-form-urlencoded" \
               --data-urlencode "client_key=${TIKTOK_CLIENT_KEY}" \
               --data-urlencode "client_secret=${TIKTOK_CLIENT_SECRET}" \
               --data-urlencode "grant_type=authorization_code" \
               --data-urlencode "code=${TIKTOK_AUTH_CODE_TEMP}" \
               --data-urlencode "redirect_uri=${TIKTOK_REDIRECT_URI}" \
-              -o token.json
+              > token.json
 
           else
             echo "ERROR: No TikTok refresh token or temporary auth code."
             exit 1
           fi
 
+          echo "TOKEN RESPONSE RECEIVED"
+
           if ! jq empty token.json >/dev/null 2>&1; then
-            echo "ERROR: TikTok token response is invalid JSON."
-            cat token.json || true
+            echo "ERROR: Invalid TikTok token JSON."
+            cat token.json
             exit 1
           fi
 
-          echo "TOKEN RESPONSE RECEIVED"
-
-          ERROR_CODE=$(jq -r '.error // empty' token.json)
-
-          if [ -n "$ERROR_CODE" ]; then
-            echo "TikTok OAuth error:"
+          if jq -e '.error' token.json >/dev/null 2>&1; then
+            echo "ERROR: TikTok OAuth returned an error."
             jq '.' token.json
             exit 1
           fi
@@ -779,27 +832,24 @@ jobs:
           ACCESS_TOKEN=$(jq -r '.access_token // empty' token.json)
 
           if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
-            echo "ERROR: access_token not found."
+            echo "ERROR: access_token was not returned."
             jq '.' token.json
             exit 1
           fi
 
-          echo "TikTok access token obtained."
+          echo "TIKTOK_ACCESS_TOKEN=${ACCESS_TOKEN}" >> "$GITHUB_ENV"
 
-          echo "TIKTOK_ACCESS_TOKEN=$ACCESS_TOKEN" >> "$GITHUB_ENV"
-
+          echo "TikTok access token acquired."
 
       # ============================================================
-      # 10. CREATOR INFO
+      # GET CREATOR INFO
       # ============================================================
       - name: Get TikTok creator info
-        env:
-          ACCESS_TOKEN: ${{ env.TIKTOK_ACCESS_TOKEN }}
         run: |
           set -e
 
           echo "================================"
-          echo "GETTING CREATOR INFO"
+          echo "GETTING TIKTOK CREATOR INFO"
           echo "================================"
 
           curl \
@@ -809,100 +859,82 @@ jobs:
             --location \
             -X POST \
             "https://open.tiktokapis.com/v2/post/publish/creator_info/query/" \
-            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            -H "Authorization: Bearer ${TIKTOK_ACCESS_TOKEN}" \
             -H "Content-Type: application/json; charset=UTF-8" \
-            -d '{}' \
+            --data '{}' \
             -o creator.json
 
           if ! jq empty creator.json >/dev/null 2>&1; then
-            echo "ERROR: creator info response invalid."
+            echo "ERROR: creator.json is invalid."
             cat creator.json
             exit 1
           fi
 
           echo "CREATOR INFO RESPONSE"
-
           jq '.' creator.json
 
+          CREATOR_ERROR=$(jq -r '.error.code // empty' creator.json)
+
+          if [ -n "$CREATOR_ERROR" ] && [ "$CREATOR_ERROR" != "ok" ]; then
+            echo "TikTok creator info failed."
+            jq '.' creator.json
+            exit 1
+          fi
+
+          MAX_DURATION=$(jq -r '.data.max_video_post_duration_sec // empty' creator.json)
+
+          if [ -n "$MAX_DURATION" ]; then
+            echo "MAX_VIDEO_POST_DURATION=${MAX_DURATION}"
+
+            python <<PY
+          max_duration = float("${MAX_DURATION}")
+          if max_duration < 15:
+              raise SystemExit(
+                  f"ERROR: TikTok creator max duration is {max_duration}s"
+              )
+          print("15 second video is allowed.")
+          PY
+          fi
+
+          echo "CREATOR INFO OK"
 
       # ============================================================
-      # 11. PREPARE UPLOAD CHUNKS
+      # PREPARE VIDEO CHUNKS
       # ============================================================
       - name: Prepare TikTok upload chunks
         run: |
           set -e
 
           echo "================================"
-          echo "PREPARING TIKTOK UPLOAD"
+          echo "PREPARING TIKTOK CHUNKS"
           echo "================================"
 
           VIDEO_SIZE=$(stat -c%s output.mp4)
 
-          CHUNK_SIZE=5000000
-
-          TOTAL_CHUNKS=$(( (VIDEO_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE ))
-
-          echo "VIDEO_SIZE=${VIDEO_SIZE}"
-          echo "CHUNK_SIZE=${CHUNK_SIZE}"
-          echo "TOTAL_CHUNKS=${TOTAL_CHUNKS}"
-
-          if [ "$TOTAL_CHUNKS" -lt 1 ]; then
-            echo "ERROR: TOTAL_CHUNKS is invalid."
-            exit 1
-          fi
+          # For the current short video size, use one chunk.
+          # TikTok accepts FILE_UPLOAD with the whole file as one chunk
+          # when the file fits the allowed single-chunk upload size.
+          CHUNK_SIZE="$VIDEO_SIZE"
+          TOTAL_CHUNKS=1
 
           rm -rf chunks
           mkdir -p chunks
 
-          split \
-            -b "${CHUNK_SIZE}" \
-            -d \
-            -a 4 \
-            output.mp4 \
-            chunks/part_
+          cp output.mp4 chunks/part_0000
 
-          echo "================================"
-          echo "GENERATED CHUNKS"
-          echo "================================"
-
-          ls -lh chunks/
-
-          ACTUAL_CHUNKS=$(
-            find chunks \
-              -maxdepth 1 \
-              -type f \
-              -name 'part_*' \
-              | wc -l
-          )
-
-          echo "ACTUAL_CHUNKS=${ACTUAL_CHUNKS}"
-
-          if [ "$ACTUAL_CHUNKS" -lt 1 ]; then
-            echo "ERROR: No chunks were created."
-            exit 1
-          fi
-
-          TOTAL_CHUNKS="$ACTUAL_CHUNKS"
-
-          FIRST_CHUNK=$(
-            find chunks \
-              -maxdepth 1 \
-              -type f \
-              -name 'part_*' \
-              | sort \
-              | head -n 1
-          )
-
-          if [ -z "$FIRST_CHUNK" ]; then
-            echo "ERROR: First chunk was not found."
-            exit 1
-          fi
-
+          FIRST_CHUNK="chunks/part_0000"
           FIRST_CHUNK_SIZE=$(stat -c%s "$FIRST_CHUNK")
 
+          if [ "$FIRST_CHUNK_SIZE" -ne "$VIDEO_SIZE" ]; then
+            echo "ERROR: Chunk size does not match video size."
+            exit 1
+          fi
+
+          echo "VIDEO_SIZE=${VIDEO_SIZE}"
+          echo "CHUNK_SIZE=${CHUNK_SIZE}"
+          echo "TOTAL_CHUNKS=${TOTAL_CHUNKS}"
           echo "FIRST_CHUNK=${FIRST_CHUNK}"
           echo "FIRST_CHUNK_SIZE=${FIRST_CHUNK_SIZE}"
-          echo "FINAL_TOTAL_CHUNKS=${TOTAL_CHUNKS}"
 
           echo "VIDEO_SIZE=${VIDEO_SIZE}" >> "$GITHUB_ENV"
           echo "CHUNK_SIZE=${CHUNK_SIZE}" >> "$GITHUB_ENV"
@@ -910,13 +942,17 @@ jobs:
           echo "FIRST_CHUNK=${FIRST_CHUNK}" >> "$GITHUB_ENV"
           echo "FIRST_CHUNK_SIZE=${FIRST_CHUNK_SIZE}" >> "$GITHUB_ENV"
 
+          ls -lh chunks/
 
       # ============================================================
-      # 12. INITIALIZE TIKTOK DIRECT POST
+      # INITIALIZE TIKTOK DIRECT POST
       # ============================================================
       - name: Initialize TikTok Direct Post
         env:
-          ACCESS_TOKEN: ${{ env.TIKTOK_ACCESS_TOKEN }}
+          TIKTOK_ACCESS_TOKEN: ${{ env.TIKTOK_ACCESS_TOKEN }}
+          VIDEO_SIZE: ${{ env.VIDEO_SIZE }}
+          CHUNK_SIZE: ${{ env.CHUNK_SIZE }}
+          TOTAL_CHUNKS: ${{ env.TOTAL_CHUNKS }}
         run: |
           set -e
 
@@ -924,20 +960,17 @@ jobs:
           echo "INITIALIZING TIKTOK DIRECT POST"
           echo "================================"
 
-          VIDEO_SIZE="${VIDEO_SIZE}"
-          TOTAL_CHUNKS="${TOTAL_CHUNKS}"
-          FIRST_CHUNK_SIZE="${FIRST_CHUNK_SIZE}"
-
           echo "VIDEO_SIZE=${VIDEO_SIZE}"
-          echo "FIRST_CHUNK_SIZE=${FIRST_CHUNK_SIZE}"
+          echo "CHUNK_SIZE=${CHUNK_SIZE}"
           echo "TOTAL_CHUNKS=${TOTAL_CHUNKS}"
 
-          python <<PY
+          python <<'PY'
           import json
+          import os
 
-          video_size = int("${VIDEO_SIZE}")
-          total_chunks = int("${TOTAL_CHUNKS}")
-          first_chunk_size = int("${FIRST_CHUNK_SIZE}")
+          video_size = int(os.environ["VIDEO_SIZE"])
+          chunk_size = int(os.environ["CHUNK_SIZE"])
+          total_chunks = int(os.environ["TOTAL_CHUNKS"])
 
           payload = {
               "post_info": {
@@ -951,16 +984,12 @@ jobs:
               "source_info": {
                   "source": "FILE_UPLOAD",
                   "video_size": video_size,
-                  "chunk_size": first_chunk_size,
+                  "chunk_size": chunk_size,
                   "total_chunk_count": total_chunks
               }
           }
 
-          with open(
-              "init_request.json",
-              "w",
-              encoding="utf-8"
-          ) as f:
+          with open("init_request.json", "w", encoding="utf-8") as f:
               json.dump(
                   payload,
                   f,
@@ -968,13 +997,11 @@ jobs:
                   indent=2
               )
 
-          print(
-              json.dumps(
-                  payload,
-                  ensure_ascii=False,
-                  indent=2
-              )
-          )
+          print(json.dumps(
+              payload,
+              ensure_ascii=False,
+              indent=2
+          ))
           PY
 
           curl \
@@ -984,40 +1011,57 @@ jobs:
             --location \
             -X POST \
             "https://open.tiktokapis.com/v2/post/publish/video/init/" \
-            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            -H "Authorization: Bearer ${TIKTOK_ACCESS_TOKEN}" \
             -H "Content-Type: application/json; charset=UTF-8" \
-            --data-binary @init_request.json \
+            --data @init_request.json \
             -o init_response.json
-
-          cp init_response.json init.json
 
           echo "================================"
           echo "TIKTOK INIT RESPONSE"
           echo "================================"
 
-          jq '.' init_response.json
+          cat init_response.json
 
+          cp init_response.json init.json
 
       # ============================================================
-      # 13. CHECK INIT ERROR
+      # CHECK INIT RESPONSE
       # ============================================================
       - name: Check TikTok init response
         run: |
           set -e
 
+          echo "================================"
+          echo "CHECKING TIKTOK INIT RESPONSE"
+          echo "================================"
+
+          if ! jq empty init_response.json >/dev/null 2>&1; then
+            echo "ERROR: TikTok init returned invalid JSON."
+            cat init_response.json
+            exit 1
+          fi
+
           ERROR_CODE=$(jq -r '.error.code // empty' init_response.json)
           ERROR_MESSAGE=$(jq -r '.error.message // empty' init_response.json)
 
-          if [ -n "$ERROR_CODE" ]; then
+          echo "CODE: ${ERROR_CODE}"
+          echo "MESSAGE: ${ERROR_MESSAGE}"
+
+          # IMPORTANT:
+          # TikTok returns:
+          # "error": {
+          #   "code": "ok",
+          #   "message": ""
+          # }
+          #
+          # "ok" is SUCCESS, not an error.
+          if [ "$ERROR_CODE" != "ok" ]; then
             echo "================================"
             echo "TIKTOK INIT ERROR"
             echo "================================"
-
             echo "CODE: ${ERROR_CODE}"
             echo "MESSAGE: ${ERROR_MESSAGE}"
-
             jq '.' init_response.json
-
             exit 1
           fi
 
@@ -1025,30 +1069,31 @@ jobs:
           PUBLISH_ID=$(jq -r '.data.publish_id // empty' init_response.json)
 
           if [ -z "$UPLOAD_URL" ] || [ "$UPLOAD_URL" = "null" ]; then
-            echo "ERROR: upload_url not found."
+            echo "ERROR: upload_url was not returned."
             jq '.' init_response.json
             exit 1
           fi
 
           if [ -z "$PUBLISH_ID" ] || [ "$PUBLISH_ID" = "null" ]; then
-            echo "ERROR: publish_id not found."
+            echo "ERROR: publish_id was not returned."
             jq '.' init_response.json
             exit 1
           fi
 
+          echo "TikTok initialization SUCCESS."
+          echo "UPLOAD_URL received."
+          echo "PUBLISH_ID=${PUBLISH_ID}"
+
           echo "UPLOAD_URL=${UPLOAD_URL}" >> "$GITHUB_ENV"
           echo "PUBLISH_ID=${PUBLISH_ID}" >> "$GITHUB_ENV"
 
-          echo "TikTok Direct Post initialized."
-          echo "Publish ID received."
-
-
       # ============================================================
-      # 14. UPLOAD VIDEO CHUNKS
+      # UPLOAD VIDEO CHUNKS
       # ============================================================
-      - name: Upload video chunks to TikTok
+      - name: Upload TikTok video chunks
         env:
           UPLOAD_URL: ${{ env.UPLOAD_URL }}
+          VIDEO_SIZE: ${{ env.VIDEO_SIZE }}
         run: |
           set -e
 
@@ -1056,25 +1101,33 @@ jobs:
           echo "UPLOADING VIDEO TO TIKTOK"
           echo "================================"
 
-          VIDEO_SIZE=$(stat -c%s output.mp4)
+          if [ -z "${UPLOAD_URL:-}" ]; then
+            echo "ERROR: UPLOAD_URL is empty."
+            exit 1
+          fi
+
+          if [ -z "${VIDEO_SIZE:-}" ]; then
+            echo "ERROR: VIDEO_SIZE is empty."
+            exit 1
+          fi
 
           OFFSET=0
           INDEX=0
 
-          for FILE in $(find chunks -type f -name 'part_*' | sort); do
+          for FILE in $(find chunks -maxdepth 1 -type f -name 'part_*' | sort); do
 
             CHUNK_FILE_SIZE=$(stat -c%s "$FILE")
 
             START="$OFFSET"
             END=$((OFFSET + CHUNK_FILE_SIZE - 1))
 
-            echo ""
             echo "--------------------------------"
-            echo "CHUNK ${INDEX}"
-            echo "FILE: ${FILE}"
-            echo "SIZE: ${CHUNK_FILE_SIZE}"
-            echo "RANGE: ${START}-${END}"
-            echo "TOTAL: ${VIDEO_SIZE}"
+            echo "CHUNK INDEX=${INDEX}"
+            echo "FILE=${FILE}"
+            echo "SIZE=${CHUNK_FILE_SIZE}"
+            echo "START=${START}"
+            echo "END=${END}"
+            echo "TOTAL=${VIDEO_SIZE}"
             echo "--------------------------------"
 
             curl \
@@ -1092,27 +1145,27 @@ jobs:
             OFFSET=$((END + 1))
             INDEX=$((INDEX + 1))
 
+            echo "CHUNK ${INDEX} UPLOADED"
           done
+
+          echo "FINAL OFFSET=${OFFSET}"
+          echo "VIDEO SIZE=${VIDEO_SIZE}"
 
           if [ "$OFFSET" -ne "$VIDEO_SIZE" ]; then
             echo "ERROR: Uploaded byte count does not match video size."
-            echo "OFFSET=${OFFSET}"
-            echo "VIDEO_SIZE=${VIDEO_SIZE}"
             exit 1
           fi
 
-          echo ""
           echo "================================"
           echo "TIKTOK VIDEO UPLOAD COMPLETE"
           echo "================================"
 
-
       # ============================================================
-      # 15. CHECK PUBLISH STATUS
+      # CHECK PUBLISH STATUS
       # ============================================================
       - name: Check TikTok publish status
         env:
-          ACCESS_TOKEN: ${{ env.TIKTOK_ACCESS_TOKEN }}
+          TIKTOK_ACCESS_TOKEN: ${{ env.TIKTOK_ACCESS_TOKEN }}
           PUBLISH_ID: ${{ env.PUBLISH_ID }}
         run: |
           set -e
@@ -1121,10 +1174,25 @@ jobs:
           echo "CHECKING TIKTOK PUBLISH STATUS"
           echo "================================"
 
-          for i in $(seq 1 12); do
+          if [ -z "${PUBLISH_ID:-}" ]; then
+            echo "ERROR: PUBLISH_ID is empty."
+            exit 1
+          fi
+
+          SUCCESS=0
+
+          for ATTEMPT in $(seq 1 18); do
 
             echo ""
-            echo "STATUS CHECK ${i}/12"
+            echo "--------------------------------"
+            echo "STATUS CHECK ${ATTEMPT}/18"
+            echo "--------------------------------"
+
+            cat > status_request.json <<EOF
+          {
+            "publish_id": "${PUBLISH_ID}"
+          }
+          EOF
 
             curl \
               --fail-with-body \
@@ -1133,99 +1201,96 @@ jobs:
               --location \
               -X POST \
               "https://open.tiktokapis.com/v2/post/publish/status/fetch/" \
-              -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+              -H "Authorization: Bearer ${TIKTOK_ACCESS_TOKEN}" \
               -H "Content-Type: application/json; charset=UTF-8" \
-              -d "{\"publish_id\":\"${PUBLISH_ID}\"}" \
+              --data @status_request.json \
               -o status.json
 
-            jq '.' status.json
+            cat status.json
 
-            STATUS=$(jq -r '.data.status // .status // empty' status.json)
+            if ! jq empty status.json >/dev/null 2>&1; then
+              echo "ERROR: Invalid status response."
+              exit 1
+            fi
+
+            STATUS=$(jq -r '.data.status // empty' status.json)
+            ERROR_CODE=$(jq -r '.error.code // empty' status.json)
+            ERROR_MESSAGE=$(jq -r '.error.message // empty' status.json)
 
             echo "STATUS=${STATUS}"
+            echo "ERROR_CODE=${ERROR_CODE}"
+            echo "ERROR_MESSAGE=${ERROR_MESSAGE}"
 
-            case "$STATUS" in
+            if [ "$ERROR_CODE" != "" ] && [ "$ERROR_CODE" != "ok" ]; then
+              echo "TikTok status API returned an error."
+              jq '.' status.json
+              exit 1
+            fi
 
-              PUBLISH_COMPLETE)
-                echo "================================"
-                echo "TIKTOK PUBLISH COMPLETE"
-                echo "================================"
-                exit 0
-                ;;
+            if [ "$STATUS" = "PUBLISH_COMPLETE" ]; then
+              echo "================================"
+              echo "TIKTOK PUBLISH COMPLETE"
+              echo "================================"
+              SUCCESS=1
+              break
+            fi
 
-              FAILED)
-                echo "================================"
-                echo "TIKTOK PUBLISH FAILED"
-                echo "================================"
-                exit 1
-                ;;
+            if [ "$STATUS" = "FAILED" ]; then
+              echo "================================"
+              echo "TIKTOK PUBLISH FAILED"
+              echo "================================"
+              jq '.' status.json
+              exit 1
+            fi
 
-              *)
-                echo "TikTok is still processing."
-                sleep 10
-                ;;
+            echo "Publishing is still processing."
+            echo "Waiting 10 seconds..."
 
-            esac
-
+            sleep 10
           done
 
-          echo "================================"
-          echo "PUBLISH STATUS TIMEOUT"
-          echo "================================"
-
-          exit 1
-
+          if [ "$SUCCESS" -ne 1 ]; then
+            echo "================================"
+            echo "TIKTOK STATUS CHECK TIMEOUT"
+            echo "================================"
+            cat status.json || true
+            exit 1
+          fi
 
       # ============================================================
-      # 16. SAVE CONTENT INFORMATION
+      # SAVE RESULT
       # ============================================================
-      - name: Save final information
+      - name: Save TikTok result
         if: always()
         run: |
           set +e
 
           echo "================================"
-          echo "FINAL INFORMATION"
+          echo "SAVING TIKTOK RESULT"
           echo "================================"
 
-          echo ""
-          echo "CONTENT:"
-
-          if [ -f content.json ]; then
-            jq '.' content.json
-          fi
-
-          echo ""
-          echo "CREATOR:"
-
-          if [ -f creator.json ]; then
-            jq '.' creator.json
-          fi
-
-          echo ""
-          echo "INIT:"
-
-          if [ -f init_response.json ]; then
-            jq '.' init_response.json
-          fi
-
-          echo ""
-          echo "STATUS:"
+          echo "PUBLISH_ID=${PUBLISH_ID:-unknown}"
 
           if [ -f status.json ]; then
-            jq '.' status.json
+            echo "FINAL STATUS:"
+            jq '.' status.json || cat status.json
           fi
 
+          if [ -f creator.json ]; then
+            echo "CREATOR INFO:"
+            jq '.' creator.json || cat creator.json
+          fi
+
+          echo "RESULT SAVED"
 
       # ============================================================
-      # 17. UPLOAD DEBUG ARTIFACTS
+      # UPLOAD ARTIFACTS
       # ============================================================
-      - name: Upload TikTok artifacts
+      - name: Upload generated artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tiktok-short-artifacts-${{ github.run_id }}
-          if-no-files-found: ignore
+          name: tiktok-short-${{ github.run_number }}
           path: |
             output.mp4
             content.json
@@ -1239,3 +1304,5 @@ jobs:
             media/subtitles.srt
             media/narration.mp3
             media/narration_fit.mp3
+          if-no-files-found: ignore
+          retention-days: 7
