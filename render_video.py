@@ -19,7 +19,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 WIDTH = 1920
 HEIGHT = 1080
-
 FPS = 30
 
 OUTPUT_DIR = Path("output")
@@ -46,7 +45,7 @@ HEADERS = {
 FONT_PATHS = [
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf",
-    "/usr/share/fonts/truetype/noto/NotoSansJP-Regular.otf",
+    "/usr/share/fonts/opentype/noto/NotoSansJP-Regular.otf",
 ]
 
 FONT_PATH = None
@@ -424,10 +423,6 @@ class IrasutoyaLibrary:
                 "html.parser",
             )
 
-            # ------------------------------------------------
-            # 通常の投稿リンク
-            # ------------------------------------------------
-
             for a in soup.find_all("a", href=True):
 
                 href = a.get("href", "")
@@ -443,10 +438,6 @@ class IrasutoyaLibrary:
 
                 if href not in candidates:
                     candidates.append(href)
-
-            # ------------------------------------------------
-            # img親リンク
-            # ------------------------------------------------
 
             for img in soup.find_all("img"):
 
@@ -467,7 +458,6 @@ class IrasutoyaLibrary:
             if candidates:
                 break
 
-        # 最大10ページ候補
         candidates = candidates[:10]
 
         for page_url in candidates:
@@ -505,7 +495,6 @@ class IrasutoyaLibrary:
             "html.parser",
         )
 
-        # og:image
         meta = soup.find(
             "meta",
             property="og:image",
@@ -517,7 +506,6 @@ class IrasutoyaLibrary:
             if "irasutoya.com" in url:
                 return url
 
-        # 記事内画像
         article = soup.find(
             class_=re.compile(
                 "post-body|entry-content"
@@ -543,7 +531,6 @@ class IrasutoyaLibrary:
                         src,
                     )
 
-        # 全画像から探す
         for img in soup.find_all(
             "img",
             src=True,
@@ -594,11 +581,11 @@ class IrasutoyaLibrary:
             return None
 
         try:
+
             output.write_bytes(
                 response.content
             )
 
-            # 画像として開けるか確認
             with Image.open(output) as im:
                 im.verify()
 
@@ -697,7 +684,6 @@ class PexelsLibrary:
                     [],
                 )
 
-                # 横長を優先
                 videos = sorted(
                     videos,
                     key=lambda v: (
@@ -729,7 +715,6 @@ class PexelsLibrary:
                         [],
                     )
 
-                    # HD以上を優先
                     files = sorted(
                         files,
                         key=lambda x: (
@@ -954,7 +939,6 @@ def prepare_image(
             "RGB"
         )
 
-        # 絶対にクロップしない
         original.thumbnail(
             (WIDTH - 80, HEIGHT - 80),
             Image.Resampling.LANCZOS,
@@ -1049,7 +1033,6 @@ def create_image_segment(
             subtitle_file,
         )
 
-    # 字幕画像を下側に配置
     filter_complex = (
         "[0:v]scale=1920:1080,"
         "setsar=1[bg];"
@@ -1370,7 +1353,6 @@ def get_visual(
 
         if image:
 
-            # 20種類を超えたら新規取得を止める
             if len(
                 set(irasutoya.used_urls)
             ) <= 20:
@@ -1388,8 +1370,6 @@ def get_visual(
     # ② Pexels実写
     # --------------------------------------------------------
 
-    # 日本語キーワードではヒットが弱い場合があるので
-    # scenes側に英語検索語を入れている
     pexels_result = pexels.search(
         queries
     )
@@ -1412,7 +1392,7 @@ def get_visual(
             }
 
     # --------------------------------------------------------
-    # ③ 最終保険
+    # ③ 既存Pexels再利用
     # --------------------------------------------------------
 
     existing_videos = list(
@@ -1434,6 +1414,10 @@ def get_visual(
             "type": "video",
             "path": fallback,
         }
+
+    # --------------------------------------------------------
+    # ④ 既存いらすとや再利用
+    # --------------------------------------------------------
 
     existing_images = list(
         IMAGE_DIR.glob("*.png")
@@ -1459,18 +1443,89 @@ def get_visual(
 
 
 # ============================================================
+# YouTube情報生成
+# ============================================================
+
+def create_video_info(
+    final_video,
+    duration,
+):
+
+    video_info = {
+        "video_file": str(final_video),
+
+        "title": (
+            "なぜ人は他人の目が気になる？ "
+            "知ると面白い身近な雑学15選"
+        ),
+
+        "description": (
+            "身近だけど意外と知らない、"
+            "ちょっと気になる雑学を15個紹介します。\n\n"
+            "人間の心理や記憶、睡眠、食べ物など、"
+            "日常生活に関係する雑学をまとめました。\n\n"
+            "#雑学 #豆知識 #心理学 #面白い雑学"
+        ),
+
+        "tags": [
+            "雑学",
+            "豆知識",
+            "面白い雑学",
+            "身近な雑学",
+            "心理学",
+            "人間心理",
+            "睡眠",
+            "記憶",
+            "YouTube",
+        ],
+
+        "category_id": "27",
+
+        "privacy_status": "public",
+
+        "duration": round(
+            duration,
+            1,
+        ),
+    }
+
+    info_path = (
+        OUTPUT_DIR
+        / "video_info.json"
+    )
+
+    with open(
+        info_path,
+        "w",
+        encoding="utf-8",
+    ) as f:
+
+        json.dump(
+            video_info,
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    return info_path
+
+
+# ============================================================
 # メイン
 # ============================================================
 
 def main():
 
     print("=" * 70)
+
     print(
         "Generate 5-Minute Trivia Encouragement Video"
     )
+
     print(
         "1920x1080 / 15 facts / Irasutoya -> Pexels"
     )
+
     print("=" * 70)
 
     if not PEXELS_API_KEY:
@@ -1493,16 +1548,19 @@ def main():
 
         print("\n")
         print("=" * 70)
+
         print(
             f"FACT {fact_index}/{len(FACTS)}"
         )
+
         print(
             fact["title"]
         )
+
         print("=" * 70)
 
         # ----------------------------------------------------
-        # 本文を4分割
+        # 本文をシーン分割
         # ----------------------------------------------------
 
         text = fact["text"]
@@ -1518,18 +1576,23 @@ def main():
             if s.strip()
         ]
 
-        # 4シーン程度にする
         scene_texts = []
 
         if len(sentences) <= 4:
+
             scene_texts = sentences
+
         else:
 
-            chunks = [[] for _ in range(4)]
+            chunks = [
+                []
+                for _ in range(4)
+            ]
 
             for i, sentence in enumerate(
                 sentences
             ):
+
                 chunks[
                     i % 4
                 ].append(sentence)
@@ -1564,7 +1627,7 @@ def main():
             )
 
             # ------------------------------------------------
-            # この場面用の検索語
+            # 検索語
             # ------------------------------------------------
 
             query_index = min(
@@ -1583,15 +1646,17 @@ def main():
                 scene_counter,
             )
 
+            # ------------------------------------------------
+            # 最終保険
+            # ------------------------------------------------
+
             if visual is None:
 
                 print(
                     "WARNING: "
-                    "画像・映像が取得できませんでした。"
+                    "画像・映像を取得できませんでした。"
                 )
 
-                # 最終的にも止めない
-                # 黒背景＋字幕だけの動画を作る
                 blank = (
                     MEDIA_DIR
                     / "blank.jpg"
@@ -1617,6 +1682,10 @@ def main():
                     "type": "image",
                     "path": blank,
                 }
+
+            # ------------------------------------------------
+            # セグメント作成
+            # ------------------------------------------------
 
             segment_path = (
                 MEDIA_DIR
@@ -1664,7 +1733,7 @@ def main():
     )
 
     # ========================================================
-    # BGM追加
+    # BGM
     # ========================================================
 
     final_video = (
@@ -1677,10 +1746,15 @@ def main():
         final_video,
     )
 
+    # ========================================================
+    # 完成確認
+    # ========================================================
+
     print("\n")
     print("=" * 70)
-    print("完成！")
+    print("動画生成 完成！")
     print("=" * 70)
+
     print(
         f"Output: {final_video}"
     )
@@ -1715,6 +1789,97 @@ def main():
         ),
     )
 
+    # ========================================================
+    # YouTube用 video_info.json
+    # ========================================================
+
+    print("")
+    print("=" * 70)
+    print("YouTubeアップロード情報を作成中...")
+    print("=" * 70)
+
+    video_info_path = create_video_info(
+        final_video,
+        duration,
+    )
+
+    # ========================================================
+    # ファイル存在確認
+    # ========================================================
+
+    print("")
+    print("=" * 70)
+    print("最終ファイル確認")
+    print("=" * 70)
+
+    print(
+        f"final_video.mp4 exists: "
+        f"{final_video.exists()}"
+    )
+
+    print(
+        f"video_info.json exists: "
+        f"{video_info_path.exists()}"
+    )
+
+    print(
+        f"video_info.json: "
+        f"{video_info_path}"
+    )
+
+    if not final_video.exists():
+
+        raise RuntimeError(
+            "final_video.mp4 が作成されていません"
+        )
+
+    if not video_info_path.exists():
+
+        raise RuntimeError(
+            "output/video_info.json "
+            "が作成されていません"
+        )
+
+    # JSONの中身も確認
+    try:
+
+        with open(
+            video_info_path,
+            "r",
+            encoding="utf-8",
+        ) as f:
+
+            check_data = json.load(f)
+
+        print(
+            f"Title: "
+            f"{check_data.get('title', '')}"
+        )
+
+        print(
+            f"Duration: "
+            f"{check_data.get('duration', '')}"
+        )
+
+    except Exception as e:
+
+        raise RuntimeError(
+            f"video_info.json の確認に失敗: {e}"
+        )
+
+    print("")
+    print("=" * 70)
+    print("動画生成処理 完全終了")
+    print("=" * 70)
+
+    print(
+        "次の upload_youtube.py に処理を渡せます。"
+    )
+
+
+# ============================================================
+# 実行
+# ============================================================
 
 if __name__ == "__main__":
     main()
