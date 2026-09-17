@@ -186,7 +186,7 @@ jobs:
               "何も決めない日があってもいい。",
               "少しだけ深呼吸してみよう。",
               "今できることだけで十分。",
-              "明日は明日のペースでいい."
+              "明日は明日のペースでいい。"
           ]
 
           category = random.choice(categories)
@@ -237,8 +237,8 @@ jobs:
                   f"{random.choice(endings)}"
               )
 
-          # TikTok用に長くなりすぎないよう調整
           text = text.replace("。", "。\n")
+
           text = "\n".join(
               line.strip()
               for line in text.splitlines()
@@ -262,7 +262,11 @@ jobs:
           print("================================")
           print("CONTENT GENERATED")
           print("================================")
-          print(json.dumps(content, ensure_ascii=False, indent=2))
+          print(json.dumps(
+              content,
+              ensure_ascii=False,
+              indent=2
+          ))
           PY
 
 
@@ -613,8 +617,14 @@ jobs:
 
               return f"{hours:02d}:{minutes:02d}:{seconds:02d},{millis:03d}"
 
-          with open("media/subtitles.srt", "w", encoding="utf-8") as f:
+          with open(
+              "media/subtitles.srt",
+              "w",
+              encoding="utf-8"
+          ) as f:
+
               for i, line in enumerate(lines, 1):
+
                   weight = len(line) / total_chars
 
                   start = current
@@ -627,13 +637,22 @@ jobs:
                       end = start + 0.1
 
                   f.write(f"{i}\\n")
-                  f.write(f"{timestamp(start)} --> {timestamp(end)}\\n")
+                  f.write(
+                      f"{timestamp(start)} --> "
+                      f"{timestamp(end)}\\n"
+                  )
                   f.write(f"{line}\\n\\n")
 
                   current = end
 
           print("SUBTITLES CREATED")
-          print(open("media/subtitles.srt", encoding="utf-8").read())
+
+          print(
+              open(
+                  "media/subtitles.srt",
+                  encoding="utf-8"
+              ).read()
+          )
           PY
 
 
@@ -819,12 +838,8 @@ jobs:
 
           VIDEO_SIZE=$(stat -c%s output.mp4)
 
-          # TikTok Direct Post upload
-          # 5MB is intentionally used as the base chunk size.
           CHUNK_SIZE=5000000
 
-          # IMPORTANT:
-          # This must be one-line Bash arithmetic.
           TOTAL_CHUNKS=$(( (VIDEO_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE ))
 
           echo "VIDEO_SIZE=${VIDEO_SIZE}"
@@ -836,6 +851,7 @@ jobs:
             exit 1
           fi
 
+          rm -rf chunks
           mkdir -p chunks
 
           split \
@@ -845,24 +861,54 @@ jobs:
             output.mp4 \
             chunks/part_
 
+          echo "================================"
+          echo "GENERATED CHUNKS"
+          echo "================================"
+
           ls -lh chunks/
 
-          ACTUAL_CHUNKS=$(find chunks -type f | wc -l)
+          ACTUAL_CHUNKS=$(
+            find chunks \
+              -maxdepth 1 \
+              -type f \
+              -name 'part_*' \
+              | wc -l
+          )
 
           echo "ACTUAL_CHUNKS=${ACTUAL_CHUNKS}"
 
-          if [ "$ACTUAL_CHUNKS" -ne "$TOTAL_CHUNKS" ]; then
-            echo "WARNING: Calculated chunk count differs from split result."
-            echo "Using actual chunk count."
-
-            TOTAL_CHUNKS="$ACTUAL_CHUNKS"
+          if [ "$ACTUAL_CHUNKS" -lt 1 ]; then
+            echo "ERROR: No chunks were created."
+            exit 1
           fi
 
+          TOTAL_CHUNKS="$ACTUAL_CHUNKS"
+
+          FIRST_CHUNK=$(
+            find chunks \
+              -maxdepth 1 \
+              -type f \
+              -name 'part_*' \
+              | sort \
+              | head -n 1
+          )
+
+          if [ -z "$FIRST_CHUNK" ]; then
+            echo "ERROR: First chunk was not found."
+            exit 1
+          fi
+
+          FIRST_CHUNK_SIZE=$(stat -c%s "$FIRST_CHUNK")
+
+          echo "FIRST_CHUNK=${FIRST_CHUNK}"
+          echo "FIRST_CHUNK_SIZE=${FIRST_CHUNK_SIZE}"
           echo "FINAL_TOTAL_CHUNKS=${TOTAL_CHUNKS}"
 
           echo "VIDEO_SIZE=${VIDEO_SIZE}" >> "$GITHUB_ENV"
           echo "CHUNK_SIZE=${CHUNK_SIZE}" >> "$GITHUB_ENV"
           echo "TOTAL_CHUNKS=${TOTAL_CHUNKS}" >> "$GITHUB_ENV"
+          echo "FIRST_CHUNK=${FIRST_CHUNK}" >> "$GITHUB_ENV"
+          echo "FIRST_CHUNK_SIZE=${FIRST_CHUNK_SIZE}" >> "$GITHUB_ENV"
 
 
       # ============================================================
@@ -878,9 +924,9 @@ jobs:
           echo "INITIALIZING TIKTOK DIRECT POST"
           echo "================================"
 
-          FIRST_CHUNK_SIZE=$(stat -c%s chunks/part_00)
-
+          VIDEO_SIZE="${VIDEO_SIZE}"
           TOTAL_CHUNKS="${TOTAL_CHUNKS}"
+          FIRST_CHUNK_SIZE="${FIRST_CHUNK_SIZE}"
 
           echo "VIDEO_SIZE=${VIDEO_SIZE}"
           echo "FIRST_CHUNK_SIZE=${FIRST_CHUNK_SIZE}"
@@ -910,10 +956,25 @@ jobs:
               }
           }
 
-          with open("init_request.json", "w", encoding="utf-8") as f:
-              json.dump(payload, f, ensure_ascii=False, indent=2)
+          with open(
+              "init_request.json",
+              "w",
+              encoding="utf-8"
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  ensure_ascii=False,
+                  indent=2
+              )
 
-          print(json.dumps(payload, ensure_ascii=False, indent=2))
+          print(
+              json.dumps(
+                  payload,
+                  ensure_ascii=False,
+                  indent=2
+              )
+          )
           PY
 
           curl \
@@ -1000,7 +1061,7 @@ jobs:
           OFFSET=0
           INDEX=0
 
-          for FILE in $(find chunks -type f | sort); do
+          for FILE in $(find chunks -type f -name 'part_*' | sort); do
 
             CHUNK_FILE_SIZE=$(stat -c%s "$FILE")
 
@@ -1129,24 +1190,28 @@ jobs:
 
           echo ""
           echo "CONTENT:"
+
           if [ -f content.json ]; then
             jq '.' content.json
           fi
 
           echo ""
           echo "CREATOR:"
+
           if [ -f creator.json ]; then
             jq '.' creator.json
           fi
 
           echo ""
           echo "INIT:"
+
           if [ -f init_response.json ]; then
             jq '.' init_response.json
           fi
 
           echo ""
           echo "STATUS:"
+
           if [ -f status.json ]; then
             jq '.' status.json
           fi
