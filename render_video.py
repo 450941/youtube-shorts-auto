@@ -1,3 +1,10 @@
+# ============================================================
+# LONG VIDEO GENERATOR
+# 5-MINUTE TRIVIA + PSYCHOLOGY + ENCOURAGEMENT
+#
+# Version: 2026.09
+# ============================================================
+
 import os
 import re
 import json
@@ -15,612 +22,614 @@ from PIL import (
     ImageDraw,
     ImageFont,
     ImageFilter,
-    ImageEnhance
+    ImageEnhance,
 )
 
 
-# =========================================================
-# LONG VIDEO GENERATOR
-# 5-MINUTE TRIVIA + PSYCHOLOGY + PHILOSOPHY
-# =========================================================
-
-
-# =========================================================
+# ============================================================
 # SETTINGS
-# =========================================================
+# ============================================================
 
 WIDTH = 1920
 HEIGHT = 1080
+FPS = 30
 
 THUMB_WIDTH = 3840
 THUMB_HEIGHT = 2160
 
-FPS = 30
-
-TARGET_MINUTES = 5
-
 TOPICS_PER_VIDEO = 15
 
-VOICE = "ja-JP-NanamiNeural"
+# 目標
+TARGET_DURATION = 300
 
+# 音声
+VOICE = "ja-JP-NanamiNeural"
 VOICE_RATE = "-3%"
 
-VOICE_VOLUME = "+0%"
+# Pexels
+PEXELS_API_KEY = os.environ.get(
+    "PEXELS_API_KEY",
+    ""
+).strip()
 
-PEXELS_PER_PAGE = 40
-
-MIN_VIDEO_WIDTH = 1280
-
-VIDEO_SEARCH_PAGES = 2
-
-RANDOM_SEED = random.randint(
-    100000,
-    999999999
+PEXELS_URL = (
+    "https://api.pexels.com/videos/search"
 )
 
-random.seed(RANDOM_SEED)
+PEXELS_PHOTO_URL = (
+    "https://api.pexels.com/v1/search"
+)
 
+PEXELS_HEADERS = {
+    "Authorization": PEXELS_API_KEY
+}
 
-# =========================================================
-# PATHS
-# =========================================================
-
+# directories
 BASE_DIR = Path(".")
 
 MEDIA_DIR = BASE_DIR / "media"
-
-IMAGE_DIR = MEDIA_DIR / "images"
-
 VOICE_DIR = MEDIA_DIR / "voice"
-
-CUT_DIR = MEDIA_DIR / "cuts"
-
+VIDEO_DIR = MEDIA_DIR / "cuts"
 SUBTITLE_DIR = MEDIA_DIR / "subtitles"
 
 OUTPUT_DIR = BASE_DIR / "output"
 
 CACHE_DIR = BASE_DIR / "cache"
 
-USED_TOPICS_FILE = (
-    CACHE_DIR / "used_topics.json"
-)
-
-USED_VIDEOS_FILE = (
-    CACHE_DIR / "used_pexels_videos.json"
-)
-
-FINAL_VIDEO = (
-    OUTPUT_DIR / "final_video.mp4"
-)
-
-THUMBNAIL = (
-    OUTPUT_DIR / "thumbnail.jpg"
-)
-
-TITLE_FILE = (
-    OUTPUT_DIR / "title.txt"
-)
-
-VIDEO_INFO_FILE = (
-    OUTPUT_DIR / "video_info.json"
-)
-
-CREDIT_FILE = (
-    OUTPUT_DIR / "pexels_credit.txt"
-)
-
-IRASUTOYA_FILE = (
-    OUTPUT_DIR / "irasutoya_sources.json"
-)
+for d in [
+    MEDIA_DIR,
+    VOICE_DIR,
+    VIDEO_DIR,
+    SUBTITLE_DIR,
+    OUTPUT_DIR,
+    CACHE_DIR,
+]:
+    d.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
 
-# =========================================================
-# ENVIRONMENT
-# =========================================================
+# ============================================================
+# FFMPEG
+# ============================================================
 
-PEXELS_API_KEY = (
-    os.environ
-    .get("PEXELS_API_KEY", "")
-    .strip()
-)
+FFMPEG = "ffmpeg"
+FFPROBE = "ffprobe"
 
 
-# =========================================================
-# TOPIC DATABASE
-# =========================================================
+# ============================================================
+# CONTENT DATABASE
+# ============================================================
+#
+# 身近な疑問を中心にする。
+#
+# 「単なる雑学」ではなく、
+#
+# 1. フック
+# 2. 意外な事実
+# 3. なぜそうなる？
+# 4. 日常へのつながり
+#
+# の流れにする。
+# ============================================================
 
-TOPICS = [
+FACTS = [
 
-    # -----------------------------------------------------
-    # 心理学
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # 心理
+    # --------------------------------------------------------
 
     {
-        "id": "psych_001",
-        "category": "心理学",
-        "keyword": "心理学",
-        "title": "人はなぜ忘れようとすると余計に思い出すのか",
+        "id": "psych_first_impression",
+        "category": "心理",
+        "title": "第一印象",
         "fact": (
-            "忘れようと意識するほど、その対象が頭に浮かびやすくなることがあります。"
-            "これは、考えないようにするために脳が対象を監視してしまうためです。"
+            "最初に得た情報が、その後の判断の基準になってしまうことがあります。"
         ),
-        "hook": "「絶対に考えないで」と言われると、逆に考えてしまったことありませんか？",
-        "why": "考えないようにするためには、まず「今それを考えていないか」を確認する必要があります。",
-        "ending": "つまり、無理に追い出すより、いったん受け流したほうが楽になることもあるんです。"
+        "explanation": (
+            "最初の情報を基準にすると、その後に入ってくる情報も、最初の印象に合わせて解釈しやすくなるからです。"
+        ),
+        "lesson": (
+            "だから第一印象は大切ですが、一度の印象だけで人を決めつけないことも大切です。"
+        ),
+        "query": "people meeting conversation",
     },
 
     {
-        "id": "psych_002",
-        "category": "心理学",
-        "keyword": "スマホ",
-        "title": "スマホが近くにあるだけで気が散る理由",
+        "id": "psych_name_memory",
+        "category": "心理",
+        "title": "名前を呼ばれる",
         "fact": (
-            "スマートフォンを使っていなくても、近くにあること自体が注意資源を奪う可能性があります。"
+            "自分の名前は、たくさんの音の中でも特に注意を向けやすい情報です。"
         ),
-        "hook": "スマホを机の上に置いたまま勉強してませんか？",
-        "why": "通知が来るかもしれない、という期待や確認したい気持ちが、無意識に注意を使わせます。",
-        "ending": "集中したいときは、画面を伏せるだけでなく、少し離してみるのも一つの方法です。"
+        "explanation": (
+            "自分に関係する情報は重要度が高いと脳が判断するため、周囲が騒がしくても名前には気づきやすくなります。"
+        ),
+        "lesson": (
+            "人との会話では、相手の名前を自然に使うだけでも印象に残りやすくなります。"
+        ),
+        "query": "friends talking smiling",
     },
 
     {
-        "id": "psych_003",
-        "category": "心理学",
-        "keyword": "選択",
-        "title": "選択肢が多すぎると決められなくなる理由",
+        "id": "psych_choice",
+        "category": "心理",
+        "title": "選択肢が多すぎる",
         "fact": (
-            "選択肢が増えるほど、比較する情報も増え、決断に負担を感じやすくなります。"
+            "選択肢が増えれば増えるほど、必ずしも決めやすくなるわけではありません。"
         ),
-        "hook": "メニューが多すぎて、逆に何も決められなくなったことありませんか？",
-        "why": "脳は候補を一つずつ比較しようとするため、選択肢が増えるほど処理する量も増えていきます。",
-        "ending": "だから迷ったときは、最初から候補を3つくらいに絞ると考えやすくなります。"
+        "explanation": (
+            "候補が多いと比較する項目も増えるため、決めるための精神的な負担が大きくなることがあります。"
+        ),
+        "lesson": (
+            "迷ったときは、最初から候補を三つ程度まで絞るだけでも考えやすくなります。"
+        ),
+        "query": "person choosing shopping products",
     },
 
     {
-        "id": "psych_004",
-        "category": "心理学",
-        "keyword": "記憶",
-        "title": "昔の失敗を何度も思い出してしまう理由",
+        "id": "psych_music_mood",
+        "category": "心理",
+        "title": "音楽と気分",
         "fact": (
-            "強く感情が動いた出来事は、普通の出来事より記憶に残りやすくなります。"
+            "音楽は、そのときの気分や記憶と強く結びつきやすいものです。"
         ),
-        "hook": "寝る前になると、昔の恥ずかしい記憶が突然出てくることありませんか？",
-        "why": "感情の強さは記憶の形成に影響するため、重要だった出来事として残りやすいのです。",
-        "ending": "その記憶が残っているからといって、あなたがずっと失敗しているという意味ではありません。"
+        "explanation": (
+            "特定の曲を聞いた瞬間に昔の出来事を思い出すことがあるのは、音と感情や記憶が一緒に保存されることがあるためです。"
+        ),
+        "lesson": (
+            "気分を切り替えたいときに、いつも聞く曲を使うのも一つの方法です。"
+        ),
+        "query": "person listening music headphones",
     },
 
     {
-        "id": "psych_005",
-        "category": "心理学",
-        "keyword": "第一印象",
-        "title": "最初の印象が後からも影響しやすい理由",
+        "id": "psych_smile",
+        "category": "心理",
+        "title": "笑顔",
         "fact": (
-            "最初に得た情報は、その後の判断の基準になってしまうことがあります。"
+            "笑顔は、自分だけでなく周囲の人の感情にも影響することがあります。"
         ),
-        "hook": "初対面で感じた印象って、あとからなかなか変わらないですよね。",
-        "why": "最初の情報を基準にして、その後の情報を解釈してしまうことがあるからです。",
-        "ending": "だから第一印象は重要ですが、一度の印象だけで人を決めつけないことも大切です。"
+        "explanation": (
+            "人は相手の表情から感情を読み取るため、明るい表情を見ると自分の反応も変わりやすくなります。"
+        ),
+        "lesson": (
+            "無理に笑う必要はありませんが、自然な笑顔は人との距離を縮めるきっかけになります。"
+        ),
+        "query": "friends laughing together",
     },
 
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # 脳
+    # --------------------------------------------------------
+
+    {
+        "id": "brain_sleep_memory",
+        "category": "脳",
+        "title": "睡眠と記憶",
+        "fact": (
+            "寝ている間、脳が完全に休んで何もしていないわけではありません。"
+        ),
+        "explanation": (
+            "睡眠中にも、起きている間に得た情報を整理する働きが行われています。"
+        ),
+        "lesson": (
+            "何かを覚えたいときは、徹夜で詰め込むより睡眠も含めて考えることが大切です。"
+        ),
+        "query": "person sleeping bedroom",
+    },
+
+    {
+        "id": "brain_attention",
+        "category": "脳",
+        "title": "注意力",
+        "fact": (
+            "人は目の前にあるものを、すべて同じ強さで意識しているわけではありません。"
+        ),
+        "explanation": (
+            "脳は大量の情報の中から、重要だと判断したものに注意を向けています。"
+        ),
+        "lesson": (
+            "集中したいときは、スマホなど注意を奪うものを視界から外すだけでも環境を変えられます。"
+        ),
+        "query": "person focused working laptop",
+    },
+
+    {
+        "id": "brain_habit",
+        "category": "脳",
+        "title": "習慣",
+        "fact": (
+            "毎日繰り返す行動は、少しずつ意識しなくても行いやすくなります。"
+        ),
+        "explanation": (
+            "同じ状況で同じ行動を繰り返すことで、その行動への負担が小さく感じられるようになるためです。"
+        ),
+        "lesson": (
+            "大きな目標より、毎日一分だけ始めるほうが続けるきっかけを作りやすいことがあります。"
+        ),
+        "query": "person morning routine",
+    },
+
+    # --------------------------------------------------------
     # 人体
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
     {
-        "id": "body_001",
+        "id": "body_yawn",
         "category": "人体",
-        "keyword": "あくび",
-        "title": "あくびがうつるのはなぜ",
+        "title": "あくび",
         "fact": (
-            "人があくびをすると、それを見た人もあくびをしたくなることがあります。"
-            "この現象は「伝染性あくび」と呼ばれています。"
+            "あくびは眠いときだけに起こるものではありません。"
         ),
-        "hook": "今「あくび」って聞いて、ちょっとあくびしたくなりませんでした？",
-        "why": "他人の行動を見たときに、自分も似た行動を起こす仕組みが関係していると考えられています。",
-        "ending": "つまり、あくびは眠気だけじゃなく、人とのつながりとも関係しているかもしれません。"
+        "explanation": (
+            "退屈しているときや、緊張が変化するときなど、さまざまな場面であくびは起こります。"
+        ),
+        "lesson": (
+            "つまり、あくびをしたからといって、必ずしも相手が話をつまらないと思っているとは限りません。"
+        ),
+        "query": "person tired yawning",
     },
 
     {
-        "id": "body_002",
+        "id": "body_heartbeat",
         "category": "人体",
-        "keyword": "鳥肌",
-        "title": "怖いときに鳥肌が立つ理由",
+        "title": "心拍数",
         "fact": (
-            "鳥肌は、寒さや強い感情などによって皮膚の毛が立つ反応です。"
+            "緊張すると心臓が速く動くのを感じることがあります。"
         ),
-        "hook": "怖い映画を見ていると、寒くないのに鳥肌が立つことありませんか？",
-        "why": "自律神経の働きによって、皮膚の毛の根元にある小さな筋肉が収縮するためです。",
-        "ending": "昔の人間にとっては体温維持などに役立った反応の名残とも考えられています。"
+        "explanation": (
+            "体が活動に備える反応によって、心拍数などが変化するためです。"
+        ),
+        "lesson": (
+            "大事な場面で緊張するのは、弱さではなく体が準備している反応とも考えられます。"
+        ),
+        "query": "person nervous presentation",
     },
 
-    {
-        "id": "body_003",
-        "category": "人体",
-        "keyword": "くしゃみ",
-        "title": "くしゃみの速度が速い理由",
-        "fact": (
-            "くしゃみでは、鼻や口から空気を一気に外へ押し出します。"
-        ),
-        "hook": "くしゃみって、どうしてあんなに一瞬で出るんでしょう？",
-        "why": "異物などを外へ出すため、呼吸に使う筋肉が短時間に連動して働くからです。",
-        "ending": "体が勝手に行う、かなりダイナミックな防御反応なんです。"
-    },
-
-    {
-        "id": "body_004",
-        "category": "人体",
-        "keyword": "睡眠",
-        "title": "寝ている間も脳が止まらない理由",
-        "fact": (
-            "睡眠中も脳は活動しており、記憶の整理など重要な働きを続けています。"
-        ),
-        "hook": "寝ている間、脳は完全に休んでいると思っていませんか？",
-        "why": "睡眠中にも神経活動は続き、起きている間とは異なる状態で情報処理が行われます。",
-        "ending": "だから睡眠は「何もしない時間」ではなく、脳にとって大切な作業時間でもあるんです。"
-    },
-
-    # -----------------------------------------------------
+    # --------------------------------------------------------
     # 日常
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
     {
-        "id": "daily_001",
+        "id": "daily_phone",
         "category": "日常",
-        "keyword": "電子レンジ",
-        "title": "電子レンジで温まり方に差が出る理由",
+        "title": "スマホを見る",
         "fact": (
-            "電子レンジでは、食品の形や水分量、置き方などによって温まり方が変わります。"
+            "スマホは、通知が来ていなくても何となく確認してしまうことがあります。"
         ),
-        "hook": "同じ皿なのに、熱々の部分と冷たい部分がありませんか？",
-        "why": "電磁波によるエネルギーの伝わり方や食品内部の水分分布などが関係しています。",
-        "ending": "だから途中で位置を変えたり、少し置いて熱をなじませたりすると食べやすくなります。"
+        "explanation": (
+            "新しい情報があるかもしれないという期待そのものが、確認する行動のきっかけになることがあります。"
+        ),
+        "lesson": (
+            "集中したい時間だけ通知を切ると、意識を戻す回数を減らせます。"
+        ),
+        "query": "person smartphone home",
     },
 
     {
-        "id": "daily_002",
+        "id": "daily_smell_memory",
         "category": "日常",
-        "keyword": "氷",
-        "title": "氷が水に浮くのは実は珍しい",
+        "title": "匂いと記憶",
         "fact": (
-            "水は固体の氷になると、液体の水より密度が小さくなります。"
+            "昔の記憶が、突然ある匂いによってよみがえることがあります。"
         ),
-        "hook": "普通、固体って液体よりギュッと詰まっていそうですよね。",
-        "why": "氷の中では水分子が特徴的な構造を作り、液体よりすき間の多い状態になります。",
-        "ending": "そのため氷は水に沈まず、表面に浮くことができます。"
+        "explanation": (
+            "匂いの情報は感情や記憶に関係する脳の領域と近い経路で処理されるため、強い記憶と結びつくことがあります。"
+        ),
+        "lesson": (
+            "だから昔の場所の匂いを感じると、一瞬で過去に戻ったような感覚になることがあります。"
+        ),
+        "query": "person smelling coffee",
     },
 
-    {
-        "id": "daily_003",
-        "category": "日常",
-        "keyword": "雨",
-        "title": "雨の匂いを感じる理由",
-        "fact": (
-            "雨が降る前後に感じる独特の匂いには、土壌由来の物質などが関係しています。"
-        ),
-        "hook": "雨が降りそうなとき、なんとなく匂いで分かることありませんか？",
-        "why": "雨によって地面の物質が空気中へ移動し、鼻に届きやすくなることがあります。",
-        "ending": "天気の変化を、私たちは目だけでなく鼻でも感じ取っているんです。"
-    },
-
-    {
-        "id": "daily_004",
-        "category": "日常",
-        "keyword": "お風呂",
-        "title": "お風呂に入ると眠くなる理由",
-        "fact": (
-            "入浴による体温変化は、眠気と関係する体のリズムに影響します。"
-        ),
-        "hook": "お風呂から出たら急に眠くなった経験ありませんか？",
-        "why": "入浴で一時的に体温が上がり、その後ゆっくり下がる過程が眠気と関連すると考えられています。",
-        "ending": "夜のお風呂は、ただ体を洗うだけの時間ではないんです。"
-    },
-
-    # -----------------------------------------------------
-    # 食べ物
-    # -----------------------------------------------------
-
-    {
-        "id": "food_001",
-        "category": "食べ物",
-        "keyword": "辛い食べ物",
-        "title": "辛いものを食べると汗が出る理由",
-        "fact": (
-            "唐辛子に含まれるカプサイシンは、熱さを感じる神経を刺激します。"
-        ),
-        "hook": "辛いラーメンを食べて汗だくになったことありませんか？",
-        "why": "体が実際に熱くなったというより、熱さに似た刺激を受けるためです。",
-        "ending": "つまり舌が感じている「熱い！」と、実際の温度は別物なんです。"
-    },
-
-    {
-        "id": "food_002",
-        "category": "食べ物",
-        "keyword": "チョコレート",
-        "title": "甘いものを食べたくなるタイミング",
-        "fact": (
-            "疲労感やストレスなどによって、甘いものを食べたいと感じることがあります。"
-        ),
-        "hook": "疲れたとき、なぜか甘いものが欲しくなりませんか？",
-        "why": "エネルギー補給への欲求や、味による満足感など複数の要因が関係します。",
-        "ending": "「疲れたら甘いもの」という感覚には、ちゃんと理由があるんです。"
-    },
-
-    # -----------------------------------------------------
+    # --------------------------------------------------------
     # 科学
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
     {
-        "id": "science_001",
+        "id": "science_ice",
         "category": "科学",
-        "keyword": "音",
-        "title": "音が見えないのに聞こえる理由",
+        "title": "氷",
         "fact": (
-            "音は空気などの物質中を伝わる振動です。"
+            "水は凍ると、液体の水より体積が大きくなります。"
         ),
-        "hook": "声も音楽も見えないのに、どうして耳に届くのでしょう？",
-        "why": "物体の振動が周囲の空気を振動させ、その変化が耳へ伝わります。",
-        "ending": "つまり私たちは、空気の小さな振動を「音」として感じ取っているんです。"
+        "explanation": (
+            "水分子が氷の中で規則的な構造を作ることで、分子同士の間隔が広がるためです。"
+        ),
+        "lesson": (
+            "だからペットボトルいっぱいに水を入れて凍らせると、容器が変形することがあります。"
+        ),
+        "query": "ice water glass close up",
     },
 
     {
-        "id": "science_002",
+        "id": "science_sky",
         "category": "科学",
-        "keyword": "虹",
-        "title": "虹が七色に見える理由",
+        "title": "空が青い理由",
         "fact": (
-            "虹は、太陽光が水滴の中で屈折・反射・分散することで生まれます。"
+            "昼間の空が青く見えるのは、太陽の光がそのまま青いからではありません。"
         ),
-        "hook": "雨上がりの虹って、どうしてあんなに色が分かれるのでしょう？",
-        "why": "白く見える太陽光にはさまざまな波長の光が含まれていて、水滴を通ると分かれて見えます。",
-        "ending": "あの虹は、空に新しい色が生まれたわけではなく、光が分解されて見えているんです。"
+        "explanation": (
+            "大気中で光が散らばるとき、青い光は比較的強く散乱されるため、空全体から青い光が届きやすくなります。"
+        ),
+        "lesson": (
+            "夕方に空が赤くなるのも、光が大気を通る距離が変わることと関係しています。"
+        ),
+        "query": "blue sky clouds sunset",
     },
 
-    # -----------------------------------------------------
-    # 哲学
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # 哲学・考え方
+    # --------------------------------------------------------
 
     {
-        "id": "philosophy_001",
+        "id": "philosophy_control",
         "category": "哲学",
-        "keyword": "幸福",
-        "title": "幸せは物の量だけでは決まらない",
+        "title": "コントロールできること",
         "fact": (
-            "人が感じる幸福には、物質的な条件だけでなく、人間関係や自分の感じ方など複数の要因が関係します。"
+            "人生では、自分では変えられないことに悩んでしまうことがあります。"
         ),
-        "hook": "欲しかったものを買ったのに、しばらくすると普通になったことありませんか？",
-        "why": "人は環境の変化に慣れる傾向があり、以前は特別だったものが日常になることがあります。",
-        "ending": "だから幸せを考えるときは、「何を持っているか」だけでなく「何を感じているか」も大切なんです。"
+        "explanation": (
+            "他人の評価や過去の出来事などは、直接コントロールすることが難しいからです。"
+        ),
+        "lesson": (
+            "そんなときは、今日自分ができる小さな行動に意識を戻すだけでも考え方を整理しやすくなります。"
+        ),
+        "query": "person thinking peaceful nature",
     },
 
     {
-        "id": "philosophy_002",
+        "id": "philosophy_failure",
         "category": "哲学",
-        "keyword": "失敗",
-        "title": "失敗した経験にも意味がある理由",
+        "title": "失敗",
         "fact": (
-            "失敗は、その後の判断や行動を変えるための情報になることがあります。"
+            "失敗した出来事そのものより、失敗をどう解釈するかで次の行動は変わります。"
         ),
-        "hook": "失敗した瞬間は最悪でも、あとから「あれがあってよかった」と思うことありませんか？",
-        "why": "失敗によって、自分に合わない方法や改善すべき点を具体的に知ることができるからです。",
-        "ending": "失敗そのものが成功になるわけではありません。でも、次の行動を変える材料にはできます。"
+        "explanation": (
+            "同じ出来事でも、終わりだと考えるか、次に使える情報だと考えるかで、その後の選択が変わるからです。"
+        ),
+        "lesson": (
+            "うまくいかなかった日は、全部を否定するのではなく、一つだけ学びを持ち帰れば十分です。"
+        ),
+        "query": "person overcoming challenge",
     },
 
-    # -----------------------------------------------------
+    # --------------------------------------------------------
     # 人間関係
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
     {
-        "id": "relation_001",
+        "id": "relationship_listening",
         "category": "人間関係",
-        "keyword": "名前",
-        "title": "名前を呼ばれると少し嬉しくなる理由",
+        "title": "聞く力",
         "fact": (
-            "自分の名前は、自分にとって非常に身近で重要な情報です。"
+            "会話では、面白い話をすることだけが大切なわけではありません。"
         ),
-        "hook": "名前で呼ばれると、なんとなく距離が近く感じませんか？",
-        "why": "名前は自分自身と強く結びついた情報なので、注意を向けやすい特徴があります。",
-        "ending": "だから会話の中で相手の名前を自然に使うことは、親しみを感じてもらう一つのきっかけになります。"
+        "explanation": (
+            "人は自分の話をきちんと聞いてもらえると、相手に理解されていると感じやすくなります。"
+        ),
+        "lesson": (
+            "会話に困ったら、無理に話題を作るより相手の話を一つ深掘りする方法もあります。"
+        ),
+        "query": "two people talking listening",
     },
 
     {
-        "id": "relation_002",
+        "id": "relationship_comparison",
         "category": "人間関係",
-        "keyword": "笑顔",
-        "title": "笑顔を見るとこちらも笑いやすくなる理由",
+        "title": "人と比べる",
         "fact": (
-            "人は他人の表情を見て、自分の表情や感情にも影響を受けることがあります。"
+            "人は自分の状況を、周囲の人と比べて判断してしまうことがあります。"
         ),
-        "hook": "誰かが楽しそうに笑っていると、こっちまで笑ってしまいませんか？",
-        "why": "表情や感情の情報を読み取り、自分の反応にも影響する仕組みがあるためです。",
-        "ending": "だから笑顔は、自分一人のものではなく、周りにも伝わる行動なんです。"
+        "explanation": (
+            "自分だけを見ても、それが良いのか悪いのか判断しにくいため、他人を基準にしてしまうことがあるからです。"
+        ),
+        "lesson": (
+            "でも他人の結果だけを見て、自分の途中経過と比べると苦しくなります。"
+        ),
+        "query": "person looking city window",
     },
 
-    # -----------------------------------------------------
-    # 仕事
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # 仕事・勉強
+    # --------------------------------------------------------
 
     {
-        "id": "work_001",
+        "id": "work_start",
         "category": "仕事",
-        "keyword": "集中",
-        "title": "集中力がずっと続かないのは普通",
+        "title": "始めるだけ",
         "fact": (
-            "人間の注意力は一定ではなく、時間や環境によって変化します。"
+            "やる気が出てから行動するとは限りません。"
         ),
-        "hook": "「今日は集中できない…」って、自分を責めてませんか？",
-        "why": "注意には限界があり、疲労や睡眠、周囲の刺激などにも左右されます。",
-        "ending": "集中できない日があること自体は珍しくありません。大切なのは、集中できる環境を作ることです。"
+        "explanation": (
+            "まず少し行動することで、あとから集中状態に入りやすくなることがあります。"
+        ),
+        "lesson": (
+            "やる気がない日は、五分だけやると決めると始めるハードルを下げられます。"
+        ),
+        "query": "person working desk laptop",
     },
 
     {
-        "id": "work_002",
+        "id": "work_break",
         "category": "仕事",
-        "keyword": "先延ばし",
-        "title": "やるべきことほど後回しにしたくなる理由",
+        "title": "休憩",
         "fact": (
-            "難しそうな作業や失敗への不安がある作業ほど、始めること自体を避けたくなる場合があります。"
+            "長時間ずっと集中し続けることだけが効率的とは限りません。"
         ),
-        "hook": "重要な仕事ほど、なぜか掃除したくなったりしませんか？",
-        "why": "作業そのものより、「始めたら大変そう」という予想が心理的な負担になることがあります。",
-        "ending": "そんなときは完成させようとせず、まず5分だけ始めるという方法があります。"
+        "explanation": (
+            "注意力や疲労は時間とともに変化するため、適切に休憩を入れることが役立つ場合があります。"
+        ),
+        "lesson": (
+            "休むことをサボりと考えず、次の集中のための時間と考えるのも一つです。"
+        ),
+        "query": "person taking break coffee work",
     },
 
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # 食べ物
+    # --------------------------------------------------------
+
+    {
+        "id": "food_spicy",
+        "category": "食べ物",
+        "title": "辛さ",
+        "fact": (
+            "唐辛子の辛さは、味覚そのものとは少し違います。"
+        ),
+        "explanation": (
+            "唐辛子に含まれるカプサイシンが、熱さや痛みに関係する受容体を刺激することで、辛いと感じます。"
+        ),
+        "lesson": (
+            "だから辛い料理を食べたとき、実際に熱いわけではなくても熱く感じることがあります。"
+        ),
+        "query": "spicy food chili peppers",
+    },
+
+    # --------------------------------------------------------
     # 自然
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
     {
-        "id": "nature_001",
+        "id": "nature_rain",
         "category": "自然",
-        "keyword": "植物",
-        "title": "植物にも昼と夜のリズムがある",
+        "title": "雨の匂い",
         "fact": (
-            "植物も光や温度などの環境変化に応じて、活動状態を変化させています。"
+            "雨が降ったあとに独特の匂いを感じることがあります。"
         ),
-        "hook": "植物って、ずっと同じ状態に見えますよね。でも実は違います。",
-        "why": "植物には光を受ける時間などを手がかりにする生理的なリズムがあります。",
-        "ending": "静かに見える植物も、時間の流れの中でちゃんと変化しているんです。"
+        "explanation": (
+            "土や植物などに由来する物質が雨によって空気中に広がることなどが関係しています。"
+        ),
+        "lesson": (
+            "普段何気なく感じる雨の匂いにも、実は自然の化学反応が隠れています。"
+        ),
+        "query": "rain street nature",
     },
 
-    {
-        "id": "nature_002",
-        "category": "自然",
-        "keyword": "猫",
-        "title": "猫が狭い場所を好む理由",
-        "fact": (
-            "猫は狭い場所や囲まれた場所に入りたがる行動を見せることがあります。"
-        ),
-        "hook": "猫って、わざわざ箱の中に入りますよね。",
-        "why": "周囲をある程度遮る場所は、安心して休める環境になる場合があります。",
-        "ending": "人間にとってはただの段ボールでも、猫にとっては立派な安心スペースなんです。"
-    }
-
 ]
 
 
-# =========================================================
-# FONT SEARCH
-# =========================================================
+# ============================================================
+# HOOKS
+# ============================================================
 
-FONT_CANDIDATES = [
-
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
-
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-
+HOOKS = [
+    "これ、たぶん一度は経験あります。",
+    "実はこれ、かなり身近な心理現象です。",
+    "知っているようで、意外と知らない話です。",
+    "もし今までこう思っていたなら、少しだけ見方が変わるかもしれません。",
+    "これ、あなたにも起きているかもしれません。",
+    "日常の何気ない瞬間に、実はこんなことが起きています。",
+    "一見すると普通ですが、脳の仕組みを知ると面白くなります。",
+    "これを知ると、昨日までの日常が少し違って見えるかもしれません。",
 ]
 
 
-def find_font():
+# ============================================================
+# ENCOURAGEMENT
+# ============================================================
 
-    for path in FONT_CANDIDATES:
-
-        if os.path.exists(path):
-
-            return path
-
-    return None
-
-
-FONT_PATH = find_font()
+ENCOURAGEMENT = [
+    "知らなかったことを一つ知るだけでも、今日は前進です。",
+    "全部を変えなくても、今日一つ行動できれば十分です。",
+    "小さな変化でも、積み重なると大きな違いになります。",
+    "うまくいかない日があっても、それだけで失敗とは限りません。",
+    "今日できる小さなことから始めれば大丈夫です。",
+]
 
 
-# =========================================================
-# BASIC HELPERS
-# =========================================================
-
-def ensure_directories():
-
-    IMAGE_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    VOICE_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    CUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    SUBTITLE_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    CACHE_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
+# ============================================================
+# UTILS
+# ============================================================
 
 def run_command(
-    command,
-    check=True
+    cmd,
+    check=True,
+    capture_output=False
 ):
-
     print()
-
-    print(
-        "COMMAND:",
-        " ".join(
-            str(x)
-            for x in command
-        )
-    )
+    print("RUN:")
+    print(" ".join(map(str, cmd)))
 
     result = subprocess.run(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True
+        cmd,
+        check=check,
+        text=True,
+        capture_output=capture_output
     )
 
-    if result.stdout:
-
-        print(
-            result.stdout
-        )
-
-    if check and result.returncode != 0:
-
-        raise RuntimeError(
-            "Command failed: "
-            + " ".join(
-                str(x)
-                for x in command
-            )
-        )
+    if capture_output:
+        return result.stdout.strip()
 
     return result
 
 
-def save_json(
-    path,
-    data
-):
+def get_duration(path):
+    cmd = [
+        FFPROBE,
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(path)
+    ]
+
+    output = run_command(
+        cmd,
+        capture_output=True
+    )
+
+    try:
+        return float(output)
+    except Exception:
+        return 0.0
+
+
+def safe_name(text):
+    text = re.sub(
+        r'[\\/:*?"<>|]',
+        "_",
+        text
+    )
+
+    text = text.replace(
+        " ",
+        "_"
+    )
+
+    return text[:80]
+
+
+def load_json(path, default):
+    if not path.exists():
+        return default
+
+    try:
+        with open(
+            path,
+            "r",
+            encoding="utf-8"
+        ) as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+def save_json(path, data):
+    path.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
     with open(
         path,
         "w",
         encoding="utf-8"
     ) as f:
-
         json.dump(
             data,
             f,
@@ -629,189 +638,112 @@ def save_json(
         )
 
 
-def load_json(
-    path,
-    default
-):
-
-    if not path.exists():
-
-        return default
-
-    try:
-
-        with open(
-            path,
-            "r",
-            encoding="utf-8"
-        ) as f:
-
-            return json.load(f)
-
-    except Exception:
-
-        return default
-
-
-def get_duration(
-    path
-):
-
-    result = subprocess.run(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(path)
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
-    )
-
-    if result.returncode != 0:
-
-        raise RuntimeError(
-            "ffprobe failed"
-        )
-
-    return float(
-        result.stdout.strip()
-    )
-
-
-def safe_filename(
-    text
-):
-
-    text = re.sub(
-        r'[\\/:*?"<>|]',
-        "_",
-        text
-    )
-
-    text = text.strip()
-
-    if not text:
-
-        text = "item"
-
-    return text[:100]
-
-
-# =========================================================
+# ============================================================
 # TOPIC SELECTION
-# =========================================================
+# ============================================================
 
 def select_topics():
+    used_file = CACHE_DIR / "used_topics.json"
 
     used = load_json(
-        USED_TOPICS_FILE,
+        used_file,
         []
     )
 
-    if not isinstance(
-        used,
-        list
-    ):
-
+    if not isinstance(used, list):
         used = []
 
     available = [
-        topic
-        for topic in TOPICS
-        if topic["id"] not in used
+        x for x in FACTS
+        if x["id"] not in used
     ]
 
     if len(available) < TOPICS_PER_VIDEO:
-
         print(
-            "使用済みネタが増えたため、"
-            "トピック履歴をリセットします。"
+            "Topic pool almost exhausted."
         )
 
         used = []
 
         available = list(
-            TOPICS
+            FACTS
         )
 
     random.shuffle(
         available
     )
 
-    selected = (
-        available[
-            :TOPICS_PER_VIDEO
-        ]
+    selected = available[
+        :TOPICS_PER_VIDEO
+    ]
+
+    used.extend(
+        x["id"]
+        for x in selected
+    )
+
+    # 重複除去
+    used = list(
+        dict.fromkeys(used)
+    )
+
+    save_json(
+        used_file,
+        used
     )
 
     return selected
 
 
-# =========================================================
-# SCRIPT GENERATION
-# =========================================================
+# ============================================================
+# SCRIPT CREATION
+# ============================================================
 
-def make_script(
-    topic,
-    index
-):
-
-    number = index + 1
-
-    intro = (
-        f"第{number}問。"
+def make_script(topic, index):
+    hook = random.choice(
+        HOOKS
     )
 
-    hook = topic["hook"]
-
-    fact = topic["fact"]
-
-    why = topic["why"]
-
-    ending = topic["ending"]
-
-    bridge = random.choice(
-        [
-            "ここが面白いところです。",
-            "実はここには理由があります。",
-            "ここからがちょっと意外です。",
-            "これ、身近なのに意外と知られていません。",
-            "知っているだけで見え方が少し変わります。"
-        ]
+    encouragement = random.choice(
+        ENCOURAGEMENT
     )
 
-    script = (
-        f"{intro}"
-        f"{hook} "
-        f"{bridge} "
-        f"{fact} "
-        f"{why} "
-        f"{ending}"
-    )
+    title = topic["title"]
 
-    return script
+    sentences = [
+        f"第{index}問。{hook}",
+        f"{title}について、実は「{topic['fact']}」ということがあります。",
+        topic["explanation"],
+        topic["lesson"],
+        encouragement,
+    ]
+
+    # 長すぎる場合に軽く整理
+    result = []
+
+    for sentence in sentences:
+        sentence = sentence.strip()
+
+        if sentence:
+            result.append(
+                sentence
+            )
+
+    return result
 
 
-# =========================================================
+# ============================================================
 # TTS
-# =========================================================
+# ============================================================
 
-async def create_tts_async(
+async def create_tts(
     text,
     output_path
 ):
-
     communicate = edge_tts.Communicate(
-        text,
-        VOICE,
-        rate=VOICE_RATE,
-        volume=VOICE_VOLUME
+        text=text,
+        voice=VOICE,
+        rate=VOICE_RATE
     )
 
     await communicate.save(
@@ -819,902 +751,406 @@ async def create_tts_async(
     )
 
 
-def create_tts(
+def create_tts_sync(
     text,
     output_path
 ):
+    print()
+    print("Creating TTS...")
+    print(text)
 
     asyncio.run(
-        create_tts_async(
+        create_tts(
             text,
             output_path
         )
     )
 
+    duration = get_duration(
+        output_path
+    )
 
-# =========================================================
-# PEXELS
-# =========================================================
+    print(
+        f"Audio duration: {duration:.2f}s"
+    )
 
-PEXELS_HEADERS = {
-    "Authorization": PEXELS_API_KEY
-}
+    if duration <= 0:
+        raise RuntimeError(
+            f"TTS音声の長さを取得できません: {output_path}"
+        )
+
+    return duration
 
 
-def pexels_search_videos(
-    query
+# ============================================================
+# PEXELS VIDEO SEARCH
+# ============================================================
+
+def search_pexels_videos(
+    query,
+    per_page=20
 ):
+    if not PEXELS_API_KEY:
+        raise RuntimeError(
+            "PEXELS_API_KEY がありません"
+        )
 
-    url = (
-        "https://api.pexels.com/videos/search"
+    print()
+    print(
+        f"Searching Pexels: {query}"
     )
 
     params = {
         "query": query,
         "orientation": "landscape",
         "size": "medium",
-        "per_page": PEXELS_PER_PAGE,
+        "per_page": per_page,
         "page": random.randint(
             1,
-            VIDEO_SEARCH_PAGES
+            3
         )
     }
 
-    response = requests.get(
-        url,
-        headers=PEXELS_HEADERS,
-        params=params,
-        timeout=30
-    )
-
-    response.raise_for_status()
-
-    return response.json().get(
-        "videos",
-        []
-    )
-
-
-def choose_pexels_file(
-    videos,
-    used_ids
-):
-
-    candidates = []
-
-    for video in videos:
-
-        video_id = str(
-            video.get(
-                "id",
-                ""
-            )
+    try:
+        response = requests.get(
+            PEXELS_URL,
+            headers=PEXELS_HEADERS,
+            params=params,
+            timeout=30
         )
 
-        if not video_id:
-            continue
-
-        if video_id in used_ids:
-            continue
-
-        width = int(
-            video.get(
-                "width",
-                0
-            )
-            or 0
+        print(
+            "Pexels status:",
+            response.status_code
         )
-
-        height = int(
-            video.get(
-                "height",
-                0
-            )
-            or 0
-        )
-
-        if width < MIN_VIDEO_WIDTH:
-            continue
-
-        files = video.get(
-            "video_files",
-            []
-        )
-
-        best = None
-
-        for file in files:
-
-            fw = int(
-                file.get(
-                    "width",
-                    0
-                )
-                or 0
-            )
-
-            fh = int(
-                file.get(
-                    "height",
-                    0
-                )
-                or 0
-            )
-
-            link = file.get(
-                "link"
-            )
-
-            if not link:
-                continue
-
-            if fw < MIN_VIDEO_WIDTH:
-                continue
-
-            if best is None:
-
-                best = file
-
-            else:
-
-                old_width = int(
-                    best.get(
-                        "width",
-                        0
-                    )
-                    or 0
-                )
-
-                if fw > old_width:
-
-                    best = file
-
-        if best:
-
-            candidates.append(
-                (
-                    video,
-                    best
-                )
-            )
-
-    if not candidates:
-
-        return None
-
-    return random.choice(
-        candidates
-    )
-
-
-def download_file(
-    url,
-    path
-):
-
-    print(
-        "Downloading:",
-        url
-    )
-
-    with requests.get(
-        url,
-        stream=True,
-        timeout=60
-    ) as response:
 
         response.raise_for_status()
 
-        with open(
-            path,
-            "wb"
-        ) as f:
+        data = response.json()
 
-            for chunk in response.iter_content(
-                chunk_size=1024 * 1024
-            ):
-
-                if chunk:
-
-                    f.write(
-                        chunk
-                    )
-
-
-# =========================================================
-# VIDEO SEARCH QUERIES
-# =========================================================
-
-QUERY_MAP = {
-
-    "心理学": [
-        "person thinking",
-        "people thinking",
-        "person looking at smartphone",
-        "human emotion",
-        "people talking"
-    ],
-
-    "人体": [
-        "human face",
-        "person sleeping",
-        "person yawning",
-        "human body",
-        "person relaxing"
-    ],
-
-    "日常": [
-        "daily life",
-        "home kitchen",
-        "person cooking",
-        "coffee morning",
-        "household"
-    ],
-
-    "食べ物": [
-        "food",
-        "eating",
-        "cooking",
-        "restaurant",
-        "dessert"
-    ],
-
-    "科学": [
-        "science",
-        "laboratory",
-        "technology",
-        "space",
-        "light"
-    ],
-
-    "哲学": [
-        "person thinking",
-        "silhouette thinking",
-        "person walking",
-        "sunset person",
-        "reflection"
-    ],
-
-    "人間関係": [
-        "friends talking",
-        "people smiling",
-        "friends laughing",
-        "conversation",
-        "people together"
-    ],
-
-    "仕事": [
-        "office work",
-        "person working",
-        "computer office",
-        "desk work",
-        "business"
-    ],
-
-    "自然": [
-        "nature",
-        "forest",
-        "plants",
-        "cat",
-        "outdoors"
-    ]
-
-}
-
-
-def get_queries(
-    topic
-):
-
-    category = topic.get(
-        "category",
-        "日常"
-    )
-
-    keyword = topic.get(
-        "keyword",
-        ""
-    )
-
-    queries = []
-
-    if keyword:
-
-        queries.append(
-            keyword
+        videos = data.get(
+            "videos",
+            []
         )
 
-    queries.extend(
-        QUERY_MAP.get(
-            category,
-            [
-                "daily life",
-                "people"
-            ]
+        print(
+            "Found videos:",
+            len(videos)
         )
+
+        return videos
+
+    except Exception as e:
+        print(
+            "Pexels search error:",
+            e
+        )
+
+        return []
+
+
+def choose_video_file(video):
+    files = video.get(
+        "video_files",
+        []
     )
 
-    # Remove duplicates
-    result = []
+    if not files:
+        return None
 
-    for q in queries:
+    # HD以上を優先
+    candidates = []
 
-        if q not in result:
+    for item in files:
+        width = item.get(
+            "width"
+        ) or 0
 
-            result.append(q)
+        height = item.get(
+            "height"
+        ) or 0
 
-    return result
+        link = item.get(
+            "link"
+        )
 
+        if not link:
+            continue
 
-# =========================================================
-# DOWNLOAD VISUAL
-# =========================================================
+        candidates.append(
+            (
+                width * height,
+                width,
+                height,
+                link
+            )
+        )
+
+    if not candidates:
+        return None
+
+    candidates.sort(
+        reverse=True
+    )
+
+    # なるべく1920x1080前後
+    for area, width, height, link in candidates:
+        if width >= 1280 and height >= 720:
+            return {
+                "link": link,
+                "width": width,
+                "height": height
+            }
+
+    area, width, height, link = candidates[0]
+
+    return {
+        "link": link,
+        "width": width,
+        "height": height
+    }
+
 
 def get_video_for_topic(
     topic,
-    index,
     used_video_ids
 ):
+    queries = [
+        topic["query"],
+    ]
 
-    queries = get_queries(
-        topic
+    # 日本語タイトルも候補
+    queries.append(
+        topic["title"]
     )
 
     for query in queries:
 
-        print()
-        print(
-            f"Searching Pexels: {query}"
+        videos = search_pexels_videos(
+            query,
+            per_page=20
         )
 
-        try:
-
-            videos = pexels_search_videos(
-                query
-            )
-
-        except Exception as e:
-
-            print(
-                "Pexels search error:",
-                e
-            )
-
+        if not videos:
             continue
 
-        selected = choose_pexels_file(
-            videos,
-            used_video_ids
+        random.shuffle(
+            videos
         )
 
-        if not selected:
+        for video in videos:
 
-            continue
-
-        video,
-        video_file = selected
-
-        video_id = str(
-            video.get(
+            video_id = video.get(
                 "id"
             )
-        )
 
-        url = video_file.get(
-            "link"
-        )
+            if not video_id:
+                continue
 
-        filename = (
-            f"scene_{index + 1:02d}_"
-            f"{video_id}.mp4"
-        )
+            if str(video_id) in used_video_ids:
+                continue
 
-        output_path = (
-            IMAGE_DIR /
-            filename
-        )
-
-        try:
-
-            download_file(
-                url,
-                output_path
+            selected_file = choose_video_file(
+                video
             )
 
-            used_video_ids.append(
-                video_id
-            )
+            if not selected_file:
+                continue
 
             return {
-                "path": output_path,
-                "id": video_id,
-                "url": url,
+                "id": str(video_id),
+                "url": selected_file["link"],
+                "width": selected_file["width"],
+                "height": selected_file["height"],
+                "user": video.get(
+                    "user",
+                    {}
+                ),
                 "page": video.get(
                     "url",
                     ""
-                ),
-                "query": query
+                )
             }
 
-        except Exception as e:
-
-            print(
-                "Video download error:",
-                e
-            )
+    # 最終フォールバック
+    print(
+        "Pexels動画が見つかりませんでした。"
+    )
 
     return None
 
 
-# =========================================================
-# VIDEO PROCESSING
-# =========================================================
+# ============================================================
+# DOWNLOAD VIDEO
+# ============================================================
 
-def create_scene(
-    video_path,
-    audio_path,
+def download_video(
+    video_info,
     output_path
 ):
-
-    duration = get_duration(
-        audio_path
+    print()
+    print(
+        "Downloading Pexels video..."
     )
 
-    video_duration = get_duration(
-        video_path
+    url = video_info["url"]
+
+    response = requests.get(
+        url,
+        stream=True,
+        timeout=120
     )
 
-    if video_duration <= 0:
-
-        raise RuntimeError(
-            "動画の長さを取得できませんでした"
-        )
-
-    if video_duration < duration:
-
-        loop_count = int(
-            duration / video_duration
-        ) + 2
-
-        filter_complex = (
-            f"[0:v]scale={WIDTH}:{HEIGHT}:"
-            f"force_original_aspect_ratio=increase,"
-            f"crop={WIDTH}:{HEIGHT},"
-            f"setsar=1,"
-            f"fps={FPS},"
-            f"trim=duration={duration},"
-            f"setpts=PTS-STARTPTS[v]"
-        )
-
-        command = [
-            "ffmpeg",
-            "-y",
-
-            "-stream_loop",
-            str(loop_count),
-
-            "-i",
-            str(video_path),
-
-            "-i",
-            str(audio_path),
-
-            "-filter_complex",
-            filter_complex,
-
-            "-map",
-            "[v]",
-
-            "-map",
-            "1:a",
-
-            "-t",
-            str(duration),
-
-            "-c:v",
-            "libx264",
-
-            "-preset",
-            "veryfast",
-
-            "-crf",
-            "21",
-
-            "-pix_fmt",
-            "yuv420p",
-
-            "-c:a",
-            "aac",
-
-            "-b:a",
-            "192k",
-
-            "-movflags",
-            "+faststart",
-
-            str(output_path)
-        ]
-
-    else:
-
-        start = 0
-
-        if video_duration > duration + 3:
-
-            max_start = (
-                video_duration
-                - duration
-            )
-
-            start = random.uniform(
-                0,
-                max_start
-            )
-
-        command = [
-            "ffmpeg",
-            "-y",
-
-            "-ss",
-            str(start),
-
-            "-i",
-            str(video_path),
-
-            "-i",
-            str(audio_path),
-
-            "-filter_complex",
-
-            (
-                f"[0:v]"
-                f"scale={WIDTH}:{HEIGHT}:"
-                f"force_original_aspect_ratio=increase,"
-                f"crop={WIDTH}:{HEIGHT},"
-                f"setsar=1,"
-                f"fps={FPS},"
-                f"setpts=PTS-STARTPTS[v]"
-            ),
-
-            "-map",
-            "[v]",
-
-            "-map",
-            "1:a",
-
-            "-t",
-            str(duration),
-
-            "-c:v",
-            "libx264",
-
-            "-preset",
-            "veryfast",
-
-            "-crf",
-            "21",
-
-            "-pix_fmt",
-            "yuv420p",
-
-            "-c:a",
-            "aac",
-
-            "-b:a",
-            "192k",
-
-            "-movflags",
-            "+faststart",
-
-            str(output_path)
-        ]
-
-    run_command(
-        command
-    )
-
-
-# =========================================================
-# SUBTITLE HELPERS
-# =========================================================
-
-def format_srt_time(
-    seconds
-):
-
-    milliseconds = int(
-        round(
-            seconds * 1000
-        )
-    )
-
-    hours = (
-        milliseconds // 3600000
-    )
-
-    milliseconds %= 3600000
-
-    minutes = (
-        milliseconds // 60000
-    )
-
-    milliseconds %= 60000
-
-    secs = (
-        milliseconds // 1000
-    )
-
-    milliseconds %= 1000
-
-    return (
-        f"{hours:02d}:"
-        f"{minutes:02d}:"
-        f"{secs:02d},"
-        f"{milliseconds:03d}"
-    )
-
-
-def split_text(
-    text,
-    max_chars=20
-):
-
-    text = re.sub(
-        r"\s+",
-        "",
-        text
-    )
-
-    parts = re.split(
-        r"(?<=[。！？])",
-        text
-    )
-
-    result = []
-
-    for part in parts:
-
-        part = part.strip()
-
-        if not part:
-            continue
-
-        if len(part) <= max_chars:
-
-            result.append(
-                part
-            )
-
-            continue
-
-        for i in range(
-            0,
-            len(part),
-            max_chars
-        ):
-
-            chunk = part[
-                i:i + max_chars
-            ].strip()
-
-            if chunk:
-
-                result.append(
-                    chunk
-                )
-
-    return result
-
-
-def create_subtitle_file(
-    segments,
-    output_path
-):
-
-    entries = []
-
-    global_time = 0.0
-
-    subtitle_index = 1
-
-    for segment in segments:
-
-        text = segment["text"]
-
-        duration = float(
-            segment["duration"]
-        )
-
-        chunks = split_text(
-            text,
-            max_chars=18
-        )
-
-        if not chunks:
-
-            global_time += duration
-
-            continue
-
-        # Character-weighted timing.
-        # This is more natural than simply dividing
-        # the audio duration equally.
-
-        total_chars = sum(
-            max(
-                1,
-                len(chunk)
-            )
-            for chunk in chunks
-        )
-
-        current = global_time
-
-        for chunk in chunks:
-
-            ratio = (
-                max(
-                    1,
-                    len(chunk)
-                )
-                / total_chars
-            )
-
-            chunk_duration = (
-                duration * ratio
-            )
-
-            start = current
-
-            end = (
-                current
-                + chunk_duration
-            )
-
-            entries.append(
-                (
-                    subtitle_index,
-                    start,
-                    end,
-                    chunk
-                )
-            )
-
-            subtitle_index += 1
-
-            current = end
-
-        global_time += duration
+    response.raise_for_status()
 
     with open(
         output_path,
-        "w",
-        encoding="utf-8"
+        "wb"
     ) as f:
 
-        for index, start, end, text in entries:
+        for chunk in response.iter_content(
+            chunk_size=1024 * 1024
+        ):
 
-            f.write(
-                f"{index}\n"
-            )
+            if chunk:
+                f.write(chunk)
 
-            f.write(
-                f"{format_srt_time(start)} "
-                f"--> "
-                f"{format_srt_time(end)}\n"
-            )
+    size = output_path.stat().st_size
 
-            f.write(
-                text
-            )
+    print(
+        "Downloaded:",
+        output_path,
+        f"{size / 1024 / 1024:.1f} MB"
+    )
 
-            f.write(
-                "\n\n"
-            )
+    if size < 10000:
+        raise RuntimeError(
+            "Pexels動画のダウンロードサイズが小さすぎます"
+        )
 
 
-# =========================================================
-# BGM
-# =========================================================
+# ============================================================
+# CREATE SCENE
+# ============================================================
 
-def create_bgm(
-    output_path,
-    duration
+def create_scene(
+    source_video,
+    audio_file,
+    output_file
 ):
+    duration = get_duration(
+        audio_file
+    )
 
-    command = [
+    if duration <= 0:
+        raise RuntimeError(
+            "音声時間が取得できません"
+        )
 
-        "ffmpeg",
+    print()
+    print(
+        f"Creating scene: {duration:.2f}s"
+    )
+
+    # 縦・横どちらでも中央クロップ
+    vf = (
+        f"scale={WIDTH}:{HEIGHT}:"
+        "force_original_aspect_ratio=increase,"
+        f"crop={WIDTH}:{HEIGHT},"
+        "setsar=1"
+    )
+
+    cmd = [
+        FFMPEG,
         "-y",
 
-        "-f",
-        "lavfi",
+        "-stream_loop",
+        "-1",
 
         "-i",
-        (
-            "sine=frequency=220:"
-            "sample_rate=44100"
-        ),
-
-        "-f",
-        "lavfi",
+        str(source_video),
 
         "-i",
-        (
-            "sine=frequency=277:"
-            "sample_rate=44100"
-        ),
+        str(audio_file),
 
         "-filter_complex",
+        f"[0:v]{vf}[v]",
 
-        (
-            "[0:a]volume=0.018[a0];"
-            "[1:a]volume=0.012[a1];"
-            "[a0][a1]amix=inputs=2:"
-            "duration=longest,"
-            "afade=t=in:st=0:d=2,"
-            f"afade=t=out:st={max(0, duration - 3)}:d=3"
-        ),
+        "-map",
+        "[v]",
+
+        "-map",
+        "1:a",
 
         "-t",
-        str(duration),
+        f"{duration:.3f}",
+
+        "-r",
+        str(FPS),
+
+        "-c:v",
+        "libx264",
+
+        "-preset",
+        "veryfast",
+
+        "-crf",
+        "23",
+
+        "-pix_fmt",
+        "yuv420p",
 
         "-c:a",
         "aac",
 
         "-b:a",
-        "128k",
+        "192k",
 
-        str(output_path)
+        "-shortest",
+
+        str(output_file)
     ]
 
     run_command(
-        command
+        cmd
     )
 
+    if not output_file.exists():
+        raise RuntimeError(
+            f"Scene作成失敗: {output_file}"
+        )
 
-# =========================================================
+
+# ============================================================
 # CONCAT
-# =========================================================
+# ============================================================
 
 def concat_scenes(
     scene_files,
-    output_path
+    output_file
 ):
-
-    concat_file = (
-        CUT_DIR /
-        "concat.txt"
-    )
+    list_file = VIDEO_DIR / "concat.txt"
 
     with open(
-        concat_file,
+        list_file,
         "w",
         encoding="utf-8"
     ) as f:
 
         for path in scene_files:
+            absolute = path.resolve()
 
-            absolute = (
-                Path(path)
-                .resolve()
-            )
-
-            escaped = (
-                str(absolute)
-                .replace(
+            f.write(
+                "file '"
+                + str(absolute).replace(
                     "'",
                     "'\\''"
                 )
+                + "'\n"
             )
 
-            f.write(
-                f"file '{escaped}'\n"
-            )
-
-    command = [
-
-        "ffmpeg",
+    cmd = [
+        FFMPEG,
         "-y",
 
         "-f",
@@ -1724,109 +1160,258 @@ def concat_scenes(
         "0",
 
         "-i",
-        str(concat_file),
+        str(list_file),
 
         "-c",
         "copy",
 
-        "-movflags",
-        "+faststart",
-
-        str(output_path)
+        str(output_file)
     ]
 
     run_command(
-        command
+        cmd
+    )
+
+    if not output_file.exists():
+        raise RuntimeError(
+            "動画結合に失敗しました"
+        )
+
+
+# ============================================================
+# SUBTITLES
+# ============================================================
+
+def format_srt_time(seconds):
+    if seconds < 0:
+        seconds = 0
+
+    millis = int(
+        round(
+            (seconds - int(seconds))
+            * 1000
+        )
+    )
+
+    total = int(
+        seconds
+    )
+
+    hours = total // 3600
+
+    minutes = (
+        total % 3600
+    ) // 60
+
+    secs = total % 60
+
+    if millis >= 1000:
+        secs += 1
+        millis = 0
+
+    return (
+        f"{hours:02d}:"
+        f"{minutes:02d}:"
+        f"{secs:02d},"
+        f"{millis:03d}"
     )
 
 
-# =========================================================
-# FINAL VIDEO
-# =========================================================
-
-def create_final_video(
-    video_path,
-    subtitle_path,
-    bgm_path,
-    output_path
+def create_srt(
+    subtitle_entries,
+    output_file
 ):
-
-    subtitle_path_abs = (
-        subtitle_path
-        .resolve()
+    print()
+    print(
+        "Creating subtitles..."
     )
 
-    subtitle_filter_path = (
-        str(
-            subtitle_path_abs
+    lines = []
+
+    for index, entry in enumerate(
+        subtitle_entries,
+        start=1
+    ):
+
+        start = entry["start"]
+        end = entry["end"]
+        text = entry["text"]
+
+        lines.append(
+            str(index)
         )
-        .replace(
-            "\\",
-            "/"
+
+        lines.append(
+            f"{format_srt_time(start)} --> "
+            f"{format_srt_time(end)}"
         )
-        .replace(
-            ":",
-            "\\:"
+
+        lines.append(
+            text
         )
-        .replace(
-            "'",
-            "\\'"
+
+        lines.append("")
+
+    output_file.write_text(
+        "\n".join(lines),
+        encoding="utf-8"
+    )
+
+    print(
+        "Subtitle file:",
+        output_file
+    )
+
+
+# ============================================================
+# BGM
+# ============================================================
+
+def create_fallback_bgm(
+    output_file,
+    duration
+):
+    print()
+    print(
+        "Creating fallback BGM..."
+    )
+
+    cmd = [
+        FFMPEG,
+        "-y",
+
+        "-f",
+        "lavfi",
+
+        "-i",
+        "sine=frequency=220:sample_rate=44100",
+
+        "-f",
+        "lavfi",
+
+        "-i",
+        "sine=frequency=277:sample_rate=44100",
+
+        "-filter_complex",
+        (
+            "[0:a]volume=0.06[a0];"
+            "[1:a]volume=0.04[a1];"
+            "[a0][a1]amix=inputs=2:"
+            "duration=longest,"
+            "afade=t=in:st=0:d=2,"
+            f"afade=t=out:st={max(duration - 3, 0)}:d=3"
+        ),
+
+        "-t",
+        f"{duration:.3f}",
+
+        "-c:a",
+        "aac",
+
+        "-b:a",
+        "128k",
+
+        str(output_file)
+    ]
+
+    run_command(
+        cmd
+    )
+
+
+def prepare_bgm(
+    duration
+):
+    downloaded = MEDIA_DIR / "bgm.ogg"
+
+    fallback = MEDIA_DIR / "bgm_fallback.m4a"
+
+    if downloaded.exists():
+        print()
+        print(
+            "Using downloaded BGM:",
+            downloaded
         )
+
+        return downloaded
+
+    create_fallback_bgm(
+        fallback,
+        duration
+    )
+
+    return fallback
+
+
+# ============================================================
+# BURN SUBTITLES + MIX BGM
+# ============================================================
+
+def burn_subtitles_and_mix_bgm(
+    video_file,
+    subtitle_file,
+    bgm_file,
+    output_file
+):
+    print()
+    print(
+        "Burning subtitles and mixing BGM..."
+    )
+
+    duration = get_duration(
+        video_file
+    )
+
+    # Linux上のFFmpeg/libass向け
+    subtitle_path = str(
+        subtitle_file.resolve()
+    )
+
+    # subtitles filterのエスケープ
+    subtitle_path = (
+        subtitle_path
+        .replace("\\", "\\\\")
+        .replace(":", "\\:")
+        .replace("'", "\\'")
     )
 
     subtitle_filter = (
-
-        "subtitles="
-        f"'{subtitle_filter_path}'"
-        ":force_style="
-
-        "'"
-        "FontName=Noto Sans CJK JP,"
-        "FontSize=20,"
-        "Bold=1,"
+        f"subtitles='{subtitle_path}':"
+        "force_style="
+        "'FontName=Noto Sans CJK JP,"
+        "FontSize=22,"
         "PrimaryColour=&H00FFFFFF,"
-        "OutlineColour=&H00000000,"
-        "Outline=4,"
-        "Shadow=2,"
+        "OutlineColour=&H80000000,"
+        "BorderStyle=1,"
+        "Outline=3,"
+        "Shadow=1,"
         "Alignment=2,"
-        "MarginV=70"
-        "'"
+        "MarginV=55'"
     )
 
-    filter_complex = (
-
-        f"[0:v]"
-        f"{subtitle_filter}"
-        "[v];"
-
-        "[1:a]"
-        "volume=0.07"
-        "[bgm];"
-
-        "[0:a]"
-        "volume=1.0"
-        "[voice];"
-
-        "[voice][bgm]"
-        "amix=inputs=2:"
-        "duration=first:"
-        "dropout_transition=2"
-        "[a]"
-    )
-
-    command = [
-
-        "ffmpeg",
+    cmd = [
+        FFMPEG,
         "-y",
 
         "-i",
-        str(video_path),
+        str(video_file),
+
+        "-stream_loop",
+        "-1",
 
         "-i",
-        str(bgm_path),
+        str(bgm_file),
 
         "-filter_complex",
-        filter_complex,
+        (
+            f"[0:v]{subtitle_filter}[v];"
+            "[1:a]volume=0.08[bgm];"
+            "[0:a][bgm]"
+            "amix=inputs=2:"
+            "duration=first:"
+            "dropout_transition=2"
+            "[a]"
+        ),
 
         "-map",
         "[v]",
@@ -1834,14 +1419,17 @@ def create_final_video(
         "-map",
         "[a]",
 
+        "-t",
+        f"{duration:.3f}",
+
         "-c:v",
         "libx264",
 
         "-preset",
-        "veryfast",
+        "medium",
 
         "-crf",
-        "20",
+        "21",
 
         "-pix_fmt",
         "yuv420p",
@@ -1855,153 +1443,251 @@ def create_final_video(
         "-movflags",
         "+faststart",
 
-        str(output_path)
+        str(output_file)
     ]
 
     run_command(
-        command
+        cmd
     )
 
+    if not output_file.exists():
+        raise RuntimeError(
+            "字幕付き最終動画の作成に失敗しました"
+        )
 
-# =========================================================
-# THUMBNAIL
-# =========================================================
+
+# ============================================================
+# PEXELS PHOTO SEARCH
+# ============================================================
 
 def search_pexels_photo(
     query
 ):
-
-    url = (
-        "https://api.pexels.com/v1/search"
+    print()
+    print(
+        f"Searching Pexels photo: {query}"
     )
 
-    params = {
-
-        "query": query,
-
-        "orientation": "landscape",
-
-        "size": "large",
-
-        "per_page": 20,
-
-        "page": random.randint(
-            1,
-            3
+    try:
+        response = requests.get(
+            PEXELS_PHOTO_URL,
+            headers=PEXELS_HEADERS,
+            params={
+                "query": query,
+                "orientation": "landscape",
+                "per_page": 20,
+                "page": random.randint(
+                    1,
+                    3
+                )
+            },
+            timeout=30
         )
-    }
 
+        response.raise_for_status()
+
+        data = response.json()
+
+        photos = data.get(
+            "photos",
+            []
+        )
+
+        if not photos:
+            return None
+
+        random.shuffle(
+            photos
+        )
+
+        for photo in photos:
+
+            src = photo.get(
+                "src",
+                {}
+            )
+
+            # 大きい画像優先
+            image_url = (
+                src.get("original")
+                or src.get("large2x")
+                or src.get("large")
+            )
+
+            if image_url:
+                return {
+                    "id": photo.get(
+                        "id"
+                    ),
+                    "url": image_url,
+                    "page": photo.get(
+                        "url",
+                        ""
+                    ),
+                    "photographer": photo.get(
+                        "photographer",
+                        ""
+                    )
+                }
+
+    except Exception as e:
+        print(
+            "Pexels photo error:",
+            e
+        )
+
+    return None
+
+
+def download_photo(
+    photo_info,
+    output_file
+):
     response = requests.get(
-        url,
-        headers=PEXELS_HEADERS,
-        params=params,
-        timeout=30
+        photo_info["url"],
+        timeout=120
     )
 
     response.raise_for_status()
 
-    photos = response.json().get(
-        "photos",
-        []
+    output_file.write_bytes(
+        response.content
     )
 
-    if not photos:
-
-        return None
-
-    # Prefer images containing people.
-    random.shuffle(
-        photos
-    )
-
-    for photo in photos:
-
-        alt = (
-            photo.get(
-                "alt",
-                ""
-            )
-            or ""
-        ).lower()
-
-        if any(
-            word in alt
-            for word in [
-                "person",
-                "people",
-                "man",
-                "woman",
-                "human"
-            ]
-        ):
-
-            return photo
-
-    return photos[0]
-
-
-def download_photo(
-    photo,
-    output_path
-):
-
-    src = photo.get(
-        "src",
-        {}
-    )
-
-    url = (
-        src.get(
-            "large2x"
-        )
-        or
-        src.get(
-            "large"
-        )
-        or
-        src.get(
-            "original"
-        )
-    )
-
-    if not url:
-
+    if output_file.stat().st_size < 10000:
         raise RuntimeError(
-            "Pexels photo URL not found"
+            "サムネイル画像が小さすぎます"
         )
 
-    download_file(
-        url,
-        output_path
-    )
 
-    return url
+# ============================================================
+# FONT
+# ============================================================
+
+def find_font():
+    candidates = [
+
+        "/usr/share/fonts/opentype/noto/"
+        "NotoSansCJK-Regular.ttc",
+
+        "/usr/share/fonts/opentype/noto/"
+        "NotoSansCJK-Bold.ttc",
+
+        "/usr/share/fonts/truetype/"
+        "noto/NotoSansCJK-Regular.ttc",
+
+        "/usr/share/fonts/truetype/"
+        "noto/NotoSansCJK-Bold.ttc",
+
+        "/usr/share/fonts/truetype/dejavu/"
+        "DejaVuSans-Bold.ttf",
+
+    ]
+
+    for font in candidates:
+
+        path = Path(font)
+
+        if path.exists():
+            return str(path)
+
+    return None
 
 
-def make_thumbnail(
-    image_path,
-    title,
-    output_path
+# ============================================================
+# THUMBNAIL
+# ============================================================
+
+def create_thumbnail(
+    photo_file,
+    topic,
+    output_file
 ):
+    print()
+    print(
+        "Creating thumbnail..."
+    )
 
     image = Image.open(
-        image_path
+        photo_file
     ).convert(
         "RGB"
     )
 
-    image = image.resize(
-        (
-            THUMB_WIDTH,
-            THUMB_HEIGHT
-        ),
-        Image.Resampling.LANCZOS
+    # cover crop
+    image_ratio = (
+        image.width
+        / image.height
     )
 
-    # -----------------------------------------------------
-    # Slight enhancement
-    # -----------------------------------------------------
+    target_ratio = (
+        THUMB_WIDTH
+        / THUMB_HEIGHT
+    )
 
+    if image_ratio > target_ratio:
+
+        new_height = THUMB_HEIGHT
+
+        new_width = int(
+            new_height
+            * image_ratio
+        )
+
+        image = image.resize(
+            (
+                new_width,
+                new_height
+            ),
+            Image.Resampling.LANCZOS
+        )
+
+        left = (
+            new_width
+            - THUMB_WIDTH
+        ) // 2
+
+        image = image.crop(
+            (
+                left,
+                0,
+                left + THUMB_WIDTH,
+                THUMB_HEIGHT
+            )
+        )
+
+    else:
+
+        new_width = THUMB_WIDTH
+
+        new_height = int(
+            new_width
+            / image_ratio
+        )
+
+        image = image.resize(
+            (
+                new_width,
+                new_height
+            ),
+            Image.Resampling.LANCZOS
+        )
+
+        top = (
+            new_height
+            - THUMB_HEIGHT
+        ) // 2
+
+        image = image.crop(
+            (
+                0,
+                top,
+                THUMB_WIDTH,
+                top + THUMB_HEIGHT
+            )
+        )
+
+    # 軽いシャープ化
     image = ImageEnhance.Contrast(
         image
     ).enhance(
@@ -2011,12 +1697,15 @@ def make_thumbnail(
     image = ImageEnhance.Color(
         image
     ).enhance(
-        1.05
+        1.08
     )
 
-    # -----------------------------------------------------
-    # Dark gradient-like overlay
-    # -----------------------------------------------------
+    # 背景を少しぼかす
+    image = image.filter(
+        ImageFilter.GaussianBlur(
+            0.5
+        )
+    )
 
     overlay = Image.new(
         "RGBA",
@@ -2033,29 +1722,25 @@ def make_thumbnail(
         overlay
     )
 
+    # 左側を暗くする
     for x in range(
         THUMB_WIDTH
     ):
 
-        ratio = (
-            1
-            - (
-                x
-                / THUMB_WIDTH
+        alpha = int(
+            190
+            * (
+                1
+                - x / THUMB_WIDTH
             )
         )
 
-        alpha = int(
-            220
-            * ratio
-        )
+        if alpha < 0:
+            alpha = 0
 
         draw.line(
             [
-                (
-                    x,
-                    0
-                ),
+                (x, 0),
                 (
                     x,
                     THUMB_HEIGHT
@@ -2070,130 +1755,138 @@ def make_thumbnail(
         )
 
     image = Image.alpha_composite(
-        image.convert(
-            "RGBA"
-        ),
+        image.convert("RGBA"),
         overlay
     )
-
-    # -----------------------------------------------------
-    # Text
-    # -----------------------------------------------------
 
     draw = ImageDraw.Draw(
         image
     )
 
-    font_path = FONT_PATH
+    font_path = find_font()
 
     if font_path:
 
-        main_font = ImageFont.truetype(
+        big_font = ImageFont.truetype(
             font_path,
-            190
+            250
+        )
+
+        medium_font = ImageFont.truetype(
+            font_path,
+            130
         )
 
         small_font = ImageFont.truetype(
             font_path,
-            78
+            85
         )
 
     else:
 
-        main_font = ImageFont.load_default()
-
+        big_font = ImageFont.load_default()
+        medium_font = ImageFont.load_default()
         small_font = ImageFont.load_default()
 
-    # Curiosity text.
-    category_text = "知ってるようで知らない"
+    # バッジ
+    badge_text = "知らないと面白い"
+
+    badge_box = (
+        180,
+        180,
+        1150,
+        350
+    )
+
+    draw.rounded_rectangle(
+        badge_box,
+        radius=40,
+        fill=(
+            255,
+            255,
+            255,
+            235
+        )
+    )
 
     draw.text(
         (
-            190,
-            170
+            230,
+            205
         ),
-        category_text,
+        badge_text,
         font=small_font,
+        fill=(
+            20,
+            20,
+            20,
+            255
+        )
+    )
+
+    # メインタイトル
+    title = (
+        "身近な雑学"
+    )
+
+    draw.text(
+        (
+            180,
+            500
+        ),
+        title,
+        font=medium_font,
         fill=(
             255,
             255,
             255,
             255
         ),
-        stroke_width=3,
+        stroke_width=6,
         stroke_fill=(
             0,
             0,
             0,
-            255
+            180
         )
     )
 
-    # Main title.
-    lines = []
+    # topic
+    topic_text = (
+        f"「{topic['title']}」"
+    )
 
-    clean_title = title.strip()
-
-    if len(clean_title) <= 15:
-
-        lines = [
-            clean_title
-        ]
-
-    else:
-
-        mid = len(clean_title) // 2
-
-        split_pos = clean_title.rfind(
-            " ",
+    draw.text(
+        (
+            180,
+            690
+        ),
+        topic_text,
+        font=big_font,
+        fill=(
+            255,
+            230,
+            80,
+            255
+        ),
+        stroke_width=8,
+        stroke_fill=(
             0,
-            mid
+            0,
+            0,
+            210
         )
+    )
 
-        if split_pos <= 0:
+    # 下部
+    bottom_text = "15問まとめて紹介"
 
-            split_pos = mid
-
-        lines = [
-            clean_title[:split_pos],
-            clean_title[split_pos:]
-        ]
-
-    y = 430
-
-    for line in lines:
-
-        draw.text(
-            (
-                190,
-                y
-            ),
-            line,
-            font=main_font,
-            fill=(
-                255,
-                255,
-                255,
-                255
-            ),
-            stroke_width=8,
-            stroke_fill=(
-                0,
-                0,
-                0,
-                255
-            )
-        )
-
-        y += 230
-
-    # Bottom hook.
     draw.text(
         (
             190,
-            THUMB_HEIGHT - 300
+            1780
         ),
-        "あなたはいくつ知ってる？",
+        bottom_text,
         font=small_font,
         fill=(
             255,
@@ -2206,7 +1899,7 @@ def make_thumbnail(
             0,
             0,
             0,
-            255
+            180
         )
     )
 
@@ -2215,55 +1908,83 @@ def make_thumbnail(
     )
 
     image.save(
-        output_path,
+        output_file,
         "JPEG",
         quality=94,
         optimize=True
     )
 
+    print(
+        "Thumbnail created:",
+        output_file
+    )
 
-# =========================================================
+
+# ============================================================
+# TITLE
+# ============================================================
+
+def create_title(topic):
+    patterns = [
+        f"知らないと面白い「{topic['title']}」の雑学15選",
+        f"身近なのに意外と知らない雑学15選【{topic['title']}】",
+        f"知ると日常がちょっと面白くなる雑学15選",
+        f"実は知らない人が多い身近な雑学15選",
+    ]
+
+    return random.choice(
+        patterns
+    )
+
+
+# ============================================================
 # MAIN
-# =========================================================
+# ============================================================
 
 def main():
 
     print()
     print("=" * 70)
-    print("LONG VIDEO GENERATOR")
-    print("5-MINUTE TRIVIA / PSYCHOLOGY / PHILOSOPHY")
+    print(
+        "LONG VIDEO GENERATOR"
+    )
+    print(
+        "5-MINUTE TRIVIA + PSYCHOLOGY"
+    )
     print("=" * 70)
-    print()
-
-    # -----------------------------------------------------
-    # Environment check
-    # -----------------------------------------------------
 
     if not PEXELS_API_KEY:
 
         raise RuntimeError(
-            "PEXELS_API_KEY がありません。"
-            "GitHub Secretsとworkflowのenvを確認してください。"
+            "PEXELS_API_KEY がありません"
         )
 
-    # -----------------------------------------------------
-    # Directories
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # Clean old generated files
+    # --------------------------------------------------------
 
-    ensure_directories()
+    for path in VOICE_DIR.glob("*"):
+        if path.is_file():
+            path.unlink()
 
-    # -----------------------------------------------------
+    for path in VIDEO_DIR.glob("*"):
+        if path.is_file():
+            path.unlink()
+
+    for path in SUBTITLE_DIR.glob("*"):
+        if path.is_file():
+            path.unlink()
+
+    # --------------------------------------------------------
     # Select topics
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
     topics = select_topics()
 
     print()
     print(
-        f"Selected {len(topics)} topics."
+        "Selected topics:"
     )
-
-    print()
 
     for i, topic in enumerate(
         topics,
@@ -2276,161 +1997,300 @@ def main():
             f"{topic['title']}"
         )
 
-    # -----------------------------------------------------
-    # Generate title
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # Create scripts
+    # --------------------------------------------------------
 
-    title_candidates = [
-
-        "知らないと損する身近な雑学15選",
-
-        "実は理由があった身近な雑学15選",
-
-        "知っているようで知らない雑学15選",
-
-        "なぜ？が分かる身近な雑学15選",
-
-        "思わず誰かに話したくなる雑学15選"
-
-    ]
-
-    title = random.choice(
-        title_candidates
-    )
-
-    TITLE_FILE.write_text(
-        title,
-        encoding="utf-8"
-    )
-
-    print()
-    print(
-        "TITLE:"
-    )
-
-    print(
-        title
-    )
-
-    # -----------------------------------------------------
-    # Used video IDs
-    # -----------------------------------------------------
-
-    used_video_ids = load_json(
-        USED_VIDEOS_FILE,
-        []
-    )
-
-    if not isinstance(
-        used_video_ids,
-        list
-    ):
-
-        used_video_ids = []
-
-    # -----------------------------------------------------
-    # Generate each segment
-    # -----------------------------------------------------
-
-    segments = []
-
-    scene_files = []
-
-    credits = []
+    all_scripts = []
 
     for index, topic in enumerate(
-        topics
+        topics,
+        start=1
     ):
-
-        print()
-        print("=" * 70)
-        print(
-            f"SCENE {index + 1}/{len(topics)}"
-        )
-        print("=" * 70)
 
         script = make_script(
             topic,
             index
         )
 
+        all_scripts.append(
+            {
+                "topic": topic,
+                "sentences": script
+            }
+        )
+
+    # --------------------------------------------------------
+    # Generate TTS
+    # --------------------------------------------------------
+
+    sentence_audio = []
+
+    subtitle_entries = []
+
+    global_time = 0.0
+
+    used_video_ids = set()
+
+    scene_files = []
+
+    pexels_sources = []
+
+    # --------------------------------------------------------
+    # Each topic
+    # --------------------------------------------------------
+
+    for topic_index, item in enumerate(
+        all_scripts,
+        start=1
+    ):
+
+        topic = item["topic"]
+
         print()
+        print("=" * 70)
         print(
-            "SCRIPT:"
+            f"TOPIC {topic_index}/{TOPICS_PER_VIDEO}"
         )
-
         print(
-            script
+            topic["title"]
         )
+        print("=" * 70)
 
-        # -------------------------------------------------
-        # TTS
-        # -------------------------------------------------
+        topic_audio_files = []
 
-        voice_file = (
+        topic_start = global_time
+
+        # ----------------------------------------------------
+        # Sentence TTS
+        # ----------------------------------------------------
+
+        for sentence_index, sentence in enumerate(
+            item["sentences"],
+            start=1
+        ):
+
+            audio_file = (
+                VOICE_DIR
+                / f"topic_{topic_index:02d}_"
+                  f"{sentence_index:02d}.mp3"
+            )
+
+            duration = create_tts_sync(
+                sentence,
+                audio_file
+            )
+
+            topic_audio_files.append(
+                audio_file
+            )
+
+            subtitle_entries.append(
+                {
+                    "start": global_time,
+                    "end": global_time + duration,
+                    "text": sentence
+                }
+            )
+
+            global_time += duration
+
+        # ----------------------------------------------------
+        # Merge topic audio
+        # ----------------------------------------------------
+
+        topic_audio = (
             VOICE_DIR
-            / f"voice_{index + 1:02d}.mp3"
+            / f"topic_{topic_index:02d}.mp3"
         )
 
-        print()
-        print(
-            "Creating TTS..."
+        concat_file = (
+            VOICE_DIR
+            / f"topic_{topic_index:02d}.txt"
         )
 
-        create_tts(
-            script,
-            voice_file
+        with open(
+            concat_file,
+            "w",
+            encoding="utf-8"
+        ) as f:
+
+            for audio in topic_audio_files:
+
+                absolute = (
+                    audio.resolve()
+                )
+
+                escaped = str(
+                    absolute
+                ).replace(
+                    "'",
+                    "'\\''"
+                )
+
+                f.write(
+                    f"file '{escaped}'\n"
+                )
+
+        run_command(
+            [
+                FFMPEG,
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(concat_file),
+                "-c:a",
+                "libmp3lame",
+                "-b:a",
+                "192k",
+                str(topic_audio)
+            ]
         )
 
-        audio_duration = get_duration(
-            voice_file
-        )
-
-        print(
-            "Audio duration:",
-            f"{audio_duration:.2f}s"
-        )
-
-        # -------------------------------------------------
-        # Pexels
-        # -------------------------------------------------
+        # ----------------------------------------------------
+        # Get Pexels video
+        # ----------------------------------------------------
 
         video_info = get_video_for_topic(
             topic,
-            index,
             used_video_ids
         )
 
         if video_info is None:
 
+            # 最終安全策として汎用動画を探す
+            fallback_queries = [
+                "people lifestyle",
+                "happy people",
+                "daily life",
+                "person thinking",
+                "modern lifestyle",
+            ]
+
+            for fallback_query in fallback_queries:
+
+                print(
+                    "Fallback Pexels search:",
+                    fallback_query
+                )
+
+                videos = search_pexels_videos(
+                    fallback_query,
+                    per_page=20
+                )
+
+                random.shuffle(
+                    videos
+                )
+
+                for candidate in videos:
+
+                    candidate_id = str(
+                        candidate.get(
+                            "id",
+                            ""
+                        )
+                    )
+
+                    if (
+                        not candidate_id
+                        or candidate_id
+                        in used_video_ids
+                    ):
+                        continue
+
+                    candidate_file = choose_video_file(
+                        candidate
+                    )
+
+                    if not candidate_file:
+                        continue
+
+                    video_info = {
+                        "id": candidate_id,
+                        "url": candidate_file[
+                            "link"
+                        ],
+                        "width": candidate_file[
+                            "width"
+                        ],
+                        "height": candidate_file[
+                            "height"
+                        ],
+                        "user": candidate.get(
+                            "user",
+                            {}
+                        ),
+                        "page": candidate.get(
+                            "url",
+                            ""
+                        )
+                    }
+
+                    break
+
+                if video_info:
+                    break
+
+        if video_info is None:
             raise RuntimeError(
-                "Pexels動画を取得できませんでした: "
-                + topic["title"]
+                f"Pexels動画を取得できませんでした: "
+                f"{topic['title']}"
             )
 
-        print()
-        print(
-            "Pexels video ID:",
+        used_video_ids.add(
             video_info["id"]
         )
 
-        # -------------------------------------------------
-        # Scene
-        # -------------------------------------------------
-
-        scene_file = (
-            CUT_DIR
-            / f"scene_{index + 1:02d}.mp4"
+        pexels_sources.append(
+            {
+                "topic": topic["title"],
+                "video_id": video_info["id"],
+                "url": video_info.get(
+                    "page",
+                    ""
+                ),
+                "photographer": (
+                    video_info.get(
+                        "user",
+                        {}
+                    ).get(
+                        "name",
+                        ""
+                    )
+                )
+            }
         )
 
-        print()
-        print(
-            "Creating scene..."
+        # ----------------------------------------------------
+        # Download
+        # ----------------------------------------------------
+
+        source_video = (
+            MEDIA_DIR
+            / f"source_{topic_index:02d}.mp4"
+        )
+
+        download_video(
+            video_info,
+            source_video
+        )
+
+        # ----------------------------------------------------
+        # Scene
+        # ----------------------------------------------------
+
+        scene_file = (
+            VIDEO_DIR
+            / f"scene_{topic_index:02d}.mp4"
         )
 
         create_scene(
-            video_info["path"],
-            voice_file,
+            source_video,
+            topic_audio,
             scene_file
         )
 
@@ -2438,427 +2298,393 @@ def main():
             scene_file
         )
 
-        # -------------------------------------------------
-        # Segment information
-        # -------------------------------------------------
+        # cleanup source to save space
+        try:
+            source_video.unlink()
+        except Exception:
+            pass
 
-        segments.append(
-            {
-                "index": index + 1,
-                "topic_id": topic["id"],
-                "category": topic["category"],
-                "title": topic["title"],
-                "script": script,
-                "duration": audio_duration,
-                "video_id": video_info["id"]
-            }
+        # topic duration
+        topic_duration = (
+            global_time
+            - topic_start
         )
 
-        credits.append(
-            {
-                "scene": index + 1,
-                "topic": topic["title"],
-                "pexels_video_id": video_info["id"],
-                "pexels_page": video_info["page"],
-                "search_query": video_info["query"]
-            }
+        print()
+        print(
+            f"Topic duration: "
+            f"{topic_duration:.2f}s"
         )
 
-    # -----------------------------------------------------
-    # Save caches
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # Total duration
+    # --------------------------------------------------------
 
-    old_topics = load_json(
-        USED_TOPICS_FILE,
-        []
-    )
-
-    if not isinstance(
-        old_topics,
-        list
-    ):
-
-        old_topics = []
-
-    for topic in topics:
-
-        if topic["id"] not in old_topics:
-
-            old_topics.append(
-                topic["id"]
-            )
-
-    save_json(
-        USED_TOPICS_FILE,
-        old_topics
-    )
-
-    save_json(
-        USED_VIDEOS_FILE,
-        used_video_ids
-    )
-
-    # -----------------------------------------------------
-    # Scene concat
-    # -----------------------------------------------------
+    total_duration = global_time
 
     print()
     print("=" * 70)
-    print("CONCAT SCENES")
+    print(
+        f"TOTAL NARRATION: "
+        f"{total_duration:.2f}s"
+    )
+    print(
+        f"TARGET: "
+        f"{TARGET_DURATION}s"
+    )
     print("=" * 70)
 
-    combined_video = (
-        CUT_DIR /
-        "combined.mp4"
+    # --------------------------------------------------------
+    # Concatenate scenes
+    # --------------------------------------------------------
+
+    concatenated = (
+        MEDIA_DIR
+        / "concatenated.mp4"
     )
 
     concat_scenes(
         scene_files,
-        combined_video
+        concatenated
     )
 
-    # -----------------------------------------------------
-    # Total duration
-    # -----------------------------------------------------
-
-    combined_duration = get_duration(
-        combined_video
-    )
-
-    print()
-    print(
-        "Combined duration:",
-        f"{combined_duration:.2f}s"
-    )
-
-    print(
-        "Target duration:",
-        f"{TARGET_MINUTES * 60}s"
-    )
-
-    # -----------------------------------------------------
-    # Subtitles
-    # -----------------------------------------------------
-
-    print()
-    print("=" * 70)
-    print("CREATE SUBTITLES")
-    print("=" * 70)
+    # --------------------------------------------------------
+    # Subtitle
+    # --------------------------------------------------------
 
     subtitle_file = (
-        SUBTITLE_DIR /
-        "captions.srt"
+        SUBTITLE_DIR
+        / "final.srt"
     )
 
-    create_subtitle_file(
-        segments,
+    create_srt(
+        subtitle_entries,
         subtitle_file
     )
 
-    print()
-    print(
-        "Subtitle:",
-        subtitle_file
-    )
-
-    # -----------------------------------------------------
+    # --------------------------------------------------------
     # BGM
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
-    print()
-    print("=" * 70)
-    print("CREATE BGM")
-    print("=" * 70)
-
-    bgm_file = (
-        MEDIA_DIR /
-        "bgm_generated.m4a"
+    actual_video_duration = get_duration(
+        concatenated
     )
 
-    create_bgm(
-        bgm_file,
-        combined_duration
+    bgm_file = prepare_bgm(
+        actual_video_duration
     )
 
-    # -----------------------------------------------------
-    # Final render
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # Final video
+    # --------------------------------------------------------
 
-    print()
-    print("=" * 70)
-    print("CREATE FINAL VIDEO")
-    print("=" * 70)
+    final_video = (
+        OUTPUT_DIR
+        / "final_video.mp4"
+    )
 
-    create_final_video(
-        combined_video,
+    burn_subtitles_and_mix_bgm(
+        concatenated,
         subtitle_file,
         bgm_file,
-        FINAL_VIDEO
+        final_video
     )
 
-    if not FINAL_VIDEO.exists():
+    # --------------------------------------------------------
+    # Thumbnail
+    # --------------------------------------------------------
 
-        raise RuntimeError(
-            "final_video.mp4 が生成されませんでした。"
+    thumbnail_queries = [
+        f"{topics[0]['query']}",
+        "surprised person thinking",
+        "person curious smartphone",
+        "happy person looking camera",
+    ]
+
+    photo_info = None
+
+    for query in thumbnail_queries:
+
+        photo_info = search_pexels_photo(
+            query
         )
 
-    final_duration = get_duration(
-        FINAL_VIDEO
-    )
-
-    print()
-    print(
-        "FINAL VIDEO:"
-    )
-
-    print(
-        FINAL_VIDEO
-    )
-
-    print(
-        "Duration:",
-        f"{final_duration:.2f}s"
-    )
-
-    # -----------------------------------------------------
-    # Thumbnail
-    # -----------------------------------------------------
-
-    print()
-    print("=" * 70)
-    print("CREATE THUMBNAIL")
-    print("=" * 70)
+        if photo_info:
+            break
 
     thumbnail_source = (
-        IMAGE_DIR /
-        "thumbnail_source.jpg"
+        MEDIA_DIR
+        / "thumbnail_source.jpg"
     )
 
-    thumbnail_photo = search_pexels_photo(
-        "Japanese person thinking"
+    thumbnail_file = (
+        OUTPUT_DIR
+        / "thumbnail.jpg"
     )
 
-    if thumbnail_photo is None:
+    if photo_info:
 
-        thumbnail_photo = search_pexels_photo(
-            "person thinking"
+        download_photo(
+            photo_info,
+            thumbnail_source
         )
 
-    if thumbnail_photo is None:
-
-        raise RuntimeError(
-            "サムネイル用Pexels画像を取得できませんでした。"
+        create_thumbnail(
+            thumbnail_source,
+            topics[0],
+            thumbnail_file
         )
 
-    thumbnail_url = download_photo(
-        thumbnail_photo,
-        thumbnail_source
+    else:
+
+        print(
+            "Thumbnail Pexels photo not found."
+        )
+
+        # 動画の最初のフレームを代用
+        run_command(
+            [
+                FFMPEG,
+                "-y",
+                "-i",
+                str(final_video),
+                "-frames:v",
+                "1",
+                str(thumbnail_file)
+            ]
+        )
+
+    # --------------------------------------------------------
+    # Title
+    # --------------------------------------------------------
+
+    title = create_title(
+        topics[0]
     )
 
-    make_thumbnail(
-        thumbnail_source,
+    title_file = (
+        OUTPUT_DIR
+        / "title.txt"
+    )
+
+    title_file.write_text(
         title,
-        THUMBNAIL
+        encoding="utf-8"
     )
 
-    print()
-    print(
-        "Thumbnail created:"
+    # --------------------------------------------------------
+    # Description
+    # --------------------------------------------------------
+
+    description = (
+        "身近なのに意外と知らない雑学を15個紹介します。\n"
+        "心理学、脳、人体、日常、科学、哲学など、"
+        "普段の生活でちょっと気になる話をまとめました。\n\n"
+        "知らなかったことを一つ知るだけでも、"
+        "日常の見え方が少し変わるかもしれません。\n\n"
+        "#雑学 #豆知識 #心理学 #面白い話 #日常"
     )
 
-    print(
-        THUMBNAIL
-    )
+    # --------------------------------------------------------
+    # video_info.json
+    # --------------------------------------------------------
 
-    # -----------------------------------------------------
-    # Pexels credits
-    # -----------------------------------------------------
+    info = {
+        "title": title,
+        "description": description,
+        "category": "27",
+        "topics": [
+            {
+                "number": i,
+                "id": topic["id"],
+                "category": topic["category"],
+                "title": topic["title"]
+            }
+            for i, topic in enumerate(
+                topics,
+                start=1
+            )
+        ],
+        "duration_seconds": get_duration(
+            final_video
+        ),
+        "video_file": str(
+            final_video
+        ),
+        "thumbnail_file": str(
+            thumbnail_file
+        )
+    }
 
-    credits.append(
-        {
-            "type": "thumbnail",
-            "pexels_photo_id": thumbnail_photo.get(
-                "id"
-            ),
-            "pexels_photo_page": thumbnail_photo.get(
-                "url",
-                ""
-            ),
-            "source_url": thumbnail_url
-        }
+    info_file = (
+        OUTPUT_DIR
+        / "video_info.json"
     )
 
     save_json(
-        IRASUTOYA_FILE,
-        []
+        info_file,
+        info
+    )
+
+    # --------------------------------------------------------
+    # Pexels credit
+    # --------------------------------------------------------
+
+    credit_file = (
+        OUTPUT_DIR
+        / "pexels_credit.txt"
     )
 
     with open(
-        CREDIT_FILE,
+        credit_file,
         "w",
         encoding="utf-8"
     ) as f:
 
         f.write(
-            "Pexels media used in this video\n"
+            "Pexels video sources\n"
+            "====================\n\n"
         )
 
-        f.write(
-            "========================================\n\n"
-        )
+        for source in pexels_sources:
 
-        for credit in credits:
+            f.write(
+                f"Topic: {source['topic']}\n"
+            )
 
-            if credit.get(
-                "type"
-            ) == "thumbnail":
+            f.write(
+                f"Video ID: "
+                f"{source['video_id']}\n"
+            )
 
-                f.write(
-                    "Thumbnail\n"
-                )
+            f.write(
+                f"Photographer: "
+                f"{source['photographer']}\n"
+            )
 
-                f.write(
-                    f"Pexels Photo ID: "
-                    f"{credit.get('pexels_photo_id')}\n"
-                )
+            f.write(
+                f"Page: "
+                f"{source['url']}\n\n"
+            )
 
-                f.write(
-                    f"Page: "
-                    f"{credit.get('pexels_photo_page')}\n\n"
-                )
+    # --------------------------------------------------------
+    # Irassutoya compatibility file
+    # --------------------------------------------------------
+    #
+    # 今回はPexels素材を使用。
+    # YAMLのartifact対象にあるためファイルだけ作る。
+    # --------------------------------------------------------
 
-            else:
-
-                f.write(
-                    f"Scene {credit['scene']}\n"
-                )
-
-                f.write(
-                    f"Topic: "
-                    f"{credit['topic']}\n"
-                )
-
-                f.write(
-                    f"Pexels Video ID: "
-                    f"{credit['pexels_video_id']}\n"
-                )
-
-                f.write(
-                    f"Page: "
-                    f"{credit['pexels_page']}\n"
-                )
-
-                f.write(
-                    f"Search: "
-                    f"{credit['search_query']}\n\n"
-                )
-
-    # -----------------------------------------------------
-    # video_info.json
-    # -----------------------------------------------------
-
-    video_info = {
-
-        "title": title,
-
-        "video_file": str(
-            FINAL_VIDEO
-        ),
-
-        "thumbnail_file": str(
-            THUMBNAIL
-        ),
-
-        "duration_seconds": final_duration,
-
-        "width": WIDTH,
-
-        "height": HEIGHT,
-
-        "fps": FPS,
-
-        "topics_count": len(
-            topics
-        ),
-
-        "voice": VOICE,
-
-        "voice_rate": VOICE_RATE,
-
-        "random_seed": RANDOM_SEED,
-
-        "topics": segments
-
-    }
-
-    save_json(
-        VIDEO_INFO_FILE,
-        video_info
+    irasutoya_file = (
+        OUTPUT_DIR
+        / "irasutoya_sources.json"
     )
 
-    # -----------------------------------------------------
+    save_json(
+        irasutoya_file,
+        {
+            "used": False,
+            "sources": [],
+            "note": (
+                "This version uses Pexels video/photo "
+                "assets instead of Irassutoya assets."
+            )
+        }
+    )
+
+    # --------------------------------------------------------
+    # Manifest
+    # --------------------------------------------------------
+
+    manifest_file = (
+        OUTPUT_DIR
+        / "generation_manifest.json"
+    )
+
+    save_json(
+        manifest_file,
+        {
+            "version": "2026.09",
+            "topics_count": len(
+                topics
+            ),
+            "duration_seconds": get_duration(
+                final_video
+            ),
+            "voice": VOICE,
+            "voice_rate": VOICE_RATE,
+            "resolution": (
+                f"{WIDTH}x{HEIGHT}"
+            ),
+            "fps": FPS,
+            "pexels_videos": pexels_sources,
+        }
+    )
+
+    # --------------------------------------------------------
     # Final checks
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
     print()
     print("=" * 70)
-    print("FINAL CHECK")
+    print(
+        "FINAL CHECK"
+    )
     print("=" * 70)
 
     required_files = [
-
-        FINAL_VIDEO,
-
-        THUMBNAIL,
-
-        TITLE_FILE,
-
-        VIDEO_INFO_FILE,
-
-        CREDIT_FILE
-
+        final_video,
+        thumbnail_file,
+        title_file,
+        info_file,
+        irasutoya_file,
     ]
 
-    for path in required_files:
+    for file in required_files:
 
-        if not path.exists():
+        if not file.exists():
 
             raise RuntimeError(
-                "必要ファイルがありません: "
-                + str(path)
+                f"必要ファイルがありません: "
+                f"{file}"
             )
 
-        size = path.stat().st_size
-
         print(
-            f"OK: {path} "
-            f"({size / 1024 / 1024:.2f} MB)"
+            "OK:",
+            file,
+            f"{file.stat().st_size / 1024 / 1024:.2f} MB"
         )
 
-    # -----------------------------------------------------
-    # Save topic information
-    # -----------------------------------------------------
-
-    topics_json = (
-        OUTPUT_DIR /
-        "topics.json"
+    final_duration = get_duration(
+        final_video
     )
-
-    save_json(
-        topics_json,
-        segments
-    )
-
-    # -----------------------------------------------------
-    # Final message
-    # -----------------------------------------------------
 
     print()
     print("=" * 70)
-    print("LONG VIDEO GENERATION COMPLETE")
+    print(
+        "LONG VIDEO GENERATION COMPLETE"
+    )
     print("=" * 70)
 
-    print()
+    print(
+        f"Duration: "
+        f"{final_duration:.2f}s"
+    )
+
+    print(
+        f"Duration: "
+        f"{final_duration / 60:.2f} minutes"
+    )
+
+    print(
+        "Video:",
+        final_video
+    )
+
+    print(
+        "Thumbnail:",
+        thumbnail_file
+    )
 
     print(
         "Title:",
@@ -2866,43 +2692,16 @@ def main():
     )
 
     print(
-        "Duration:",
-        f"{final_duration:.2f}s"
-    )
-
-    print(
-        "Topics:",
-        len(topics)
-    )
-
-    print(
-        "Video:",
-        FINAL_VIDEO
-    )
-
-    print(
-        "Thumbnail:",
-        THUMBNAIL
-    )
-
-    print(
         "Video info:",
-        VIDEO_INFO_FILE
+        info_file
     )
 
-    print(
-        "Credits:",
-        CREDIT_FILE
-    )
-
-    print()
     print("=" * 70)
 
 
-# =========================================================
+# ============================================================
 # ENTRY POINT
-# =========================================================
+# ============================================================
 
 if __name__ == "__main__":
-
     main()
