@@ -2,24 +2,67 @@ import json
 import hashlib
 import re
 from pathlib import Path
+from collections import Counter
 
 BASE_DIR = Path(__file__).resolve().parent
-
 OUTPUT = BASE_DIR / "trivia.json"
 
+# ============================================================
+# 設定
+# ============================================================
+
+BATCH_FILES = [
+    BASE_DIR / f"trivia_batch_{i:03d}.json"
+    for i in range(1, 11)
+]
+
+EXPECTED_TOTAL = 1000
+
+EXPECTED_CATEGORY_COUNTS = {
+    "身近な雑学": 250,
+    "心理学": 150,
+    "科学": 150,
+    "歴史": 100,
+    "哲学": 50,
+    "人体": 100,
+    "食べ物": 50,
+    "動物・自然": 50,
+    "テクノロジー": 50,
+    "社会・文化": 50,
+}
+
+# 1バッチあたりの予定数
+EXPECTED_BATCH_TOTAL = 100
+
+
+# ============================================================
+# 正規化
+# ============================================================
 
 def normalize(text):
     text = str(text).lower()
-    text = re.sub(r"\s+", "", text)
+
+    text = re.sub(
+        r"\s+",
+        "",
+        text
+    )
+
     text = re.sub(
         r"[。、！？!?「」『』（）()・,，.!?]",
         "",
         text
     )
+
     return text
 
 
+# ============================================================
+# ハッシュ
+# ============================================================
+
 def make_hash(item):
+
     text = "|".join([
         normalize(item.get("category", "")),
         normalize(item.get("keyword", "")),
@@ -33,7 +76,12 @@ def make_hash(item):
     ).hexdigest()
 
 
+# ============================================================
+# データチェック
+# ============================================================
+
 def valid(item):
+
     if not isinstance(item, dict):
         return False
 
@@ -46,74 +94,193 @@ def valid(item):
     ]
 
     for key in required:
-        if not str(item.get(key, "")).strip():
+
+        if not str(
+            item.get(key, "")
+        ).strip():
+
             return False
 
     return True
 
 
+# ============================================================
+# メイン
+# ============================================================
+
 def main():
 
-    print("=" * 60)
+    print("=" * 70)
     print("LUMI TRIVIA MERGER")
-    print("=" * 60)
+    print("trivia_batch_001 ～ 010")
+    print("=" * 70)
 
-    batch_files = sorted(
-        BASE_DIR.glob("trivia_batch_*.json")
-    )
+    # --------------------------------------------------------
+    # バッチ存在確認
+    # --------------------------------------------------------
 
-    if not batch_files:
-        print("trivia_batch_*.json がありません")
+    print()
+    print("【バッチファイル確認】")
+
+    missing_files = []
+
+    for file in BATCH_FILES:
+
+        if file.exists():
+
+            print(
+                f"  OK   {file.name}"
+            )
+
+        else:
+
+            print(
+                f"  NG   {file.name}"
+            )
+
+            missing_files.append(file.name)
+
+    if missing_files:
+
+        print()
+        print("❌ ファイルが不足しています")
+
+        for name in missing_files:
+            print(
+                f"  - {name}"
+            )
+
         return
 
-    print(
-        f"バッチファイル: {len(batch_files)}個"
-    )
+    # --------------------------------------------------------
+    # 読み込み
+    # --------------------------------------------------------
+
+    print()
+    print("【読み込み】")
 
     all_items = []
 
-    for file in batch_files:
+    batch_counts = {}
 
-        print(
-            f"読み込み: {file.name}"
-        )
+    for file in BATCH_FILES:
 
         try:
+
             with open(
                 file,
                 "r",
                 encoding="utf-8"
             ) as f:
+
                 data = json.load(f)
 
         except Exception as e:
 
+            print()
             print(
-                f"  ERROR: {e}"
+                f"❌ {file.name} の読み込み失敗"
             )
-            continue
+
+            print(e)
+
+            return
 
         if not isinstance(data, list):
 
+            print()
             print(
-                "  配列ではないためスキップ"
+                f"❌ {file.name} がJSON配列ではありません"
             )
-            continue
+
+            return
+
+        count = len(data)
+
+        batch_counts[
+            file.name
+        ] = count
 
         print(
-            f"  {len(data)}件"
+            f"  {file.name}: {count}件"
         )
 
         all_items.extend(data)
 
+    # --------------------------------------------------------
+    # バッチ件数チェック
+    # --------------------------------------------------------
+
     print()
+    print("【バッチ件数チェック】")
+
+    batch_error = False
+
+    for name, count in batch_counts.items():
+
+        if count != EXPECTED_BATCH_TOTAL:
+
+            print(
+                f"  ⚠ {name}: {count}件"
+                f" → 100件ではありません"
+            )
+
+            batch_error = True
+
+        else:
+
+            print(
+                f"  OK {name}: 100件"
+            )
+
+    print()
+
     print(
         f"合計入力: {len(all_items):,}件"
     )
 
-    # ========================================================
+    # --------------------------------------------------------
+    # 必須項目チェック
+    # --------------------------------------------------------
+
+    print()
+    print("【データ形式チェック】")
+
+    invalid_items = []
+
+    for index, item in enumerate(
+        all_items,
+        start=1
+    ):
+
+        if not valid(item):
+
+            invalid_items.append(index)
+
+    if invalid_items:
+
+        print(
+            f"❌ 不正データ: "
+            f"{len(invalid_items)}件"
+        )
+
+        print(
+            "該当番号:",
+            invalid_items[:20]
+        )
+
+        return
+
+    print(
+        "OK: すべてのデータ形式が正常"
+    )
+
+    # --------------------------------------------------------
     # 重複除去
-    # ========================================================
+    # --------------------------------------------------------
+
+    print()
+    print("【重複チェック】")
 
     unique = []
 
@@ -121,15 +288,9 @@ def main():
     titles = set()
     facts = set()
 
-    invalid_count = 0
     duplicate_count = 0
 
     for item in all_items:
-
-        if not valid(item):
-
-            invalid_count += 1
-            continue
 
         full_hash = make_hash(item)
 
@@ -142,14 +303,17 @@ def main():
         )
 
         if full_hash in hashes:
+
             duplicate_count += 1
             continue
 
         if title in titles:
+
             duplicate_count += 1
             continue
 
         if fact in facts:
+
             duplicate_count += 1
             continue
 
@@ -167,9 +331,17 @@ def main():
 
         unique.append(item)
 
-    # ========================================================
-    # ID
-    # ========================================================
+    print(
+        f"重複: {duplicate_count}件"
+    )
+
+    print(
+        f"重複除去後: {len(unique):,}件"
+    )
+
+    # --------------------------------------------------------
+    # ID付与
+    # --------------------------------------------------------
 
     final = []
 
@@ -179,19 +351,25 @@ def main():
     ):
 
         new_item = {
+
             "id": index,
+
             "category": str(
                 item["category"]
             ).strip(),
+
             "keyword": str(
                 item["keyword"]
             ).strip(),
+
             "title": str(
                 item["title"]
             ).strip(),
+
             "fact": str(
                 item["fact"]
             ).strip(),
+
             "example": str(
                 item["example"]
             ).strip()
@@ -201,9 +379,49 @@ def main():
             new_item
         )
 
-    # ========================================================
-    # SAVE
-    # ========================================================
+    # --------------------------------------------------------
+    # カテゴリー集計
+    # --------------------------------------------------------
+
+    categories = Counter(
+        item["category"]
+        for item in final
+    )
+
+    print()
+    print("【カテゴリー集計】")
+
+    category_error = False
+
+    for category, expected in (
+        EXPECTED_CATEGORY_COUNTS.items()
+    ):
+
+        actual = categories.get(
+            category,
+            0
+        )
+
+        if actual == expected:
+
+            print(
+                f"  OK  {category}: "
+                f"{actual}件"
+            )
+
+        else:
+
+            print(
+                f"  ⚠  {category}: "
+                f"{actual}件"
+                f" / 予定 {expected}件"
+            )
+
+            category_error = True
+
+    # --------------------------------------------------------
+    # 保存
+    # --------------------------------------------------------
 
     with open(
         OUTPUT,
@@ -218,34 +436,17 @@ def main():
             indent=2
         )
 
-    # ========================================================
-    # CATEGORY
-    # ========================================================
-
-    categories = {}
-
-    for item in final:
-
-        category = item["category"]
-
-        categories[category] = (
-            categories.get(
-                category,
-                0
-            ) + 1
-        )
-
-    # ========================================================
-    # RESULT
-    # ========================================================
+    # --------------------------------------------------------
+    # 最終結果
+    # --------------------------------------------------------
 
     print()
-    print("=" * 60)
-    print("完成")
-    print("=" * 60)
+    print("=" * 70)
+    print("【最終結果】")
+    print("=" * 70)
 
     print(
-        f"最終件数       : {len(final):,}"
+        f"入力件数       : {len(all_items):,}"
     )
 
     print(
@@ -253,42 +454,75 @@ def main():
     )
 
     print(
-        f"不正データ削除 : {invalid_count:,}"
+        f"最終件数       : {len(final):,}"
+    )
+
+    print(
+        f"目標件数       : {EXPECTED_TOTAL:,}"
     )
 
     print()
 
-    print("カテゴリー:")
+    # --------------------------------------------------------
+    # 1000件判定
+    # --------------------------------------------------------
 
-    for category, count in sorted(
-        categories.items()
-    ):
+    if len(final) == EXPECTED_TOTAL:
 
         print(
-            f"  {category}: {count:,}"
+            "🎉🎉🎉 1000件完成！"
         )
 
-    print()
-
-    if len(final) >= 10000:
+    elif len(final) > EXPECTED_TOTAL:
 
         print(
-            "🎉 10,000件達成！"
+            f"⚠ 目標より "
+            f"{len(final) - EXPECTED_TOTAL}件多いです"
         )
 
     else:
 
         print(
-            f"あと {10000 - len(final):,}件"
+            f"⚠ 目標まで "
+            f"{EXPECTED_TOTAL - len(final)}件不足"
         )
 
-    print()
+    # --------------------------------------------------------
+    # 警告
+    # --------------------------------------------------------
 
+    if batch_error:
+
+        print()
+        print(
+            "⚠ バッチの中に100件ではない"
+            "ファイルがあります"
+        )
+
+    if duplicate_count > 0:
+
+        print()
+        print(
+            "⚠ 重複データがありました"
+        )
+
+    if category_error:
+
+        print()
+        print(
+            "⚠ カテゴリー数が予定と一致していません"
+        )
+
+    # --------------------------------------------------------
+    # 保存場所
+    # --------------------------------------------------------
+
+    print()
     print(
         f"保存先: {OUTPUT}"
     )
 
-    print("=" * 60)
+    print("=" * 70)
 
 
 if __name__ == "__main__":
