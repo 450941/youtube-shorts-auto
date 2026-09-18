@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from collections import Counter
+from collections import defaultdict
 
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT = BASE_DIR / "trivia.json"
@@ -10,20 +10,33 @@ BATCH_FILES = [
     for i in range(1, 11)
 ]
 
-EXPECTED_TOTAL = 1000
+EXTRA_FILE = BASE_DIR / "trivia_extra.json"
+
+TARGET_COUNTS = {
+    "身近な雑学": 250,
+    "心理学": 150,
+    "科学": 150,
+    "歴史": 100,
+    "哲学": 50,
+    "人体": 100,
+    "食べ物": 50,
+    "動物・自然": 50,
+    "テクノロジー": 50,
+    "社会・文化": 50,
+}
 
 
 def main():
 
     print("=" * 70)
     print("LUMI TRIVIA MERGER")
-    print("001 ～ 010")
+    print("001 ～ 010 + EXTRA")
     print("=" * 70)
 
     all_items = []
 
     # ============================================================
-    # 読み込み
+    # バッチ読み込み
     # ============================================================
 
     for file in BATCH_FILES:
@@ -50,14 +63,46 @@ def main():
 
         all_items.extend(data)
 
+    # ============================================================
+    # EXTRA
+    # ============================================================
+
+    if EXTRA_FILE.exists():
+
+        with open(
+            EXTRA_FILE,
+            "r",
+            encoding="utf-8"
+        ) as f:
+
+            extra = json.load(f)
+
+        if not isinstance(extra, list):
+            print("ERROR: trivia_extra.json が配列ではありません")
+            raise SystemExit(1)
+
+        print(
+            f"trivia_extra.json: {len(extra)}件"
+        )
+
+        all_items.extend(extra)
+
+    else:
+
+        print(
+            "WARNING: trivia_extra.json がありません"
+        )
+
     print()
     print(
         f"入力合計: {len(all_items)}件"
     )
 
     # ============================================================
-    # データチェック
+    # データをカテゴリーごとに分ける
     # ============================================================
+
+    grouped = defaultdict(list)
 
     required = [
         "category",
@@ -67,65 +112,82 @@ def main():
         "example"
     ]
 
-    valid_items = []
+    invalid = 0
 
-    for index, item in enumerate(
-        all_items,
-        start=1
-    ):
+    for item in all_items:
 
         if not isinstance(item, dict):
-            print(
-                f"WARNING: {index}番目がオブジェクトではありません"
-            )
+            invalid += 1
             continue
 
-        missing = [
-            key
+        if any(
+            not str(item.get(key, "")).strip()
             for key in required
-            if not str(item.get(key, "")).strip()
-        ]
-
-        if missing:
-
-            print(
-                f"WARNING: {index}番目に不足:"
-                f" {missing}"
-            )
-
+        ):
+            invalid += 1
             continue
 
-        valid_items.append(item)
+        category = str(
+            item["category"]
+        ).strip()
 
-    print(
-        f"有効データ: {len(valid_items)}件"
-    )
+        if category in TARGET_COUNTS:
+
+            grouped[category].append(item)
 
     # ============================================================
-    # 重複削除しない
+    # カテゴリー確認
     # ============================================================
 
     print()
-    print(
-        "重複削除: OFF"
-    )
+    print("=" * 70)
+    print("カテゴリー確認")
+    print("=" * 70)
 
-    print(
-        "全データをそのまま保持します"
-    )
+    for category, target in TARGET_COUNTS.items():
+
+        available = len(
+            grouped[category]
+        )
+
+        print(
+            f"{category}: "
+            f"{available}件 → 必要 {target}件"
+        )
+
+        if available < target:
+
+            print(
+                f"ERROR: {category} が "
+                f"{target - available}件不足しています"
+            )
+
+            raise SystemExit(1)
 
     # ============================================================
-    # IDを振り直す
+    # 各カテゴリーから必要数だけ採用
     # ============================================================
 
     final = []
 
+    for category, target in TARGET_COUNTS.items():
+
+        selected = grouped[category][:target]
+
+        final.extend(selected)
+
+    # ============================================================
+    # IDを1から振り直す
+    # ============================================================
+
+    result = []
+
     for index, item in enumerate(
-        valid_items,
+        final,
         start=1
     ):
 
-        final.append({
+        result.append({
 
             "id": index,
 
@@ -161,71 +223,53 @@ def main():
     ) as f:
 
         json.dump(
-            final,
+            result,
             f,
             ensure_ascii=False,
             indent=2
         )
 
     # ============================================================
-    # カテゴリー集計
+    # 最終確認
     # ============================================================
-
-    categories = Counter(
-        item["category"]
-        for item in final
-    )
 
     print()
     print("=" * 70)
-    print("カテゴリー")
+    print("最終結果")
     print("=" * 70)
 
-    for category, count in sorted(
-        categories.items()
-    ):
+    print(
+        f"最終件数: {len(result)}件"
+    )
+
+    print()
+
+    for category, target in TARGET_COUNTS.items():
+
+        count = sum(
+            1
+            for item in result
+            if item["category"] == category
+        )
 
         print(
             f"{category}: {count}件"
         )
 
-    # ============================================================
-    # 結果
-    # ============================================================
-
     print()
-    print("=" * 70)
-    print("完成")
-    print("=" * 70)
+
+    if len(result) != 1000:
+
+        print(
+            f"ERROR: 1000件ではありません"
+            f" → {len(result)}件"
+        )
+
+        raise SystemExit(1)
 
     print(
-        f"最終件数: {len(final)}件"
+        "🎉 1000件完成！"
     )
-
-    print(
-        f"目標件数: {EXPECTED_TOTAL}件"
-    )
-
-    if len(final) == EXPECTED_TOTAL:
-
-        print()
-        print(
-            "🎉 1000件完成！"
-        )
-
-    elif len(final) < EXPECTED_TOTAL:
-
-        print()
-        print(
-            f"⚠ {EXPECTED_TOTAL - len(final)}件不足"
-        )
-
-    else:
-
-        print()
-        print(
-            f"⚠ {len(final) - EXPECTED_TOTAL}件多い"
-        )
 
     print()
     print(
