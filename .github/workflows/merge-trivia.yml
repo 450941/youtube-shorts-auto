@@ -1,0 +1,58 @@
+name: Merge Trivia Batches
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Merge trivia
+        run: |
+          python merge_trivia.py
+
+      - name: Check result
+        run: |
+          echo "===== trivia.json ====="
+
+          python - <<'PY'
+          import json
+
+          with open("trivia.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          print(f"最終件数: {len(data)}")
+
+          if len(data) != 1000:
+              raise SystemExit(
+                  f"1000件ではありません: {len(data)}件"
+              )
+
+          print("1000件OK!")
+          PY
+
+      - name: Commit trivia.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add trivia.json
+
+          if git diff --cached --quiet; then
+            echo "変更なし"
+          else
+            git commit -m "Merge trivia batches into trivia.json"
+            git push
+          fi
