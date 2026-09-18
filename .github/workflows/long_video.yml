@@ -14,24 +14,53 @@ jobs:
     timeout-minutes: 60
 
     steps:
+      # ========================================
+      # Checkout
+      # ========================================
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ========================================
+      # Python
+      # ========================================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
+      # ========================================
+      # System packages
+      # ========================================
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-noto-cjk fonts-dejavu imagemagick curl jq
+          sudo apt-get install -y \
+            ffmpeg \
+            fonts-noto-cjk \
+            fonts-dejavu \
+            imagemagick \
+            curl \
+            jq
 
+      # ========================================
+      # Python packages
+      # ========================================
       - name: Install Python packages
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 pillow edge-tts google-api-python-client google-auth google-auth-oauthlib google-auth-httplib2
+          pip install \
+            requests \
+            beautifulsoup4 \
+            pillow \
+            edge-tts \
+            google-api-python-client \
+            google-auth \
+            google-auth-oauthlib \
+            google-auth-httplib2
 
+      # ========================================
+      # Prepare folders
+      # ========================================
       - name: Prepare folders
         run: |
           rm -rf media output
@@ -41,31 +70,100 @@ jobs:
           mkdir -p media/subtitles
           mkdir -p output
 
+      # ========================================
+      # Download BGM
+      # ========================================
       - name: Download BGM
         run: |
           curl -L --fail --retry 3 \
             "https://commons.wikimedia.org/wiki/Special:Redirect/file/John_Bartmann_-_09_-_Happy_Clappy.ogg" \
             -o media/bgm.ogg
 
+          test -s media/bgm.ogg
+
+      # ========================================
+      # Check Python files
+      # ========================================
       - name: Check Python files
         run: |
           python -m py_compile render_video.py
           python -m py_compile upload_youtube.py
 
+      # ========================================
+      # Check Pexels Secret
+      # ========================================
+      - name: Check Pexels API key
+        env:
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: |
+          if [ -z "$PEXELS_API_KEY" ]; then
+            echo "ERROR: PEXELS_API_KEY がGitHub Secretsから取得できません。"
+            exit 1
+          fi
+
+          echo "PEXELS_API_KEY: OK"
+
+      # ========================================
+      # Generate long video
+      # ========================================
       - name: Generate video
         env:
           PYTHONUNBUFFERED: "1"
+
+          # Pexels
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+
         run: |
+          echo "========================================"
+          echo "START LONG VIDEO GENERATOR"
+          echo "========================================"
+
           python render_video.py
 
+      # ========================================
+      # Check generated files
+      # ========================================
+      - name: Check generated files
+        run: |
+          echo "Checking generated files..."
+
+          if [ ! -f output/final_video.mp4 ]; then
+            echo "ERROR: final_video.mp4 がありません"
+            exit 1
+          fi
+
+          if [ ! -f output/thumbnail.jpg ]; then
+            echo "ERROR: thumbnail.jpg がありません"
+            exit 1
+          fi
+
+          echo "Video:"
+          ls -lh output/final_video.mp4
+
+          echo "Thumbnail:"
+          ls -lh output/thumbnail.jpg
+
+          echo "Output directory:"
+          ls -lah output
+
+      # ========================================
+      # Upload to YouTube
+      # ========================================
       - name: Upload to YouTube
         env:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
+          echo "========================================"
+          echo "UPLOAD TO YOUTUBE"
+          echo "========================================"
+
           python upload_youtube.py
 
+      # ========================================
+      # Save generated files
+      # ========================================
       - name: Save generated files
         uses: actions/upload-artifact@v4
         with:
