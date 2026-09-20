@@ -2,6 +2,7 @@ name: Generate 5-Minute Trivia Encouragement Video
 
 on:
   workflow_dispatch:
+
   schedule:
     # 日本時間 12:00
     - cron: "0 3 * * *"
@@ -9,37 +10,53 @@ on:
     # 日本時間 18:00
     - cron: "0 9 * * *"
 
+# ============================================================
+# HISTORY保存のため contents: write
+# ============================================================
+
 permissions:
-  contents: read
+  contents: write
+
+# ============================================================
+# 同時実行防止
+# 手動実行と定時実行が重なっても履歴が壊れないようにする
+# ============================================================
+
+concurrency:
+  group: long-video-generator
+  cancel-in-progress: false
 
 jobs:
   render:
+
     runs-on: ubuntu-latest
 
-    # 動画生成に時間がかかるため60分
     timeout-minutes: 60
 
     steps:
 
-      # ========================================
-      # 1. Checkout
-      # ========================================
+      # ======================================================
+      # CHECKOUT
+      # ======================================================
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
+      # ======================================================
+      # PYTHON
+      # ======================================================
 
-      # ========================================
-      # 2. Python
-      # ========================================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
+      # ======================================================
+      # SYSTEM PACKAGES
+      # ======================================================
 
-      # ========================================
-      # 3. System packages
-      # ========================================
       - name: Install system packages
         run: |
           sudo apt-get update
@@ -47,15 +64,16 @@ jobs:
           sudo apt-get install -y \
             ffmpeg \
             fonts-noto-cjk \
+            fonts-noto-cjk-extra \
             fonts-dejavu \
             imagemagick \
             curl \
             jq
 
+      # ======================================================
+      # PYTHON PACKAGES
+      # ======================================================
 
-      # ========================================
-      # 4. Python packages
-      # ========================================
       - name: Install Python packages
         run: |
           python -m pip install --upgrade pip
@@ -70,26 +88,43 @@ jobs:
             google-auth-oauthlib \
             google-auth-httplib2
 
+      # ======================================================
+      # PREPARE FOLDERS
+      # ======================================================
 
-      # ========================================
-      # 5. Prepare folders
-      # ========================================
       - name: Prepare folders
         run: |
-          rm -rf media output
+          echo "========================================"
+          echo "PREPARE FOLDERS"
+          echo "========================================"
+
+          rm -rf media
+          rm -rf output
 
           mkdir -p media/images
           mkdir -p media/voice
           mkdir -p media/cuts
           mkdir -p media/subtitles
+
           mkdir -p output
 
+          # history は絶対に削除しない
+          mkdir -p history
 
-      # ========================================
-      # 6. Download BGM
-      # ========================================
+          echo ""
+          echo "Folders:"
+          find . -maxdepth 2 -type d | sort
+
+      # ======================================================
+      # DOWNLOAD BGM
+      # ======================================================
+
       - name: Download BGM
         run: |
+          echo "========================================"
+          echo "DOWNLOAD BGM"
+          echo "========================================"
+
           curl -L --fail --retry 3 \
             "https://commons.wikimedia.org/wiki/Special:Redirect/file/John_Bartmann_-_09_-_Happy_Clappy.ogg" \
             -o media/bgm.ogg
@@ -98,26 +133,31 @@ jobs:
 
           echo "BGM download OK"
 
+          ls -lh media/bgm.ogg
 
-      # ========================================
-      # 7. Check Python files
-      # ========================================
+      # ======================================================
+      # CHECK PYTHON
+      # ======================================================
+
       - name: Check Python files
         run: |
-          echo "Checking render_video.py..."
+          echo "========================================"
+          echo "CHECK PYTHON FILES"
+          echo "========================================"
 
+          echo "Checking render_video.py..."
           python -m py_compile render_video.py
 
           echo "Checking upload_youtube.py..."
-
           python -m py_compile upload_youtube.py
 
+          echo ""
           echo "Python files OK"
 
+      # ======================================================
+      # CHECK TRIVIA DATABASE
+      # ======================================================
 
-      # ========================================
-      # 8. Check trivia database
-      # ========================================
       - name: Check trivia database
         run: |
           echo "========================================"
@@ -132,7 +172,11 @@ jobs:
           python - <<'PY'
           import json
 
-          with open("trivia.json", "r", encoding="utf-8") as f:
+          with open(
+              "trivia.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
               data = json.load(f)
 
           print(f"trivia.json: {len(data)}件")
@@ -145,13 +189,69 @@ jobs:
           print("1000件OK!")
           PY
 
+      # ======================================================
+      # CHECK HISTORY
+      # ======================================================
 
-      # ========================================
-      # 9. Check Pexels Secret
-      # ========================================
+      - name: Check history
+        run: |
+          echo "========================================"
+          echo "CHECK HISTORY"
+          echo "========================================"
+
+          mkdir -p history
+
+          echo ""
+          echo "History files:"
+
+          if [ -f history/used_trivia.json ]; then
+            echo "used_trivia.json:"
+            python - <<'PY'
+          import json
+
+          path = "history/used_trivia.json"
+
+          with open(path, "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          print(f"  使用済み雑学: {len(data)}件")
+          PY
+          else
+            echo "  used_trivia.json: 初回実行"
+          fi
+
+          if [ -f history/used_thumbnails.json ]; then
+            echo "used_thumbnails.json: EXISTS"
+          else
+            echo "used_thumbnails.json: 初回実行"
+          fi
+
+          if [ -f history/description_history.json ]; then
+            echo "description_history.json: EXISTS"
+          else
+            echo "description_history.json: 初回実行"
+          fi
+
+          if [ -f history/title_history.json ]; then
+            echo "title_history.json: EXISTS"
+          else
+            echo "title_history.json: 初回実行"
+          fi
+
+          if [ -f history/thumbnail_style_history.json ]; then
+            echo "thumbnail_style_history.json: EXISTS"
+          else
+            echo "thumbnail_style_history.json: 初回実行"
+          fi
+
+      # ======================================================
+      # CHECK PEXELS SECRET
+      # ======================================================
+
       - name: Check Pexels Secret
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+
         run: |
           echo "========================================"
           echo "CHECK PEXELS API"
@@ -164,14 +264,15 @@ jobs:
 
           echo "PEXELS_API_KEY: OK"
 
+      # ======================================================
+      # GENERATE VIDEO
+      # ======================================================
 
-      # ========================================
-      # 10. Generate long video
-      # ========================================
       - name: Generate video
         env:
           PYTHONUNBUFFERED: "1"
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+
         run: |
           echo "========================================"
           echo "START LONG VIDEO GENERATOR"
@@ -180,15 +281,19 @@ jobs:
           echo "開始時刻:"
           date
 
+          echo ""
+
           python render_video.py
+
+          echo ""
 
           echo "終了時刻:"
           date
 
+      # ======================================================
+      # CHECK GENERATED FILES
+      # ======================================================
 
-      # ========================================
-      # 11. Check generated files
-      # ========================================
       - name: Check generated files
         run: |
           echo "========================================"
@@ -210,6 +315,11 @@ jobs:
             exit 1
           fi
 
+          if [ ! -f output/manifest.json ]; then
+            echo "ERROR: manifest.json がありません"
+            exit 1
+          fi
+
           echo ""
           echo "Video:"
           ls -lh output/final_video.mp4
@@ -223,13 +333,17 @@ jobs:
           ls -lh output/video_info.json
 
           echo ""
+          echo "Manifest:"
+          ls -lh output/manifest.json
+
+          echo ""
           echo "Output directory:"
           ls -lah output
 
+      # ======================================================
+      # SHOW VIDEO INFORMATION
+      # ======================================================
 
-      # ========================================
-      # 12. Show video information
-      # ========================================
       - name: Show video information
         run: |
           echo "========================================"
@@ -240,15 +354,25 @@ jobs:
             cat output/video_info.json
           fi
 
+          echo ""
+          echo "========================================"
+          echo "MANIFEST"
+          echo "========================================"
 
-      # ========================================
-      # 13. Upload to YouTube
-      # ========================================
+          if [ -f output/manifest.json ]; then
+            cat output/manifest.json
+          fi
+
+      # ======================================================
+      # UPLOAD TO YOUTUBE
+      # ======================================================
+
       - name: Upload to YouTube
         env:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+
         run: |
           echo "========================================"
           echo "UPLOAD TO YOUTUBE"
@@ -256,12 +380,72 @@ jobs:
 
           python upload_youtube.py
 
+      # ======================================================
+      # SAVE HISTORY TO GITHUB
+      #
+      # 動画生成が成功したあとにhistoryが更新され、
+      # YouTubeアップロード後にGitHubへ保存する。
+      #
+      # upload失敗でも履歴は保存する。
+      # これにより再実行時の雑学重複を防ぐ。
+      # ======================================================
 
-      # ========================================
-      # 14. Save generated files
-      # ========================================
+      - name: Save history to GitHub
+        if: always()
+
+        run: |
+          echo "========================================"
+          echo "SAVE HISTORY TO GITHUB"
+          echo "========================================"
+
+          if [ ! -d history ]; then
+            echo "history directory がありません。"
+            echo "保存する履歴はありません。"
+            exit 0
+          fi
+
+          echo ""
+          echo "History directory:"
+          ls -lah history
+
+          echo ""
+          echo "Git status:"
+          git status --short
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add history/
+
+          if git diff --cached --quiet; then
+            echo ""
+            echo "履歴に変更はありません。"
+            exit 0
+          fi
+
+          echo ""
+          echo "Committing history..."
+
+          git commit \
+            -m "Update long video generation history"
+
+          echo ""
+          echo "Pushing history..."
+
+          git push
+
+          echo ""
+          echo "History saved successfully."
+
+      # ======================================================
+      # UPLOAD ARTIFACT
+      # ======================================================
+
       - name: Save generated files
+        if: always()
+
         uses: actions/upload-artifact@v4
+
         with:
           name: generated-long-video-${{ github.run_id }}
 
@@ -269,30 +453,64 @@ jobs:
             output/final_video.mp4
             output/thumbnail.jpg
             output/video_info.json
+            output/manifest.json
+            output/title.txt
+            output/description.txt
             output/irasutoya_sources.json
+            history/used_trivia.json
+            history/used_thumbnails.json
+            history/description_history.json
+            history/title_history.json
+            history/thumbnail_style_history.json
 
           retention-days: 7
 
+          if-no-files-found: warn
 
-      # ========================================
-      # 15. Finish
-      # ========================================
+      # ======================================================
+      # COMPLETE
+      # ======================================================
+
       - name: Complete
+        if: always()
+
         run: |
           echo "========================================"
           echo "LONG VIDEO GENERATION COMPLETE"
           echo "========================================"
 
+          echo ""
           echo "日本時間:"
           TZ=Asia/Tokyo date
 
           echo ""
           echo "今回の動画:"
-          ls -lh output/final_video.mp4
+
+          if [ -f output/final_video.mp4 ]; then
+            ls -lh output/final_video.mp4
+          else
+            echo "final_video.mp4 がありません"
+          fi
 
           echo ""
           echo "サムネイル:"
-          ls -lh output/thumbnail.jpg
+
+          if [ -f output/thumbnail.jpg ]; then
+            ls -lh output/thumbnail.jpg
+          else
+            echo "thumbnail.jpg がありません"
+          fi
 
           echo ""
-          echo "完了しました！"
+          echo "履歴:"
+
+          if [ -d history ]; then
+            ls -lah history
+          else
+            echo "history がありません"
+          fi
+
+          echo ""
+          echo "========================================"
+          echo "完了"
+          echo "========================================"
