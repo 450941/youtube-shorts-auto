@@ -55,6 +55,10 @@ jobs:
 
       # ============================================================
       # 3. Create seed
+      #
+      # 1日2本
+      # UTC 00:00 / 12:00
+      # 日本時間 09:00 / 21:00
       # ============================================================
       - name: Create seed
         run: |
@@ -80,614 +84,148 @@ jobs:
 
 
       # ============================================================
-      # 4. Generate 600000 patterns
+      # 4. Select ONE encouragement from 1000 patterns
       #
-      # 60 contents
-      # × 100 hooks
-      # × 100 endings
-      # = 600,000 patterns
+      # encouragement_1000.json
       #
-      # 30 trivia
-      # 30 encouragement
+      # フックなし
+      # 締めなし
+      # 雑学なし
+      # 激励だけ
       # ============================================================
-      - name: Generate 600000 patterns
+      - name: Generate encouragement script
         run: |
           set -e
 
+          test -f encouragement_1000.json
+
           python - <<'PY'
+          import json
           import os
+          import random
 
           seed = int(os.environ["SEED"])
 
-
           # ========================================================
-          # 30 TRIVIA
+          # Load 1000 encouragement messages
           # ========================================================
 
-          trivia = [
-
-            {
-              "type": "trivia",
-              "query": "octopus underwater",
-              "title": "タコの心臓は3つ",
-              "text": "タコには心臓が3つあります。しかも、そのうち2つはエラへ血液を送っています。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "octopus underwater",
-              "title": "タコの血は青い",
-              "text": "タコの血は青色です。酸素を運ぶ成分に、鉄ではなく銅を含む物質が使われています。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "cat cute",
-              "title": "猫は甘さを感じにくい",
-              "text": "猫は人間のように甘味を感じるための仕組みがうまく働きません。だから甘い物への反応が違います。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "butterfly flower",
-              "title": "チョウは足で味を感じる",
-              "text": "チョウには足にも味を感じるための器官があります。花に止まったとき、食べられるものか確認しています。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "bat flying",
-              "title": "コウモリは飛べる哺乳類",
-              "text": "コウモリは、自力で継続的に飛行できる哺乳類として知られています。種類によっては音で周囲を把握します。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "hummingbird",
-              "title": "ハチドリは後ろ向きに飛べる",
-              "text": "ハチドリは鳥の中でも珍しく、後ろ向きに飛ぶことができます。翼を特殊な動かし方で使っています。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "penguin",
-              "title": "ペンギンには膝がある",
-              "text": "ペンギンにも膝があります。ただし、脚の奥に隠れているため外からは分かりにくいんです。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "wombat",
-              "title": "ウォンバットのフンは四角い",
-              "text": "ウォンバットのフンは四角い形をしています。腸の形や収縮の仕組みが関係しています。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "crow bird",
-              "title": "カラスは人の顔を覚える",
-              "text": "カラスは人の顔を見分ける能力について研究されています。人間が思う以上に記憶力が優れています。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "dolphin ocean",
-              "title": "イルカには特徴的な呼び声がある",
-              "text": "イルカには個体ごとに特徴的な呼び声があり、仲間とのコミュニケーションに使われています。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "human brain",
-              "title": "記憶は録画ではない",
-              "text": "人間の記憶は動画のようにそのまま保存されるわけではありません。思い出すときに再構成されます。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "brain psychology",
-              "title": "自分の名前には反応しやすい",
-              "text": "騒がしい場所でも自分の名前が聞こえると、注意を向けやすくなる現象が知られています。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "brain thinking",
-              "title": "マルチタスクは切り替えが多い",
-              "text": "複数のことを同時にしているように感じても、実際には注意を素早く切り替えている場合があります。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "sleep bed",
-              "title": "睡眠中も脳は働いている",
-              "text": "眠っている間も脳が完全に停止するわけではありません。睡眠中にもさまざまな活動が続いています。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "music headphones",
-              "title": "音楽は記憶を呼び起こす",
-              "text": "音楽は過去の出来事や感情と結びつき、昔の記憶を思い出すきっかけになることがあります。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "smell perfume",
-              "title": "香りは記憶と結びつきやすい",
-              "text": "香りは記憶や感情と強く結びつくことがあります。昔の香りで記憶がよみがえることがあるのはそのためです。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "banana",
-              "title": "バナナは植物学上ベリー",
-              "text": "植物学上では、バナナはベリーに分類されます。普段のイメージとはかなり違います。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "strawberry",
-              "title": "イチゴは植物学上のベリーではない",
-              "text": "イチゴは普段ベリーと呼ばれますが、植物学上の分類では一般的なベリーとは異なります。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "popcorn",
-              "title": "ポップコーンが爆発する理由",
-              "text": "ポップコーンの粒の中には水分があります。加熱すると水蒸気になり、圧力で粒が弾けます。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "bread bakery",
-              "title": "パンが古くなる科学",
-              "text": "パンが時間とともに硬くなるのは、単純に水分がなくなるだけではありません。デンプンの変化も関係しています。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "ice water",
-              "title": "氷は水に浮く",
-              "text": "氷は液体の水より密度が低いため、水に浮きます。これは水が持つ珍しい性質の一つです。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "lightning storm",
-              "title": "雷は非常に高温になる",
-              "text": "雷の放電が通る空気は、瞬間的に非常に高い温度になることがあります。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "rainbow sky",
-              "title": "虹は条件次第で円に見える",
-              "text": "虹は条件がそろうと円形に近い姿として見えることがあります。地上では一部しか見えないことが多いんです。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "sky blue",
-              "title": "空が青く見える理由",
-              "text": "空が青く見えるのは、太陽光が大気中で散乱するためです。青い光は特に散乱されやすい性質があります。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "moon space",
-              "title": "月の光は自分で作っていない",
-              "text": "夜空で輝いて見える月の光は、月自身が作った光ではありません。太陽の光を反射しています。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "sun earth space",
-              "title": "太陽の光が地球に届くまで",
-              "text": "太陽から地球まで光が届くには、およそ8分20秒かかります。今見ている太陽は少し前の姿です。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "venus planet",
-              "title": "金星は1日が1年より長い",
-              "text": "金星では、自転にかかる時間が公転周期より長いという不思議な特徴があります。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "mars planet",
-              "title": "火星では青い夕焼けが見える",
-              "text": "火星の夕焼けは、地球とは違って青っぽく見えることがあります。大気中の細かなちりが関係しています。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "saturn planet",
-              "title": "土星は水より平均密度が低い",
-              "text": "土星の平均密度は水より低いです。もちろん実際に巨大な水槽へ浮かべることはできません。"
-            },
-
-            {
-              "type": "trivia",
-              "query": "airplane window",
-              "title": "飛行機の窓には小さな穴がある",
-              "text": "飛行機の窓にある小さな穴は、窓の層の間の圧力差を調整する役割があります。"
-            }
-          ]
+          with open(
+              "encouragement_1000.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
+              data = json.load(f)
 
 
           # ========================================================
-          # 30 ENCOURAGEMENT
+          # Support several JSON formats
           # ========================================================
 
-          encouragement = [
+          if isinstance(data, list):
 
-            {
-              "type": "encouragement",
-              "query": "sunrise person",
-              "title": "今日を乗り越える",
-              "text": "今日は今日のぶんだけで大丈夫。明日のことまで、今のあなたが背負わなくていい。"
-            },
+              contents = data
 
-            {
-              "type": "encouragement",
-              "query": "person walking sunset",
-              "title": "一歩でいい",
-              "text": "大きく前に進めなくてもいい。止まらずに一歩だけ進めたら、それで十分です。"
-            },
+          elif isinstance(data, dict):
 
-            {
-              "type": "encouragement",
-              "query": "mountain sunrise",
-              "title": "遅くても進んでいる",
-              "text": "人と同じ速さじゃなくていい。ゆっくりでも、自分の道を歩いているなら前進です。"
-            },
+              if "encouragement" in data:
+                  contents = data["encouragement"]
 
-            {
-              "type": "encouragement",
-              "query": "rain window",
-              "title": "雨の日も終わる",
-              "text": "ずっと雨が降り続くわけじゃない。今つらい時間にも、ちゃんと終わりがあります。"
-            },
+              elif "contents" in data:
+                  contents = data["contents"]
 
-            {
-              "type": "encouragement",
-              "query": "city night person",
-              "title": "頑張っている",
-              "text": "誰にも気づかれなくても、今日を生きた。それだけで、あなたはちゃんと頑張っています。"
-            },
+              elif "messages" in data:
+                  contents = data["messages"]
 
-            {
-              "type": "encouragement",
-              "query": "ocean sunset",
-              "title": "休んでもいい",
-              "text": "立ち止まることは負けじゃない。疲れたら休んでいい。また歩き出せばいい。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "person alone nature",
-              "title": "自分を責めない",
-              "text": "できなかったことばかり数えなくていい。今日できた小さなことにも目を向けてください。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "sunlight window",
-              "title": "明日は変えられる",
-              "text": "今日がうまくいかなかったとしても、それで全部が決まったわけじゃない。明日はまた始められます。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "forest walking",
-              "title": "焦らなくていい",
-              "text": "焦って答えを出さなくていい。自分のペースで少しずつ進めば、それで大丈夫です。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "road sunrise",
-              "title": "道は一つじゃない",
-              "text": "今の道が苦しいなら、別の道を選んでもいい。人生には何度でも方向を変える時間があります。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "cloud sky",
-              "title": "雲の向こう",
-              "text": "今は先が見えなくても、空がずっと曇ったままとは限らない。焦らず今日を越えていこう。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "person beach",
-              "title": "小さな幸せ",
-              "text": "大きな幸せを探さなくていい。温かい飲み物や綺麗な空、それだけでも今日は十分です。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "morning coffee",
-              "title": "朝は何度でも来る",
-              "text": "眠れない夜があっても、朝はやってきます。今はただ、次の朝まで自分を守ればいい。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "person looking sky",
-              "title": "自分の人生を歩く",
-              "text": "誰かと比べなくていい。あなたの人生は、あなたの速度で進めばいい。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "road night lights",
-              "title": "迷ってもいい",
-              "text": "迷うことは悪いことじゃない。迷いながらでも、自分に合う場所を探していけばいい。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "flowers garden",
-              "title": "咲く時期は違う",
-              "text": "花が咲く時期がそれぞれ違うように、人にもそれぞれのタイミングがあります。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "ocean waves",
-              "title": "波は必ず変わる",
-              "text": "苦しい気持ちも、波のように変化します。今の感情が永遠に続くわけではありません。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "mountain road",
-              "title": "昨日より一歩",
-              "text": "昨日より少しだけ進めたら、それで十分。小さな一歩は、積み重なれば大きな道になります。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "sunset silhouette",
-              "title": "今日を終えていい",
-              "text": "今日できることをやったなら、もう休んでいい。明日の自分に続きを任せても大丈夫です。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "city sunrise",
-              "title": "まだ終わっていない",
-              "text": "今が苦しいからといって、人生全部が苦しいわけじゃない。まだこれから変わっていきます。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "person running",
-              "title": "ゆっくりでいい",
-              "text": "走れない日があってもいい。歩いてもいい。立ち止まってもいい。また動けるときに動けばいい。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "quiet room sunlight",
-              "title": "何もしない時間も必要",
-              "text": "何もしない時間は無駄じゃない。疲れた心を休ませるための、大切な時間です。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "forest sunlight",
-              "title": "比べなくていい",
-              "text": "誰かの人生と自分の人生を比べなくていい。見えている部分だけでは、誰にも分かりません。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "starry sky person",
-              "title": "夜にも意味がある",
-              "text": "暗い夜があるから、朝の光に気づける。今の時間にも、きっと意味があります。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "ocean horizon",
-              "title": "遠回りでもいい",
-              "text": "最短距離じゃなくてもいい。遠回りしたからこそ見える景色もあります。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "walking road",
-              "title": "今日を大切にする",
-              "text": "未来を心配しすぎなくていい。まずは今日一日を、自分に優しく過ごしてください。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "sunrise mountain",
-              "title": "また始めればいい",
-              "text": "何度失敗しても、また始めればいい。人生には何度でもやり直すチャンスがあります。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "person sitting beach",
-              "title": "生きているだけで十分",
-              "text": "何もできない日があってもいい。今日を生きている。それだけでも十分な一日です。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "sunset road",
-              "title": "明日の自分へ",
-              "text": "今日の自分が頑張ったぶんだけ、明日の自分が少し楽になる。だから今日はもう休もう。"
-            },
-
-            {
-              "type": "encouragement",
-              "query": "hope sunrise",
-              "title": "希望は小さくていい",
-              "text": "大きな希望が見つからなくてもいい。明日少しだけ楽になる。そのくらいの希望からでいい。"
-            }
-          ]
-
-
-          # ========================================================
-          # 100 HOOKS
-          # ========================================================
-
-          hook_a = [
-            "実は、",
-            "意外ですが、",
-            "知っていましたか？",
-            "これ、意外と知られていません。",
-            "ここで一つ、覚えておいてください。",
-            "ちょっとだけ聞いてください。",
-            "今から大切なことを言います。",
-            "もし今、疲れているなら、",
-            "もし今日つらかったなら、",
-            "今のあなたに伝えたいのは、"
-          ]
-
-          hook_b = [
-            "こんな事実があります。",
-            "ちゃんと理由があります。",
-            "意外なことがあります。",
-            "知ると少し見方が変わります。",
-            "覚えておいてほしいことがあります。",
-            "あなたに伝えたい言葉があります。",
-            "きっと覚えておいて損はありません。",
-            "少しだけ立ち止まって聞いてください。",
-            "ここだけは忘れないでください。",
-            "この15秒だけ聞いてください。"
-          ]
-
-          hooks = [
-            a + b
-            for a in hook_a
-            for b in hook_b
-          ]
-
-
-          # ========================================================
-          # 100 ENDINGS
-          # ========================================================
-
-          end_a = [
-            "知っておくと",
-            "覚えておくと",
-            "今日だけでも",
-            "明日になったら",
-            "この言葉を",
-            "少しだけでも",
-            "また苦しくなったら",
-            "今日の最後に",
-            "いつか思い出したら",
-            "この15秒を"
-          ]
-
-          end_b = [
-            "ちょっと得した気分です。",
-            "思わず誰かに話したくなります。",
-            "少し見え方が変わります。",
-            "きっと思い出せます。",
-            "自分を少し大切にできます。",
-            "焦らなくて大丈夫です。",
-            "また一歩進めます。",
-            "今日を乗り越える力になります。",
-            "心の片隅に置いておいてください。",
-            "明日の自分に渡してあげてください。"
-          ]
-
-          endings = [
-            a + "、" + b
-            for a in end_a
-            for b in end_b
-          ]
-
-
-          # ========================================================
-          # 600,000 PATTERNS
-          #
-          # 60 contents
-          # × 100 hooks
-          # × 100 endings
-          # = 600,000
-          # ========================================================
-
-          contents = trivia + encouragement
-
-          CONTENT_COUNT = len(contents)
-          HOOK_COUNT = len(hooks)
-          END_COUNT = len(endings)
-
-          TOTAL = (
-              CONTENT_COUNT
-              * HOOK_COUNT
-              * END_COUNT
-          )
-
-
-          # ========================================================
-          # Pattern selection
-          # ========================================================
-
-          content_index = (
-              seed % CONTENT_COUNT
-          )
-
-          hook_index = (
-              seed // CONTENT_COUNT
-          ) % HOOK_COUNT
-
-          ending_index = (
-              seed
-              // (CONTENT_COUNT * HOOK_COUNT)
-          ) % END_COUNT
-
-
-          content = contents[content_index]
-
-          hook = hooks[hook_index]
-
-          ending = endings[ending_index]
-
-
-          # ========================================================
-          # Different script style
-          # ========================================================
-
-          if content["type"] == "encouragement":
-
-              script = (
-                  hook
-                  + "\n"
-                  + content["text"]
-                  + "\n"
-                  + ending
-              )
-
-              category = "激励"
+              else:
+                  raise RuntimeError(
+                      "encouragement_1000.json の形式が認識できません。"
+                  )
 
           else:
 
-              script = (
-                  hook
-                  + "\n"
-                  + content["text"]
-                  + "\n"
-                  + ending
+              raise RuntimeError(
+                  "encouragement_1000.json が正しいJSONではありません。"
               )
 
-              category = "雑学"
+
+          if not contents:
+
+              raise RuntimeError(
+                  "激励メッセージが0件です。"
+              )
 
 
           # ========================================================
-          # Save files
+          # Normalize messages
+          # ========================================================
+
+          normalized = []
+
+          for item in contents:
+
+              if isinstance(item, str):
+
+                  text = item.strip()
+
+                  title = text[:30]
+
+              elif isinstance(item, dict):
+
+                  text = (
+                      item.get("text")
+                      or item.get("message")
+                      or item.get("content")
+                      or ""
+                  ).strip()
+
+                  title = (
+                      item.get("title")
+                      or text[:30]
+                  ).strip()
+
+              else:
+
+                  continue
+
+
+              if not text:
+                  continue
+
+
+              normalized.append({
+                  "text": text,
+                  "title": title
+              })
+
+
+          contents = normalized
+
+
+          if not contents:
+
+              raise RuntimeError(
+                  "有効な激励メッセージがありません。"
+              )
+
+
+          # ========================================================
+          # Select message
+          # ========================================================
+
+          index = seed % len(contents)
+
+          selected = contents[index]
+
+          text = selected["text"]
+
+          title = selected["title"]
+
+
+          # ========================================================
+          # Save script
+          #
+          # 激励文だけ
           # ========================================================
 
           with open(
@@ -696,7 +234,14 @@ jobs:
               encoding="utf-8"
           ) as f:
 
-              f.write(script)
+              f.write(text)
+
+
+          # ========================================================
+          # Category
+          # ========================================================
+
+          category = "激励"
 
 
           with open(
@@ -708,13 +253,42 @@ jobs:
               f.write(category)
 
 
+          # ========================================================
+          # Content title
+          # ========================================================
+
           with open(
               "content_title.txt",
               "w",
               encoding="utf-8"
           ) as f:
 
-              f.write(content["title"])
+              f.write(title)
+
+
+          # ========================================================
+          # Pexels query
+          #
+          # 激励動画なので人物・自然系
+          # ========================================================
+
+          queries = [
+              "person sunrise",
+              "person sunset",
+              "walking nature",
+              "mountain sunrise",
+              "ocean sunset",
+              "person looking sky",
+              "sunlight window",
+              "forest walking",
+              "peaceful nature",
+              "hope sunrise"
+          ]
+
+
+          query = queries[
+              seed % len(queries)
+          ]
 
 
           with open(
@@ -723,7 +297,17 @@ jobs:
               encoding="utf-8"
           ) as f:
 
-              f.write(content["query"])
+              f.write(query)
+
+
+          # ========================================================
+          # YouTube title
+          # ========================================================
+
+          video_title = (
+              title
+              + "｜今日のあなたへ #Shorts"
+          )
 
 
           with open(
@@ -732,46 +316,27 @@ jobs:
               encoding="utf-8"
           ) as f:
 
-              if content["type"] == "encouragement":
-
-                  title = (
-                      content["title"]
-                      + "｜今日のあなたへ #Shorts"
-                  )
-
-              else:
-
-                  title = (
-                      content["title"]
-                      + " #Shorts"
-                  )
-
-              f.write(title)
+              f.write(video_title)
 
 
           # ========================================================
-          # GitHub environment
+          # Environment
           # ========================================================
 
           print("==========================================")
-          print("TOTAL PATTERNS:", TOTAL)
-          print("CONTENT COUNT :", CONTENT_COUNT)
-          print("TRIVIA        :", len(trivia))
-          print("ENCOURAGEMENT :", len(encouragement))
-          print("HOOKS         :", HOOK_COUNT)
-          print("ENDINGS       :", END_COUNT)
-          print("------------------------------------------")
+          print("ENCOURAGEMENT ONLY")
+          print("==========================================")
+          print("TOTAL MESSAGES:", len(contents))
           print("SEED          :", seed)
-          print("CONTENT INDEX :", content_index)
-          print("HOOK INDEX    :", hook_index)
-          print("ENDING INDEX  :", ending_index)
-          print("TYPE          :", content["type"])
-          print("TITLE         :", content["title"])
-          print("==========================================")
-          print("")
+          print("INDEX         :", index)
+          print("TITLE         :", title)
+          print("QUERY         :", query)
+          print("------------------------------------------")
           print("SCRIPT:")
-          print(script)
-          print("")
+          print(text)
+          print("==========================================")
+
+
           PY
 
 
@@ -781,11 +346,12 @@ jobs:
 
           CATEGORY=$(cat category.txt)
 
+
           echo "QUERY=$QUERY" >> "$GITHUB_ENV"
 
           echo "VIDEO_TITLE=$VIDEO_TITLE" >> "$GITHUB_ENV"
 
-          echo "CATEGORY=$CATEGORY" >> "$GITHUB_ENV"
+          echo "CATEGORY=$CATEGORY"
 
 
       # ============================================================
@@ -797,6 +363,11 @@ jobs:
 
         run: |
           set -e
+
+          if [ -z "$PEXELS_API_KEY" ]; then
+            echo "ERROR: PEXELS_API_KEY がありません"
+            exit 1
+          fi
 
           echo "=========================================="
           echo "Pexels search"
@@ -831,20 +402,15 @@ jobs:
           echo "Results: $COUNT"
 
 
-          # Fallback
+          # ========================================================
+          # Fallback 1
+          # ========================================================
+
           if [ "$COUNT" -eq 0 ]; then
 
             echo "No matching video."
 
-            if [ "$CATEGORY" = "激励" ]; then
-
-              FALLBACK_QUERY="sunrise"
-
-            else
-
-              FALLBACK_QUERY="nature"
-
-            fi
+            FALLBACK_QUERY="sunrise"
 
 
             ENCODED_FALLBACK=$(python - <<PY
@@ -872,7 +438,10 @@ jobs:
           fi
 
 
-          # Second fallback
+          # ========================================================
+          # Fallback 2
+          # ========================================================
+
           if [ "$COUNT" -eq 0 ]; then
 
             echo "Using people fallback."
@@ -936,7 +505,7 @@ jobs:
         run: |
           set -e
 
-          echo "Generating Japanese narration..."
+          echo "Generating Japanese encouragement narration..."
 
 
           edge-tts \
@@ -1117,7 +686,6 @@ jobs:
                       cut = 18
 
 
-                      # 自然な句読点位置を探す
                       for i in range(
                           12,
                           19
@@ -1307,10 +875,6 @@ jobs:
                       end = duration
 
 
-                  # ==================================================
-                  # 2-line subtitle
-                  # ==================================================
-
                   if len(chunk) > 10:
 
                       midpoint = len(chunk) // 2
@@ -1386,7 +950,7 @@ jobs:
           set -e
 
           echo "=========================================="
-          echo "Rendering 15 second Short"
+          echo "Rendering 15 second encouragement Short"
           echo "Category: $CATEGORY"
           echo "=========================================="
 
@@ -1528,45 +1092,27 @@ jobs:
 
           title = os.environ.get(
               "VIDEO_TITLE",
-              "15秒ショート #Shorts"
+              "今日のあなたへ #Shorts"
           )
 
 
-          category = os.environ.get(
-              "CATEGORY",
-              "雑学"
+          description = (
+              "今日を頑張るあなたへ。\n"
+              "少しでも心が軽くなる言葉を15秒で。\n\n"
+              "#Shorts #激励 #応援 #前向き #モチベーション"
           )
 
 
-          if category == "激励":
-
-              description = (
-                  "今日を頑張るあなたへ。\n"
-                  "少しでも心が軽くなる言葉を15秒で。\n\n"
-                  "#Shorts #激励 #応援 #前向き"
-              )
-
-              tags = [
-                  "Shorts",
-                  "激励",
-                  "応援",
-                  "前向き",
-                  "モチベーション"
-              ]
-
-          else:
-
-              description = (
-                  "知られざる雑学を15秒で紹介します。\n\n"
-                  "#Shorts #雑学 #豆知識"
-              )
-
-              tags = [
-                  "Shorts",
-                  "雑学",
-                  "豆知識",
-                  "面白い話"
-              ]
+          tags = [
+              "Shorts",
+              "激励",
+              "応援",
+              "前向き",
+              "モチベーション",
+              "励まし",
+              "癒し",
+              "言葉"
+          ]
 
 
           body = {
@@ -1638,8 +1184,7 @@ jobs:
           )
 
           print(
-              "Category:",
-              category
+              "Category: 激励"
           )
 
           print(
