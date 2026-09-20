@@ -5,6 +5,9 @@ on:
     - cron: "0 0,12 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   render:
     runs-on: ubuntu-latest
@@ -13,7 +16,14 @@ jobs:
     steps:
 
       # ============================================================
-      # 1. Install tools
+      # 1. Checkout
+      # ============================================================
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
+      # ============================================================
+      # 2. Install tools
       # ============================================================
       - name: Install tools
         run: |
@@ -24,6 +34,7 @@ jobs:
           sudo apt-get install -y \
             ffmpeg \
             fonts-noto-cjk \
+            fonts-noto-cjk-extra \
             jq \
             curl
 
@@ -37,7 +48,7 @@ jobs:
 
 
       # ============================================================
-      # 2. Install Python packages
+      # 3. Install Python packages
       # ============================================================
       - name: Install Python packages
         run: |
@@ -54,9 +65,30 @@ jobs:
 
 
       # ============================================================
-      # 3. Create seed
+      # 4. Prepare Pexels history
+      #
+      # used_pexels.txt が存在しない場合でも動作
+      # ============================================================
+      - name: Prepare Pexels history
+        run: |
+          set -e
+
+          touch used_pexels.txt
+
+          echo "=========================================="
+          echo "Pexels history"
+          echo "=========================================="
+
+          COUNT=$(grep -cve '^[[:space:]]*$' used_pexels.txt || true)
+
+          echo "Previously used videos: $COUNT"
+
+
+      # ============================================================
+      # 5. Create seed
       #
       # 1日2本
+      #
       # UTC 00:00 / 12:00
       # 日本時間 09:00 / 21:00
       # ============================================================
@@ -84,13 +116,13 @@ jobs:
 
 
       # ============================================================
-      # 4. Select ONE encouragement from 1000 patterns
+      # 6. Select ONE encouragement from 1000 patterns
       #
       # encouragement_1000.json
       #
+      # 雑学なし
       # フックなし
       # 締めなし
-      # 雑学なし
       # 激励だけ
       # ============================================================
       - name: Generate encouragement script
@@ -102,12 +134,11 @@ jobs:
           python - <<'PY'
           import json
           import os
-          import random
 
           seed = int(os.environ["SEED"])
 
           # ========================================================
-          # Load 1000 encouragement messages
+          # Load JSON
           # ========================================================
 
           with open(
@@ -172,14 +203,14 @@ jobs:
 
               elif isinstance(item, dict):
 
-                  text = (
+                  text = str(
                       item.get("text")
                       or item.get("message")
                       or item.get("content")
                       or ""
                   ).strip()
 
-                  title = (
+                  title = str(
                       item.get("title")
                       or text[:30]
                   ).strip()
@@ -224,8 +255,6 @@ jobs:
 
           # ========================================================
           # Save script
-          #
-          # 激励文だけ
           # ========================================================
 
           with open(
@@ -242,7 +271,6 @@ jobs:
           # ========================================================
 
           category = "激励"
-
 
           with open(
               "category.txt",
@@ -267,9 +295,7 @@ jobs:
 
 
           # ========================================================
-          # Pexels query
-          #
-          # 激励動画なので人物・自然系
+          # Pexels queries
           # ========================================================
 
           queries = [
@@ -284,7 +310,6 @@ jobs:
               "peaceful nature",
               "hope sunrise"
           ]
-
 
           query = queries[
               seed % len(queries)
@@ -320,7 +345,7 @@ jobs:
 
 
           # ========================================================
-          # Environment
+          # Log
           # ========================================================
 
           print("==========================================")
@@ -351,13 +376,16 @@ jobs:
 
           echo "VIDEO_TITLE=$VIDEO_TITLE" >> "$GITHUB_ENV"
 
-          echo "CATEGORY=$CATEGORY"
+          echo "CATEGORY=$CATEGORY" >> "$GITHUB_ENV"
 
 
       # ============================================================
-      # 5. Download Pexels video
+      # 7. Download NEW Pexels video
+      #
+      # 重要：
+      # used_pexels.txt にある動画URLは絶対に再利用しない
       # ============================================================
-      - name: Download Pexels video
+      - name: Download NEW Pexels video
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
 
@@ -369,6 +397,8 @@ jobs:
             exit 1
           fi
 
+          touch used_pexels.txt
+
           echo "=========================================="
           echo "Pexels search"
           echo "Category: $CATEGORY"
@@ -376,51 +406,20 @@ jobs:
           echo "=========================================="
 
 
-          ENCODED_QUERY=$(python - <<PY
-          import urllib.parse
-
-          query = """$QUERY"""
-
-          print(
-              urllib.parse.quote(query)
-          )
-          PY
-          )
-
-
-          curl \
-            --fail \
-            -L \
-            -H "Authorization: $PEXELS_API_KEY" \
-            "https://api.pexels.com/videos/search?query=${ENCODED_QUERY}&orientation=portrait&size=medium&per_page=20" \
-            -o pexels.json
-
-
-          COUNT=$(jq '.videos | length' pexels.json)
-
-
-          echo "Results: $COUNT"
-
-
           # ========================================================
-          # Fallback 1
+          # Function
+          # Search and select unused video
           # ========================================================
 
-          if [ "$COUNT" -eq 0 ]; then
+          search_pexels() {
 
-            echo "No matching video."
+            SEARCH_QUERY="$1"
 
-            FALLBACK_QUERY="sunrise"
+            echo "Searching: $SEARCH_QUERY"
 
-
-            ENCODED_FALLBACK=$(python - <<PY
+            ENCODED_QUERY=$(python - <<PY
           import urllib.parse
-
-          print(
-              urllib.parse.quote(
-                  "$FALLBACK_QUERY"
-              )
-          )
+          print(urllib.parse.quote("""$SEARCH_QUERY"""))
           PY
             )
 
@@ -429,11 +428,101 @@ jobs:
               --fail \
               -L \
               -H "Authorization: $PEXELS_API_KEY" \
-              "https://api.pexels.com/videos/search?query=${ENCODED_FALLBACK}&orientation=portrait&size=medium&per_page=20" \
+              "https://api.pexels.com/videos/search?query=${ENCODED_QUERY}&orientation=portrait&size=medium&per_page=80" \
               -o pexels.json
 
 
             COUNT=$(jq '.videos | length' pexels.json)
+
+            echo "Results: $COUNT"
+
+
+            if [ "$COUNT" -eq 0 ]; then
+              return
+            fi
+
+
+            # ======================================================
+            # Check every result
+            # ======================================================
+
+            for i in $(seq 0 $((COUNT - 1))); do
+
+              CANDIDATE=$(jq -r \
+                --argjson index "$i" \
+                '
+                .videos[$index].video_files
+                | map(
+                    select(
+                      .file_type=="video/mp4"
+                      and .width >= 720
+                      and .height > .width
+                    )
+                  )
+                | sort_by(.width)
+                | reverse
+                | .[0].link // empty
+                ' \
+                pexels.json
+              )
+
+
+              if [ -z "$CANDIDATE" ]; then
+                continue
+              fi
+
+
+              # ====================================================
+              # Already used?
+              # ====================================================
+
+              if grep -Fxq "$CANDIDATE" used_pexels.txt; then
+
+                echo "SKIP USED VIDEO:"
+                echo "$CANDIDATE"
+
+                continue
+
+              fi
+
+
+              # ====================================================
+              # NEW VIDEO
+              # ====================================================
+
+              VIDEO_URL="$CANDIDATE"
+
+              echo "=========================================="
+              echo "NEW VIDEO FOUND"
+              echo "$VIDEO_URL"
+              echo "=========================================="
+
+              return
+
+            done
+
+          }
+
+
+          VIDEO_URL=""
+
+
+          # ========================================================
+          # Main query
+          # ========================================================
+
+          search_pexels "$QUERY"
+
+
+          # ========================================================
+          # Fallback 1
+          # ========================================================
+
+          if [ -z "$VIDEO_URL" ]; then
+
+            echo "No unused video in main search."
+
+            search_pexels "sunrise"
 
           fi
 
@@ -442,48 +531,38 @@ jobs:
           # Fallback 2
           # ========================================================
 
-          if [ "$COUNT" -eq 0 ]; then
+          if [ -z "$VIDEO_URL" ]; then
 
-            echo "Using people fallback."
+            echo "No unused sunrise video."
 
-            curl \
-              --fail \
-              -L \
-              -H "Authorization: $PEXELS_API_KEY" \
-              "https://api.pexels.com/videos/search?query=people&orientation=portrait&size=medium&per_page=20" \
-              -o pexels.json
-
-            COUNT=$(jq '.videos | length' pexels.json)
+            search_pexels "people"
 
           fi
 
 
-          test "$COUNT" -gt 0
+          # ========================================================
+          # No new video
+          # ========================================================
+
+          if [ -z "$VIDEO_URL" ]; then
+
+            echo "=========================================="
+            echo "ERROR"
+            echo "=========================================="
+            echo "新しいPexels動画が見つかりません。"
+            echo "同じ映像を再利用せず、処理を停止します。"
+            echo "=========================================="
+
+            exit 1
+
+          fi
 
 
-          INDEX=$((SEED % COUNT))
+          # ========================================================
+          # Download
+          # ========================================================
 
-
-          VIDEO_URL=$(jq -r \
-            --argjson index "$INDEX" \
-            '
-            .videos[$index].video_files
-            | map(
-                select(.file_type=="video/mp4")
-              )
-            | sort_by(.width)
-            | reverse
-            | .[0].link
-            ' \
-            pexels.json
-          )
-
-
-          test -n "$VIDEO_URL"
-
-
-          echo "Downloading video..."
-
+          echo "Downloading NEW video..."
 
           curl \
             --fail \
@@ -495,11 +574,21 @@ jobs:
           test -s source.mp4
 
 
-          echo "Video downloaded."
+          # ========================================================
+          # Record used video
+          # ========================================================
+
+          echo "$VIDEO_URL" >> used_pexels.txt
+
+
+          echo "=========================================="
+          echo "Video downloaded successfully."
+          echo "Added to used_pexels.txt"
+          echo "=========================================="
 
 
       # ============================================================
-      # 6. Generate narration
+      # 8. Generate narration
       # ============================================================
       - name: Generate narration
         run: |
@@ -529,7 +618,7 @@ jobs:
 
 
       # ============================================================
-      # 7. Fit narration to 15 seconds
+      # 9. Fit narration to 15 seconds
       # ============================================================
       - name: Fit narration
         run: |
@@ -591,7 +680,7 @@ jobs:
 
 
       # ============================================================
-      # 8. Create ASS subtitles
+      # 10. Create ASS subtitles
       # ============================================================
       - name: Create ASS subtitles
         run: |
@@ -943,7 +1032,7 @@ jobs:
 
 
       # ============================================================
-      # 9. Render 15 second Short
+      # 11. Render 15 second Short
       # ============================================================
       - name: Render 15 second Short
         run: |
@@ -980,12 +1069,11 @@ jobs:
 
           test -s short.mp4
 
-
           echo "Render completed."
 
 
       # ============================================================
-      # 10. Check video
+      # 12. Check video
       # ============================================================
       - name: Check video
         run: |
@@ -1033,7 +1121,7 @@ jobs:
 
 
       # ============================================================
-      # 11. Create YouTube upload script
+      # 13. Create YouTube upload script
       # ============================================================
       - name: Create YouTube upload script
         run: |
@@ -1205,7 +1293,7 @@ jobs:
 
 
       # ============================================================
-      # 12. Upload to YouTube
+      # 14. Upload to YouTube
       # ============================================================
       - name: Upload to YouTube
         env:
@@ -1222,7 +1310,45 @@ jobs:
 
 
       # ============================================================
-      # 13. Upload artifact
+      # 15. Save Pexels history
+      #
+      # ここが重要
+      # 次回のActionsでも使用済み動画を覚える
+      # ============================================================
+      - name: Save Pexels history
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "Saving Pexels video history"
+          echo "=========================================="
+
+
+          git config user.name "github-actions[bot]"
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+
+          git add used_pexels.txt
+
+
+          if git diff --cached --quiet; then
+
+            echo "No changes to Pexels history."
+
+          else
+
+            git commit \
+              -m "Update used Pexels video history"
+
+            git push
+
+          fi
+
+
+      # ============================================================
+      # 16. Upload artifact
       # ============================================================
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -1236,5 +1362,6 @@ jobs:
             captions.ass
             category.txt
             content_title.txt
+            used_pexels.txt
 
           retention-days: 3
