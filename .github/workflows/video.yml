@@ -11,7 +11,7 @@ permissions:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
 
@@ -35,31 +35,23 @@ jobs:
             fonts-noto-cjk \
             fonts-noto-cjk-extra \
             jq \
-            curl
-
-          fc-cache -fv
-
-          echo "=== FFmpeg ==="
-          ffmpeg -version | head -n 1
-
-          echo "=== Japanese fonts ==="
-          fc-list | grep -i "Noto Sans CJK" | head -n 5 || true
+            curl \
+            python3 \
+            python3-pip
 
       # ============================================================
       # 3. Install Python packages
       # ============================================================
       - name: Install Python packages
         run: |
-          set -e
-
           python -m pip install --upgrade pip
 
           pip install \
             edge-tts \
             google-api-python-client \
             google-auth \
-            google-auth-httplib2 \
-            google-auth-oauthlib
+            google-auth-oauthlib \
+            google-auth-httplib2
 
       # ============================================================
       # 4. Prepare Pexels history
@@ -68,239 +60,262 @@ jobs:
         run: |
           set -e
 
-          touch used_pexels.txt
+          if [ ! -f used_pexels.txt ]; then
+            touch used_pexels.txt
+          fi
 
-          echo "=========================================="
-          echo "Pexels history"
-          echo "=========================================="
-
-          COUNT=$(grep -cve '^[[:space:]]*$' used_pexels.txt || true)
-
-          echo "Previously used videos: $COUNT"
+          echo "Used Pexels videos:"
+          wc -l used_pexels.txt || true
 
       # ============================================================
-      # 5. Create seed
+      # 5. Select encouragement message
       # ============================================================
-      - name: Create seed
+      - name: Select encouragement
+        env:
+          GH_RUN_NUMBER: ${{ github.run_number }}
         run: |
           set -e
 
-          DAY=$(($(date +%s) / 86400))
-
-          HOUR=$(date -u +%H)
-          HOUR=$((10#$HOUR))
-
-          SLOT=$((HOUR / 12))
-
-          SEED=$((DAY * 2 + SLOT))
-
-          echo "SEED=$SEED" >> "$GITHUB_ENV"
-
-          echo "========================================"
-          echo "SEED: $SEED"
-          echo "DAY : $DAY"
-          echo "HOUR: $HOUR"
-          echo "SLOT: $SLOT"
-          echo "========================================"
-
-      # ============================================================
-      # 6. Select ONE encouragement from 1000 patterns
-      # ============================================================
-      - name: Generate encouragement script
-        run: |
-          set -e
-
-          test -f encouragement_1000.json
-
-          python - <<'PY'
+          python <<'PY'
           import json
           import os
+          from pathlib import Path
+          from datetime import datetime, timezone
 
-          seed = int(os.environ["SEED"])
+          source = Path("encouragement_1000.json")
 
-          with open(
-              "encouragement_1000.json",
-              "r",
-              encoding="utf-8"
-          ) as f:
-              data = json.load(f)
+          if not source.exists():
+              raise FileNotFoundError(
+                  "encouragement_1000.json が見つかりません"
+              )
 
+          data = json.loads(source.read_text(encoding="utf-8"))
+
+          # --------------------------------------------------------
+          # JSON形式に対応
+          # --------------------------------------------------------
           if isinstance(data, list):
-
-              contents = data
+              raw_contents = data
 
           elif isinstance(data, dict):
-
-              if "encouragement" in data:
-                  contents = data["encouragement"]
-
-              elif "contents" in data:
-                  contents = data["contents"]
-
-              elif "messages" in data:
-                  contents = data["messages"]
-
+              for key in [
+                  "encouragement",
+                  "contents",
+                  "messages",
+                  "items"
+              ]:
+                  if isinstance(data.get(key), list):
+                      raw_contents = data[key]
+                      break
               else:
-                  raise RuntimeError(
-                      "encouragement_1000.json の形式が認識できません。"
+                  raise ValueError(
+                      "encouragement_1000.json に対象リストがありません"
                   )
 
           else:
+              raise ValueError("JSONの形式が不正です")
 
-              raise RuntimeError(
-                  "encouragement_1000.json が正しいJSONではありません。"
-              )
+          contents = []
 
-          if not contents:
-
-              raise RuntimeError(
-                  "激励メッセージが0件です。"
-              )
-
-          normalized = []
-
-          for item in contents:
+          for item in raw_contents:
 
               if isinstance(item, str):
-
                   text = item.strip()
-                  title = text[:30]
+                  title = ""
 
               elif isinstance(item, dict):
+                  text = ""
 
-                  text = str(
-                      item.get("text")
-                      or item.get("message")
-                      or item.get("content")
-                      or ""
-                  ).strip()
+                  for key in [
+                      "text",
+                      "message",
+                      "content",
+                      "encouragement"
+                  ]:
+                      if item.get(key):
+                          text = str(item[key]).strip()
+                          break
 
                   title = str(
-                      item.get("title")
-                      or text[:30]
+                      item.get("title", "")
                   ).strip()
 
               else:
-
                   continue
 
-              if not text:
-                  continue
-
-              normalized.append(
-                  {
+              if text:
+                  contents.append({
                       "text": text,
                       "title": title
-                  }
-              )
-
-          contents = normalized
+                  })
 
           if not contents:
-
-              raise RuntimeError(
-                  "有効な激励メッセージがありません。"
+              raise ValueError(
+                  "有効な激励メッセージがありません"
               )
+
+          # --------------------------------------------------------
+          # 1日2本
+          # UTC 00:00 / 12:00
+          # --------------------------------------------------------
+          now = datetime.now(timezone.utc)
+
+          day = (now.date() - datetime(
+              1970, 1, 1,
+              tzinfo=timezone.utc
+          ).date()).days
+
+          hour = now.hour
+          slot = hour // 12
+
+          seed = day * 2 + slot
 
           index = seed % len(contents)
 
           selected = contents[index]
 
-          text = selected["text"]
-          title = selected["title"]
+          script = selected["text"]
+          original_title = selected["title"]
 
-          with open(
-              "script.txt",
-              "w",
-              encoding="utf-8"
-          ) as f:
-              f.write(text)
+          # --------------------------------------------------------
+          # 本文から冒頭フックを作る
+          # --------------------------------------------------------
+          import re
 
-          category = "激励"
+          clean = re.sub(
+              r"\s+",
+              "",
+              script
+          )
 
-          with open(
-              "category.txt",
-              "w",
-              encoding="utf-8"
-          ) as f:
-              f.write(category)
+          # 最初の文章を優先
+          parts = re.split(
+              r"(?<=[。！？!?])",
+              clean
+          )
 
-          with open(
-              "content_title.txt",
-              "w",
-              encoding="utf-8"
-          ) as f:
-              f.write(title)
+          first_sentence = ""
 
+          for part in parts:
+              part = part.strip()
+              if part:
+                  first_sentence = part
+                  break
+
+          if not first_sentence:
+              first_sentence = clean
+
+          # 長すぎる場合は短くする
+          hook = first_sentence[:28]
+
+          if len(hook) < 8:
+              hook = clean[:28]
+
+          # --------------------------------------------------------
+          # タイトル
+          # --------------------------------------------------------
+          if original_title:
+              video_title = original_title.strip()
+
+          else:
+              video_title = hook
+
+          # YouTubeタイトル長を考慮
+          video_title = video_title[:70]
+
+          # --------------------------------------------------------
+          # Pexels検索ワード
+          # 内容を直接検索するのではなく、
+          # 感情・状況系をローテーション
+          # --------------------------------------------------------
           queries = [
-              "person sunrise",
-              "person sunset",
-              "walking nature",
-              "mountain sunrise",
-              "ocean sunset",
+              "person thinking",
+              "person walking city",
+              "sunrise person",
+              "sunset person",
+              "young person walking",
               "person looking sky",
-              "sunlight window",
-              "forest walking",
-              "peaceful nature",
-              "hope sunrise"
+              "person working",
+              "person studying",
+              "person running",
+              "person nature",
+              "calm person",
+              "happy person",
+              "person overcoming",
+              "person mountain",
+              "city night person",
+              "morning person",
+              "motivational person",
+              "person silhouette",
+              "person beach",
+              "person alone",
+              "person smiling",
+              "person looking window",
+              "person outdoors",
+              "person journey",
+              "person success"
           ]
 
           query = queries[
               seed % len(queries)
           ]
 
-          with open(
-              "pexels_query.txt",
-              "w",
+          # --------------------------------------------------------
+          # 出力
+          # --------------------------------------------------------
+          Path("script.txt").write_text(
+              script,
               encoding="utf-8"
-          ) as f:
-              f.write(query)
-
-          video_title = (
-              title
-              + "｜今日のあなたへ #Shorts"
           )
 
-          with open(
-              "video_title.txt",
-              "w",
+          Path("category.txt").write_text(
+              "激励・応援",
               encoding="utf-8"
-          ) as f:
-              f.write(video_title)
+          )
+
+          Path("content_title.txt").write_text(
+              video_title,
+              encoding="utf-8"
+          )
+
+          Path("video_title.txt").write_text(
+              video_title + " #Shorts",
+              encoding="utf-8"
+          )
+
+          Path("hook.txt").write_text(
+              hook,
+              encoding="utf-8"
+          )
+
+          Path("pexels_query.txt").write_text(
+              query,
+              encoding="utf-8"
+          )
 
           print("==========================================")
-          print("ENCOURAGEMENT ONLY")
+          print("ENCOURAGEMENT SELECTED")
           print("==========================================")
-          print("TOTAL MESSAGES:", len(contents))
-          print("SEED          :", seed)
-          print("INDEX         :", index)
-          print("TITLE         :", title)
-          print("QUERY         :", query)
-          print("------------------------------------------")
-          print("SCRIPT:")
-          print(text)
+          print(f"Total messages : {len(contents)}")
+          print(f"Index          : {index}")
+          print(f"Title          : {video_title}")
+          print(f"Hook           : {hook}")
+          print(f"Pexels query   : {query}")
+          print(f"Characters     : {len(script)}")
           print("==========================================")
-          PY
-
-          QUERY=$(cat pexels_query.txt)
-
-          VIDEO_TITLE=$(cat video_title.txt)
-
-          CATEGORY=$(cat category.txt)
-
-          echo "QUERY=$QUERY" >> "$GITHUB_ENV"
-
-          echo "VIDEO_TITLE=$VIDEO_TITLE" >> "$GITHUB_ENV"
-
-          echo "CATEGORY=$CATEGORY" >> "$GITHUB_ENV"
 
       # ============================================================
-      # 7. Download NEW Pexels video
+      # 6. Download Pexels video
+      #
+      # 未使用映像を最優先
+      # ↓
+      # 未使用が無ければ過去映像を再利用
+      # ↓
+      # 同じ映像の連続使用は可能な限り回避
       # ============================================================
-      - name: Download NEW Pexels video
+      - name: Download Pexels video
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-
         run: |
           set -e
 
@@ -309,150 +324,211 @@ jobs:
             exit 1
           fi
 
+          QUERY=$(cat pexels_query.txt)
+
+          echo "=========================================="
+          echo "PEXELS SEARCH"
+          echo "=========================================="
+          echo "Primary query: $QUERY"
+
           touch used_pexels.txt
 
-          echo "=========================================="
-          echo "Pexels search"
-          echo "Category: $CATEGORY"
-          echo "Query: $QUERY"
-          echo "=========================================="
+          # --------------------------------------------------------
+          # 検索候補
+          # --------------------------------------------------------
+          QUERIES=(
+            "$QUERY"
+            "sunrise person"
+            "person walking"
+            "person nature"
+            "motivational person"
+            "person looking sky"
+            "person working"
+            "person outdoors"
+          )
 
-          search_pexels() {
+          FOUND_NEW="false"
+          SELECTED_URL=""
+          SELECTED_ID=""
 
-            SEARCH_QUERY="$1"
+          # --------------------------------------------------------
+          # 未使用映像を探す
+          # --------------------------------------------------------
+          for SEARCH_QUERY in "${QUERIES[@]}"; do
 
+            echo ""
             echo "Searching: $SEARCH_QUERY"
 
-            ENCODED_QUERY=$(python - <<PY
-          import urllib.parse
+            ENCODED_QUERY=$(python -c "import urllib.parse; print(urllib.parse.quote('''$SEARCH_QUERY'''))")
 
-          print(
-              urllib.parse.quote(
-                  """$SEARCH_QUERY"""
-              )
-          )
-          PY
-            )
-
-            curl \
-              --fail \
-              -L \
+            RESPONSE=$(curl -s \
               -H "Authorization: $PEXELS_API_KEY" \
-              "https://api.pexels.com/videos/search?query=${ENCODED_QUERY}&orientation=portrait&size=medium&per_page=80" \
-              -o pexels.json
+              "https://api.pexels.com/videos/search?query=${ENCODED_QUERY}&orientation=portrait&size=medium&per_page=80&page=1")
 
-            COUNT=$(jq '.videos | length' pexels.json)
+            COUNT=$(echo "$RESPONSE" | jq '.videos | length')
 
-            echo "Results: $COUNT"
-
-            if [ "$COUNT" -eq 0 ]; then
-              return
+            if [ "$COUNT" = "0" ] || [ "$COUNT" = "null" ]; then
+              continue
             fi
 
-            for i in $(seq 0 $((COUNT - 1))); do
+            # ------------------------------------------------------
+            # 候補を調べる
+            # ------------------------------------------------------
+            for ROW in $(seq 0 $((COUNT - 1))); do
 
-              CANDIDATE=$(jq -r \
-                --argjson index "$i" \
-                '
-                .videos[$index].video_files
-                | map(
-                    select(
-                      .file_type=="video/mp4"
-                      and .width >= 720
-                      and .height > .width
-                    )
-                  )
-                | sort_by(.width)
-                | reverse
-                | .[0].link // empty
-                ' \
-                pexels.json
+              VIDEO_ID=$(echo "$RESPONSE" | jq -r ".videos[$ROW].id")
+
+              FILE_URL=$(
+                echo "$RESPONSE" |
+                jq -r ".videos[$ROW].video_files |
+                  map(select(
+                    .file_type == \"video/mp4\"
+                    and (.width // 0) >= 720
+                    and (.height // 0) >= 1000
+                  ))
+                  | sort_by(.width // 0)
+                  | reverse
+                  | .[0].link // empty"
               )
 
-              if [ -z "$CANDIDATE" ]; then
+              if [ -z "$FILE_URL" ] || [ "$FILE_URL" = "null" ]; then
                 continue
               fi
 
-              if grep -Fxq "$CANDIDATE" used_pexels.txt; then
-
-                echo "SKIP USED VIDEO:"
-                echo "$CANDIDATE"
-
+              # ----------------------------------------------------
+              # 過去使用チェック
+              # ----------------------------------------------------
+              if grep -Fqx "$FILE_URL" used_pexels.txt; then
                 continue
               fi
 
-              VIDEO_URL="$CANDIDATE"
+              SELECTED_URL="$FILE_URL"
+              SELECTED_ID="$VIDEO_ID"
+              FOUND_NEW="true"
 
-              echo "=========================================="
-              echo "NEW VIDEO FOUND"
-              echo "$VIDEO_URL"
-              echo "=========================================="
+              echo "NEW PEXELS VIDEO FOUND"
+              echo "Video ID: $SELECTED_ID"
 
-              return
-
+              break
             done
-          }
 
-          VIDEO_URL=""
+            if [ "$FOUND_NEW" = "true" ]; then
+              break
+            fi
 
-          search_pexels "$QUERY"
+          done
 
-          if [ -z "$VIDEO_URL" ]; then
+          # --------------------------------------------------------
+          # 未使用映像が無かった場合
+          # 過去映像を再利用
+          # --------------------------------------------------------
+          if [ "$FOUND_NEW" != "true" ]; then
 
-            echo "No unused video in main search."
+            echo ""
+            echo "=========================================="
+            echo "No unused Pexels video found."
+            echo "Falling back to previously used videos."
+            echo "=========================================="
 
-            search_pexels "sunrise"
+            # 直前の映像はできるだけ避ける
+            LAST_URL=$(tail -n 1 used_pexels.txt 2>/dev/null || true)
 
+            for SEARCH_QUERY in "${QUERIES[@]}"; do
+
+              echo ""
+              echo "Fallback search: $SEARCH_QUERY"
+
+              ENCODED_QUERY=$(python -c "import urllib.parse; print(urllib.parse.quote('''$SEARCH_QUERY'''))")
+
+              RESPONSE=$(curl -s \
+                -H "Authorization: $PEXELS_API_KEY" \
+                "https://api.pexels.com/videos/search?query=${ENCODED_QUERY}&orientation=portrait&size=medium&per_page=40&page=1")
+
+              COUNT=$(echo "$RESPONSE" | jq '.videos | length')
+
+              if [ "$COUNT" = "0" ] || [ "$COUNT" = "null" ]; then
+                continue
+              fi
+
+              # まず直前の映像以外を探す
+              for ROW in $(seq 0 $((COUNT - 1))); do
+
+                VIDEO_ID=$(echo "$RESPONSE" | jq -r ".videos[$ROW].id")
+
+                FILE_URL=$(
+                  echo "$RESPONSE" |
+                  jq -r ".videos[$ROW].video_files |
+                    map(select(
+                      .file_type == \"video/mp4\"
+                      and (.width // 0) >= 720
+                      and (.height // 0) >= 1000
+                    ))
+                    | sort_by(.width // 0)
+                    | reverse
+                    | .[0].link // empty"
+                )
+
+                if [ -z "$FILE_URL" ] || [ "$FILE_URL" = "null" ]; then
+                  continue
+                fi
+
+                if [ "$FILE_URL" = "$LAST_URL" ]; then
+                  continue
+                fi
+
+                SELECTED_URL="$FILE_URL"
+                SELECTED_ID="$VIDEO_ID"
+
+                break 2
+              done
+            done
           fi
 
-          if [ -z "$VIDEO_URL" ]; then
-
-            echo "No unused sunrise video."
-
-            search_pexels "people"
-
-          fi
-
-          if [ -z "$VIDEO_URL" ]; then
-
-            echo "=========================================="
-            echo "ERROR"
-            echo "=========================================="
-
-            echo "新しいPexels動画が見つかりません。"
-            echo "同じ映像を再利用せず、処理を停止します。"
-
-            echo "=========================================="
-
+          if [ -z "$SELECTED_URL" ]; then
+            echo "ERROR: Pexels video が見つかりませんでした"
             exit 1
-
           fi
 
-          echo "Downloading NEW video..."
+          echo ""
+          echo "=========================================="
+          echo "SELECTED PEXELS VIDEO"
+          echo "=========================================="
+          echo "ID: $SELECTED_ID"
+          echo "URL: $SELECTED_URL"
+          echo "=========================================="
 
-          curl \
+          # --------------------------------------------------------
+          # ダウンロード
+          # --------------------------------------------------------
+          curl -L \
             --fail \
-            -L \
-            "$VIDEO_URL" \
+            --retry 3 \
+            --retry-delay 2 \
+            "$SELECTED_URL" \
             -o source.mp4
 
-          test -s source.mp4
+          if [ ! -s source.mp4 ]; then
+            echo "ERROR: source.mp4 が空です"
+            exit 1
+          fi
 
-          echo "$VIDEO_URL" >> used_pexels.txt
+          # URLを履歴へ追加
+          echo "$SELECTED_URL" >> used_pexels.txt
 
-          echo "=========================================="
-          echo "Video downloaded successfully."
-          echo "Added to used_pexels.txt"
-          echo "=========================================="
+          echo ""
+          echo "Downloaded:"
+          ls -lh source.mp4
 
       # ============================================================
-      # 8. Generate narration
+      # 7. Generate narration
       # ============================================================
       - name: Generate narration
         run: |
           set -e
 
-          echo "Generating Japanese encouragement narration..."
+          echo "=========================================="
+          echo "GENERATING NARRATION"
+          echo "=========================================="
 
           edge-tts \
             --voice ja-JP-NanamiNeural \
@@ -460,9 +536,10 @@ jobs:
             --file script.txt \
             --write-media voice.mp3
 
-          test -s voice.mp3
-
-          echo "Original narration duration:"
+          if [ ! -s voice.mp3 ]; then
+            echo "ERROR: voice.mp3 が作成されませんでした"
+            exit 1
+          fi
 
           ffprobe \
             -v error \
@@ -471,13 +548,14 @@ jobs:
             voice.mp3
 
       # ============================================================
-      # 9. Fit narration to approximately 14.8 seconds
+      # 8. Keep narration natural
+      #
+      # 15秒に無理やり合わせない
+      # atempoによる圧縮・引き伸ばしなし
       # ============================================================
-      - name: Fit narration
+      - name: Check narration
         run: |
           set -e
-
-          TARGET=14.8
 
           DURATION=$(ffprobe \
             -v error \
@@ -486,86 +564,42 @@ jobs:
             voice.mp3)
 
           echo "=========================================="
-          echo "Original narration: $DURATION seconds"
-          echo "Target duration: $TARGET seconds"
+          echo "NARRATION INFORMATION"
+          echo "=========================================="
+          echo "Duration: $DURATION seconds"
+          echo "Speed: Natural"
+          echo "Forced 15 seconds: OFF"
           echo "=========================================="
 
-          SPEED=$(python - <<PY
-          d = float("$DURATION")
-          target = float("$TARGET")
-
-          speed = d / target
-
-          if speed < 0.5:
-              speed = 0.5
-
-          if speed > 2.0:
-              speed = 2.0
-
-          print(f"{speed:.8f}")
-          PY
-          )
-
-          echo "Atempo: $SPEED"
-
-          ffmpeg \
-            -y \
-            -i voice.mp3 \
-            -filter:a "atempo=$SPEED" \
-            -vn \
-            voice_fit.mp3
-
-          mv voice_fit.mp3 voice.mp3
-
-          FINAL_DURATION=$(ffprobe \
-            -v error \
-            -show_entries format=duration \
-            -of default=noprint_wrappers=1:nokey=1 \
-            voice.mp3)
-
-          echo "=========================================="
-          echo "Adjusted narration: $FINAL_DURATION seconds"
-          echo "=========================================="
-
-          if ! awk \
-            "BEGIN {exit !($FINAL_DURATION >= 14.3 && $FINAL_DURATION <= 15.0)}"
-          then
-
-            echo "ERROR: Narration was not fitted correctly."
-
+          if ! awk "BEGIN {exit !($DURATION > 0)}"; then
+            echo "ERROR: Narration duration is invalid."
             exit 1
-
           fi
 
-          echo "Narration fit OK."
-
       # ============================================================
-      # 10. Create ASS subtitles
+      # 9. Create subtitles + hook overlay
       # ============================================================
-      - name: Create ASS subtitles
+      - name: Create subtitles
         run: |
           set -e
 
-          python - <<'PY'
+          python <<'PY'
           import subprocess
           import re
+          from pathlib import Path
 
-          with open(
-              "script.txt",
+          script = Path("script.txt").read_text(
               encoding="utf-8"
-          ) as f:
+          ).strip()
 
-              raw_lines = [
-                  x.strip()
-                  for x in f.read().splitlines()
-                  if x.strip()
-              ]
+          hook = Path("hook.txt").read_text(
+              encoding="utf-8"
+          ).strip()
 
           result = subprocess.run(
               [
                   "ffprobe",
-                  "-v",
-                  "error",
+                  "-v", "error",
                   "-show_entries",
                   "format=duration",
                   "-of",
@@ -577,143 +611,147 @@ jobs:
               check=True
           )
 
-          duration = float(
-              result.stdout.strip()
-          )
+          duration = float(result.stdout.strip())
 
-          duration = min(
-              duration,
-              15.0
-          )
+          # --------------------------------------------------------
+          # ASS時間
+          # --------------------------------------------------------
+          def ass_time(seconds):
+              seconds = max(0.0, seconds)
 
-          def split_text(text):
+              h = int(seconds // 3600)
+              m = int((seconds % 3600) // 60)
+              s = int(seconds % 60)
+              cs = int(round((seconds - int(seconds)) * 100))
 
-              text = re.sub(
-                  r"\s+",
-                  "",
+              if cs >= 100:
+                  s += 1
+                  cs = 0
+
+              if s >= 60:
+                  m += 1
+                  s = 0
+
+              if m >= 60:
+                  h += 1
+                  m = 0
+
+              return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+          # --------------------------------------------------------
+          # ASSエスケープ
+          # --------------------------------------------------------
+          def escape_ass(text):
+              return (
                   text
+                  .replace("\\", r"\\")
+                  .replace("{", r"\{")
+                  .replace("}", r"\}")
               )
 
-              parts = re.split(
-                  r"(?<=[。！？!?])",
-                  text
-              )
+          # --------------------------------------------------------
+          # 文章を字幕単位へ分割
+          # --------------------------------------------------------
+          clean = re.sub(
+              r"\s+",
+              "",
+              script
+          )
 
-              parts = [
-                  p.strip()
-                  for p in parts
-                  if p.strip()
-              ]
-
-              final = []
-
-              for part in parts:
-
-                  while len(part) > 18:
-
-                      cut = 18
-
-                      for i in range(12, 19):
-
-                          if (
-                              i < len(part)
-                              and part[i] in "、，"
-                          ):
-
-                              cut = i + 1
-                              break
-
-                      final.append(
-                          part[:cut]
-                      )
-
-                      part = part[cut:]
-
-                  if part:
-                      final.append(part)
-
-              return final
+          sentences = re.split(
+              r"(?<=[。！？!?])",
+              clean
+          )
 
           chunks = []
 
-          for line in raw_lines:
-              chunks.extend(
-                  split_text(line)
-              )
+          for sentence in sentences:
+
+              sentence = sentence.strip()
+
+              if not sentence:
+                  continue
+
+              # 長すぎる字幕を分割
+              while len(sentence) > 18:
+
+                  cut = 18
+
+                  # 読点などを優先
+                  candidates = [
+                      i for i in range(
+                          8,
+                          min(18, len(sentence)) + 1
+                      )
+                      if sentence[i - 1] in "、，, "
+                  ]
+
+                  if candidates:
+                      cut = candidates[-1]
+
+                  chunks.append(
+                      sentence[:cut]
+                  )
+
+                  sentence = sentence[cut:]
+
+              if sentence:
+                  chunks.append(sentence)
 
           if not chunks:
+              chunks = [clean]
 
-              raise RuntimeError(
-                  "No subtitle chunks."
-              )
+          # --------------------------------------------------------
+          # 文字数に応じて時間配分
+          # --------------------------------------------------------
+          total_chars = sum(
+              len(x) for x in chunks
+          )
 
-          weights = []
+          events = []
+
+          current = 0.0
 
           for chunk in chunks:
 
-              clean = re.sub(
-                  r"[^\wぁ-んァ-ン一-龥ー]",
-                  "",
-                  chunk
+              weight = (
+                  len(chunk) / total_chars
               )
 
-              weights.append(
-                  max(len(clean), 1)
+              chunk_duration = (
+                  duration * weight
               )
 
-          total_weight = sum(
-              weights
-          )
+              start = current
+              end = current + chunk_duration
 
-          def ass_time(seconds):
+              # 2行化
+              display = chunk
 
-              if seconds < 0:
-                  seconds = 0
+              if len(display) >= 12:
+                  midpoint = len(display) // 2
 
-              hours = int(
-                  seconds // 3600
-              )
+                  # 日本語なら中央付近で改行
+                  display = (
+                      display[:midpoint]
+                      + r"\N"
+                      + display[midpoint:]
+                  )
 
-              minutes = int(
-                  (seconds % 3600) // 60
-              )
-
-              secs = int(
-                  seconds % 60
-              )
-
-              centis = int(
-                  round(
-                      (
-                          seconds
-                          - int(seconds)
-                      ) * 100
+              events.append(
+                  (
+                      start,
+                      end,
+                      display
                   )
               )
 
-              if centis >= 100:
+              current = end
 
-                  centis -= 100
-                  secs += 1
-
-              if secs >= 60:
-
-                  secs -= 60
-                  minutes += 1
-
-              if minutes >= 60:
-
-                  minutes -= 60
-                  hours += 1
-
-              return (
-                  f"{hours}:"
-                  f"{minutes:02d}:"
-                  f"{secs:02d}."
-                  f"{centis:02d}"
-              )
-
-          header = """[Script Info]
+          # --------------------------------------------------------
+          # ASS本体
+          # --------------------------------------------------------
+          header = r"""[Script Info]
           ScriptType: v4.00+
           PlayResX: 1080
           PlayResY: 1920
@@ -722,130 +760,77 @@ jobs:
 
           [V4+ Styles]
           Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-          Style: Default,Noto Sans CJK JP,58,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,2,2,60,60,260,1
+          Style: Default,Noto Sans CJK JP,62,&H00FFFFFF,&H00FFFFFF,&H00111111,&H80000000,1,0,0,0,100,100,0,0,1,4,1,2,80,80,170,1
+          Style: Hook,Noto Sans CJK JP,70,&H00FFFFFF,&H00FFFFFF,&H00000000,&H90000000,1,0,0,0,100,100,0,0,1,5,2,5,90,90,0,1
 
           [Events]
           Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
           """
 
-          current = 0.0
+          lines = [
+              line.strip()
+              for line in header.strip().splitlines()
+          ]
 
-          with open(
-              "captions.ass",
-              "w",
+          # --------------------------------------------------------
+          # 冒頭フック
+          # 0〜2.8秒
+          # --------------------------------------------------------
+          hook_end = min(
+              2.8,
+              duration
+          )
+
+          hook_display = escape_ass(
+              hook
+          )
+
+          lines.append(
+              "Dialogue: 10,"
+              + ass_time(0)
+              + ","
+              + ass_time(hook_end)
+              + ",Hook,,0,0,0,,"
+              + r"{\fad(200,200)}"
+              + hook_display
+          )
+
+          # --------------------------------------------------------
+          # 本文字幕
+          # --------------------------------------------------------
+          for start, end, text in events:
+
+              lines.append(
+                  "Dialogue: 1,"
+                  + ass_time(start)
+                  + ","
+                  + ass_time(end)
+                  + ",Default,,0,0,0,,"
+                  + escape_ass(text)
+              )
+
+          Path("captions.ass").write_text(
+              "\n".join(lines) + "\n",
               encoding="utf-8"
-          ) as f:
-
-              f.write(header)
-
-              for index, chunk in enumerate(
-                  chunks
-              ):
-
-                  ratio = (
-                      weights[index]
-                      / total_weight
-                  )
-
-                  segment = (
-                      duration
-                      * ratio
-                  )
-
-                  start = current
-
-                  end = (
-                      current
-                      + segment
-                  )
-
-                  if (
-                      index
-                      == len(chunks) - 1
-                  ):
-
-                      end = duration
-
-                  if len(chunk) > 10:
-
-                      midpoint = (
-                          len(chunk) // 2
-                      )
-
-                      candidates = []
-
-                      for i in range(
-                          max(
-                              5,
-                              midpoint - 5
-                          ),
-                          min(
-                              len(chunk) - 1,
-                              midpoint + 6
-                          )
-                      ):
-
-                          if chunk[i] in "、。！？":
-
-                              candidates.append(
-                                  i + 1
-                              )
-
-                      if candidates:
-
-                          split_at = min(
-                              candidates,
-                              key=lambda x:
-                              abs(
-                                  x - midpoint
-                              )
-                          )
-
-                      else:
-
-                          split_at = midpoint
-
-                      text = (
-                          chunk[:split_at]
-                          + r"\N"
-                          + chunk[split_at:]
-                      )
-
-                  else:
-
-                      text = chunk
-
-                  f.write(
-                      "Dialogue: 0,"
-                      + ass_time(start)
-                      + ","
-                      + ass_time(end)
-                      + ",Default,,0,0,0,,"
-                      + text
-                      + "\n"
-                  )
-
-                  current = end
+          )
 
           print("==========================================")
-          print("ASS subtitle created")
-          print("Audio duration:", duration)
-          print("Chunks:", len(chunks))
+          print("SUBTITLE CREATED")
           print("==========================================")
+          print(f"Duration : {duration:.2f}s")
+          print(f"Chunks   : {len(chunks)}")
+          print(f"Hook     : {hook}")
+          print("==========================================")
+          PY
 
       # ============================================================
-      # 11. Render Short
-      #     Video ends exactly with narration
+      # 10. Render vertical video
+      #
+      # 映像はナレーション時間までループ
       # ============================================================
-      - name: Render Short
+      - name: Render video
         run: |
           set -e
-
-          echo "=========================================="
-          echo "Rendering Short"
-          echo "NO EXTRA SILENCE"
-          echo "Category: $CATEGORY"
-          echo "=========================================="
 
           AUDIO_DURATION=$(ffprobe \
             -v error \
@@ -853,10 +838,14 @@ jobs:
             -of default=noprint_wrappers=1:nokey=1 \
             voice.mp3)
 
+          echo "=========================================="
+          echo "RENDERING VIDEO"
+          echo "=========================================="
           echo "Audio duration: $AUDIO_DURATION"
+          echo "Video will end with narration."
+          echo "=========================================="
 
-          ffmpeg \
-            -y \
+          ffmpeg -y \
             -stream_loop -1 \
             -i source.mp4 \
             -i voice.mp3 \
@@ -875,16 +864,16 @@ jobs:
             -movflags +faststart \
             short.mp4
 
-          test -s short.mp4
-
-          echo "=========================================="
-          echo "Render completed."
-          echo "Video ends exactly with narration."
-          echo "No extra silence."
-          echo "=========================================="
+          if [ ! -s short.mp4 ]; then
+            echo "ERROR: short.mp4 が作成されませんでした"
+            exit 1
+          fi
 
       # ============================================================
-      # 12. Check video
+      # 11. Check video
+      #
+      # 15秒制限なし
+      # 音声と動画の長さだけ確認
       # ============================================================
       - name: Check video
         run: |
@@ -903,96 +892,77 @@ jobs:
             -of default=noprint_wrappers=1 \
             short.mp4
 
-          DURATION=$(ffprobe \
+          VIDEO_DURATION=$(ffprobe \
             -v error \
             -show_entries format=duration \
             -of default=noprint_wrappers=1:nokey=1 \
             short.mp4)
 
+          AUDIO_DURATION=$(ffprobe \
+            -v error \
+            -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 \
+            voice.mp3)
+
           echo ""
-          echo "Final duration: $DURATION"
+          echo "Video duration : $VIDEO_DURATION"
+          echo "Audio duration : $AUDIO_DURATION"
 
-          if ! awk \
-            "BEGIN {exit !($DURATION >= 14.0 && $DURATION <= 15.0)}"
-          then
-
-            echo "ERROR: Video duration is not close enough to 15 seconds."
-
+          if ! awk "BEGIN {exit !($VIDEO_DURATION > 0)}"; then
+            echo "ERROR: Video duration is invalid."
             exit 1
-
           fi
 
-          echo "Video check OK."
+          DIFF=$(python - <<PY
+          video = float("$VIDEO_DURATION")
+          audio = float("$AUDIO_DURATION")
+          print(abs(video - audio))
+          PY
+          )
+
+          echo "Duration difference: $DIFF seconds"
+
+          if ! awk "BEGIN {exit !($DIFF <= 0.20)}"; then
+            echo "ERROR: Video and narration durations differ too much."
+            exit 1
+          fi
+
+          echo ""
+          echo "=========================================="
+          echo "VIDEO CHECK OK"
+          echo "=========================================="
 
       # ============================================================
-      # 13. Create YouTube upload script
+      # 12. Create YouTube uploader
       # ============================================================
-      - name: Create YouTube upload script
+      - name: Create uploader
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
           set -e
 
           cat > upload.py <<'PY'
           import os
-
           from google.oauth2.credentials import Credentials
-
           from googleapiclient.discovery import build
-
           from googleapiclient.http import MediaFileUpload
 
+          CLIENT_ID = os.environ["YOUTUBE_CLIENT_ID"]
+          CLIENT_SECRET = os.environ["YOUTUBE_CLIENT_SECRET"]
+          REFRESH_TOKEN = os.environ["YOUTUBE_REFRESH_TOKEN"]
 
-          CLIENT_ID = os.environ[
-              "YOUTUBE_CLIENT_ID"
-          ]
-
-          CLIENT_SECRET = os.environ[
-              "YOUTUBE_CLIENT_SECRET"
-          ]
-
-          REFRESH_TOKEN = os.environ[
-              "YOUTUBE_REFRESH_TOKEN"
-          ]
-
-
-          credentials = Credentials(
-
-              token=None,
-
-              refresh_token=REFRESH_TOKEN,
-
-              token_uri=(
-                  "https://oauth2.googleapis.com/token"
-              ),
-
-              client_id=CLIENT_ID,
-
-              client_secret=CLIENT_SECRET,
-
-              scopes=[
-                  "https://www.googleapis.com/auth/youtube.upload"
-              ]
-          )
-
-
-          youtube = build(
-              "youtube",
-              "v3",
-              credentials=credentials
-          )
-
-
-          title = os.environ.get(
-              "VIDEO_TITLE",
-              "今日のあなたへ #Shorts"
-          )
-
+          title = open(
+              "video_title.txt",
+              encoding="utf-8"
+          ).read().strip()
 
           description = (
               "今日を頑張るあなたへ。\n"
-              "少しでも心が軽くなる言葉を15秒で。\n\n"
+              "心が少し軽くなる言葉を届けます。\n\n"
               "#Shorts #激励 #応援 #前向き #モチベーション"
           )
-
 
           tags = [
               "Shorts",
@@ -1001,165 +971,116 @@ jobs:
               "前向き",
               "モチベーション",
               "励まし",
-              "癒し",
-              "言葉"
+              "人生",
+              "言葉",
+              "自己成長"
           ]
 
+          credentials = Credentials(
+              token=None,
+              refresh_token=REFRESH_TOKEN,
+              token_uri="https://oauth2.googleapis.com/token",
+              client_id=CLIENT_ID,
+              client_secret=CLIENT_SECRET,
+              scopes=[
+                  "https://www.googleapis.com/auth/youtube.upload"
+              ]
+          )
+
+          youtube = build(
+              "youtube",
+              "v3",
+              credentials=credentials
+          )
 
           body = {
-
               "snippet": {
-
-                  "title": title,
-
+                  "title": title[:100],
                   "description": description,
-
                   "tags": tags,
-
                   "categoryId": "22"
               },
-
               "status": {
-
                   "privacyStatus": "public",
-
                   "selfDeclaredMadeForKids": False
               }
           }
 
-
           media = MediaFileUpload(
-
               "short.mp4",
-
               mimetype="video/mp4",
-
               resumable=True
           )
 
-
           request = youtube.videos().insert(
-
               part="snippet,status",
-
               body=body,
-
               media_body=media
           )
 
+          response = request.execute()
 
-          response = None
+          video_id = response["id"]
 
-
-          while response is None:
-
-              status, response = (
-                  request.next_chunk()
-              )
-
-              if status:
-
-                  print(
-                      "Upload progress:",
-                      int(
-                          status.progress() * 100
-                      ),
-                      "%"
-                  )
-
-
-          print(
-              "=========================================="
-          )
-
-          print(
-              "YouTube upload completed!"
-          )
-
-          print(
-              "Category: 激励"
-          )
-
-          print(
-              "Video ID:",
-              response["id"]
-          )
-
-          print(
-              "URL:",
-              "https://www.youtube.com/watch?v="
-              + response["id"]
-          )
-
-          print(
-              "=========================================="
-          )
+          print("==========================================")
+          print("YOUTUBE UPLOAD SUCCESS")
+          print("==========================================")
+          print(f"Video ID: {video_id}")
+          print(f"https://www.youtube.com/watch?v={video_id}")
+          print("==========================================")
           PY
 
       # ============================================================
-      # 14. Upload to YouTube
+      # 13. Upload to YouTube
       # ============================================================
       - name: Upload to YouTube
         env:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
-          CATEGORY: ${{ env.CATEGORY }}
-
         run: |
           set -e
 
           python upload.py
 
       # ============================================================
-      # 15. Save Pexels history
+      # 14. Save Pexels history
       # ============================================================
       - name: Save Pexels history
+        env:
+          GH_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
         run: |
           set -e
 
-          echo "=========================================="
-          echo "Saving Pexels video history"
-          echo "=========================================="
-
-          git config user.name \
-            "github-actions[bot]"
-
-          git config user.email \
-            "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add used_pexels.txt
 
           if git diff --cached --quiet; then
-
-            echo "No changes to Pexels history."
-
+            echo "No Pexels history changes."
           else
-
-            git commit \
-              -m "Update used Pexels video history"
-
+            git commit -m "Update Pexels video history"
             git push
-
           fi
 
       # ============================================================
-      # 16. Upload artifact
+      # 15. Upload artifacts
       # ============================================================
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
-
         with:
-
           name: youtube-short-${{ github.run_number }}
-
           path: |
             short.mp4
+            source.mp4
+            voice.mp3
             script.txt
             captions.ass
+            hook.txt
             category.txt
             content_title.txt
+            video_title.txt
+            pexels_query.txt
             used_pexels.txt
-
           retention-days: 3
