@@ -325,6 +325,7 @@ jobs:
 
             ENCODED_QUERY=$(python - <<PY
           import urllib.parse
+
           print(
               urllib.parse.quote(
                   """$SEARCH_QUERY"""
@@ -470,11 +471,13 @@ jobs:
             voice.mp3
 
       # ============================================================
-      # 9. Fit narration - eliminate unnecessary ending silence
+      # 9. Fit narration to approximately 14.8 seconds
       # ============================================================
       - name: Fit narration
         run: |
           set -e
+
+          TARGET=14.8
 
           DURATION=$(ffprobe \
             -v error \
@@ -482,87 +485,37 @@ jobs:
             -of default=noprint_wrappers=1:nokey=1 \
             voice.mp3)
 
+          echo "=========================================="
           echo "Original narration: $DURATION seconds"
+          echo "Target duration: $TARGET seconds"
+          echo "=========================================="
 
-          python - <<PY
-          import subprocess
-          import os
-
+          SPEED=$(python - <<PY
           d = float("$DURATION")
+          target = float("$TARGET")
 
-          # 15秒以内で、できるだけ15秒に近づける
-          target = 14.8
+          speed = d / target
 
-          print("Original:", d)
-          print("Target:", target)
+          if speed < 0.5:
+              speed = 0.5
 
-          if d > target:
+          if speed > 2.0:
+              speed = 2.0
 
-              speed = d / target
-
-              if speed > 1.95:
-                  speed = 1.95
-
-              print(
-                  f"Speeding up: {speed:.6f}"
-              )
-
-              subprocess.run(
-                  [
-                      "ffmpeg",
-                      "-y",
-                      "-i",
-                      "voice.mp3",
-                      "-filter:a",
-                      f"atempo={speed:.6f}",
-                      "-vn",
-                      "voice_fit.mp3"
-                  ],
-                  check=True
-              )
-
-              os.replace(
-                  "voice_fit.mp3",
-                  "voice.mp3"
-              )
-
-          elif d < 14.0:
-
-              speed = d / target
-
-              if speed < 0.75:
-                  speed = 0.75
-
-              print(
-                  f"Slowing down: {speed:.6f}"
-              )
-
-              subprocess.run(
-                  [
-                      "ffmpeg",
-                      "-y",
-                      "-i",
-                      "voice.mp3",
-                      "-filter:a",
-                      f"atempo={speed:.6f}",
-                      "-vn",
-                      "voice_fit.mp3"
-                  ],
-                  check=True
-              )
-
-              os.replace(
-                  "voice_fit.mp3",
-                  "voice.mp3"
-              )
-
-          else:
-
-              print(
-                  "Narration already fits."
-              )
-
+          print(f"{speed:.8f}")
           PY
+          )
+
+          echo "Atempo: $SPEED"
+
+          ffmpeg \
+            -y \
+            -i voice.mp3 \
+            -filter:a "atempo=$SPEED" \
+            -vn \
+            voice_fit.mp3
+
+          mv voice_fit.mp3 voice.mp3
 
           FINAL_DURATION=$(ffprobe \
             -v error \
@@ -570,15 +523,21 @@ jobs:
             -of default=noprint_wrappers=1:nokey=1 \
             voice.mp3)
 
-          echo "Final narration: $FINAL_DURATION seconds"
+          echo "=========================================="
+          echo "Adjusted narration: $FINAL_DURATION seconds"
+          echo "=========================================="
 
-          if awk "BEGIN {exit !($FINAL_DURATION > 15.0)}"; then
+          if ! awk \
+            "BEGIN {exit !($FINAL_DURATION >= 14.3 && $FINAL_DURATION <= 15.0)}"
+          then
 
-            echo "ERROR: Narration is longer than 15 seconds."
+            echo "ERROR: Narration was not fitted correctly."
 
             exit 1
 
           fi
+
+          echo "Narration fit OK."
 
       # ============================================================
       # 10. Create ASS subtitles
@@ -683,6 +642,7 @@ jobs:
               )
 
           if not chunks:
+
               raise RuntimeError(
                   "No subtitle chunks."
               )
@@ -874,7 +834,8 @@ jobs:
           print("==========================================")
 
       # ============================================================
-      # 11. Render Short - video ends with narration
+      # 11. Render Short
+      #     Video ends exactly with narration
       # ============================================================
       - name: Render Short
         run: |
@@ -952,10 +913,10 @@ jobs:
           echo "Final duration: $DURATION"
 
           if ! awk \
-            "BEGIN {exit !($DURATION >= 13.0 && $DURATION <= 15.0)}"
+            "BEGIN {exit !($DURATION >= 14.0 && $DURATION <= 15.0)}"
           then
 
-            echo "ERROR: Video duration is outside 13-15 seconds."
+            echo "ERROR: Video duration is not close enough to 15 seconds."
 
             exit 1
 
