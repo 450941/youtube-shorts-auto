@@ -21,7 +21,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-
       # ============================================================
       # 2. Install tools
       # ============================================================
@@ -46,7 +45,6 @@ jobs:
           echo "=== Japanese fonts ==="
           fc-list | grep -i "Noto Sans CJK" | head -n 5 || true
 
-
       # ============================================================
       # 3. Install Python packages
       # ============================================================
@@ -63,11 +61,8 @@ jobs:
             google-auth-httplib2 \
             google-auth-oauthlib
 
-
       # ============================================================
       # 4. Prepare Pexels history
-      #
-      # used_pexels.txt が存在しない場合でも動作
       # ============================================================
       - name: Prepare Pexels history
         run: |
@@ -83,14 +78,8 @@ jobs:
 
           echo "Previously used videos: $COUNT"
 
-
       # ============================================================
       # 5. Create seed
-      #
-      # 1日2本
-      #
-      # UTC 00:00 / 12:00
-      # 日本時間 09:00 / 21:00
       # ============================================================
       - name: Create seed
         run: |
@@ -114,16 +103,8 @@ jobs:
           echo "SLOT: $SLOT"
           echo "========================================"
 
-
       # ============================================================
       # 6. Select ONE encouragement from 1000 patterns
-      #
-      # encouragement_1000.json
-      #
-      # 雑学なし
-      # フックなし
-      # 締めなし
-      # 激励だけ
       # ============================================================
       - name: Generate encouragement script
         run: |
@@ -137,21 +118,12 @@ jobs:
 
           seed = int(os.environ["SEED"])
 
-          # ========================================================
-          # Load JSON
-          # ========================================================
-
           with open(
               "encouragement_1000.json",
               "r",
               encoding="utf-8"
           ) as f:
               data = json.load(f)
-
-
-          # ========================================================
-          # Support several JSON formats
-          # ========================================================
 
           if isinstance(data, list):
 
@@ -179,17 +151,11 @@ jobs:
                   "encouragement_1000.json が正しいJSONではありません。"
               )
 
-
           if not contents:
 
               raise RuntimeError(
                   "激励メッセージが0件です。"
               )
-
-
-          # ========================================================
-          # Normalize messages
-          # ========================================================
 
           normalized = []
 
@@ -198,7 +164,6 @@ jobs:
               if isinstance(item, str):
 
                   text = item.strip()
-
                   title = text[:30]
 
               elif isinstance(item, dict):
@@ -219,19 +184,17 @@ jobs:
 
                   continue
 
-
               if not text:
                   continue
 
-
-              normalized.append({
-                  "text": text,
-                  "title": title
-              })
-
+              normalized.append(
+                  {
+                      "text": text,
+                      "title": title
+                  }
+              )
 
           contents = normalized
-
 
           if not contents:
 
@@ -239,36 +202,19 @@ jobs:
                   "有効な激励メッセージがありません。"
               )
 
-
-          # ========================================================
-          # Select message
-          # ========================================================
-
           index = seed % len(contents)
 
           selected = contents[index]
 
           text = selected["text"]
-
           title = selected["title"]
-
-
-          # ========================================================
-          # Save script
-          # ========================================================
 
           with open(
               "script.txt",
               "w",
               encoding="utf-8"
           ) as f:
-
               f.write(text)
-
-
-          # ========================================================
-          # Category
-          # ========================================================
 
           category = "激励"
 
@@ -277,26 +223,14 @@ jobs:
               "w",
               encoding="utf-8"
           ) as f:
-
               f.write(category)
-
-
-          # ========================================================
-          # Content title
-          # ========================================================
 
           with open(
               "content_title.txt",
               "w",
               encoding="utf-8"
           ) as f:
-
               f.write(title)
-
-
-          # ========================================================
-          # Pexels queries
-          # ========================================================
 
           queries = [
               "person sunrise",
@@ -315,38 +249,24 @@ jobs:
               seed % len(queries)
           ]
 
-
           with open(
               "pexels_query.txt",
               "w",
               encoding="utf-8"
           ) as f:
-
               f.write(query)
-
-
-          # ========================================================
-          # YouTube title
-          # ========================================================
 
           video_title = (
               title
               + "｜今日のあなたへ #Shorts"
           )
 
-
           with open(
               "video_title.txt",
               "w",
               encoding="utf-8"
           ) as f:
-
               f.write(video_title)
-
-
-          # ========================================================
-          # Log
-          # ========================================================
 
           print("==========================================")
           print("ENCOURAGEMENT ONLY")
@@ -360,10 +280,7 @@ jobs:
           print("SCRIPT:")
           print(text)
           print("==========================================")
-
-
           PY
-
 
           QUERY=$(cat pexels_query.txt)
 
@@ -371,19 +288,14 @@ jobs:
 
           CATEGORY=$(cat category.txt)
 
-
           echo "QUERY=$QUERY" >> "$GITHUB_ENV"
 
           echo "VIDEO_TITLE=$VIDEO_TITLE" >> "$GITHUB_ENV"
 
           echo "CATEGORY=$CATEGORY" >> "$GITHUB_ENV"
 
-
       # ============================================================
       # 7. Download NEW Pexels video
-      #
-      # 重要：
-      # used_pexels.txt にある動画URLは絶対に再利用しない
       # ============================================================
       - name: Download NEW Pexels video
         env:
@@ -405,12 +317,6 @@ jobs:
           echo "Query: $QUERY"
           echo "=========================================="
 
-
-          # ========================================================
-          # Function
-          # Search and select unused video
-          # ========================================================
-
           search_pexels() {
 
             SEARCH_QUERY="$1"
@@ -419,10 +325,13 @@ jobs:
 
             ENCODED_QUERY=$(python - <<PY
           import urllib.parse
-          print(urllib.parse.quote("""$SEARCH_QUERY"""))
+          print(
+              urllib.parse.quote(
+                  """$SEARCH_QUERY"""
+              )
+          )
           PY
             )
-
 
             curl \
               --fail \
@@ -431,20 +340,13 @@ jobs:
               "https://api.pexels.com/videos/search?query=${ENCODED_QUERY}&orientation=portrait&size=medium&per_page=80" \
               -o pexels.json
 
-
             COUNT=$(jq '.videos | length' pexels.json)
 
             echo "Results: $COUNT"
 
-
             if [ "$COUNT" -eq 0 ]; then
               return
             fi
-
-
-            # ======================================================
-            # Check every result
-            # ======================================================
 
             for i in $(seq 0 $((COUNT - 1))); do
 
@@ -466,15 +368,9 @@ jobs:
                 pexels.json
               )
 
-
               if [ -z "$CANDIDATE" ]; then
                 continue
               fi
-
-
-              # ====================================================
-              # Already used?
-              # ====================================================
 
               if grep -Fxq "$CANDIDATE" used_pexels.txt; then
 
@@ -482,13 +378,7 @@ jobs:
                 echo "$CANDIDATE"
 
                 continue
-
               fi
-
-
-              # ====================================================
-              # NEW VIDEO
-              # ====================================================
 
               VIDEO_URL="$CANDIDATE"
 
@@ -500,23 +390,11 @@ jobs:
               return
 
             done
-
           }
-
 
           VIDEO_URL=""
 
-
-          # ========================================================
-          # Main query
-          # ========================================================
-
           search_pexels "$QUERY"
-
-
-          # ========================================================
-          # Fallback 1
-          # ========================================================
 
           if [ -z "$VIDEO_URL" ]; then
 
@@ -526,11 +404,6 @@ jobs:
 
           fi
 
-
-          # ========================================================
-          # Fallback 2
-          # ========================================================
-
           if [ -z "$VIDEO_URL" ]; then
 
             echo "No unused sunrise video."
@@ -539,28 +412,20 @@ jobs:
 
           fi
 
-
-          # ========================================================
-          # No new video
-          # ========================================================
-
           if [ -z "$VIDEO_URL" ]; then
 
             echo "=========================================="
             echo "ERROR"
             echo "=========================================="
+
             echo "新しいPexels動画が見つかりません。"
             echo "同じ映像を再利用せず、処理を停止します。"
+
             echo "=========================================="
 
             exit 1
 
           fi
-
-
-          # ========================================================
-          # Download
-          # ========================================================
 
           echo "Downloading NEW video..."
 
@@ -570,22 +435,14 @@ jobs:
             "$VIDEO_URL" \
             -o source.mp4
 
-
           test -s source.mp4
 
-
-          # ========================================================
-          # Record used video
-          # ========================================================
-
           echo "$VIDEO_URL" >> used_pexels.txt
-
 
           echo "=========================================="
           echo "Video downloaded successfully."
           echo "Added to used_pexels.txt"
           echo "=========================================="
-
 
       # ============================================================
       # 8. Generate narration
@@ -596,19 +453,15 @@ jobs:
 
           echo "Generating Japanese encouragement narration..."
 
-
           edge-tts \
             --voice ja-JP-NanamiNeural \
             --rate="+8%" \
             --file script.txt \
             --write-media voice.mp3
 
-
           test -s voice.mp3
 
-
           echo "Original narration duration:"
-
 
           ffprobe \
             -v error \
@@ -616,9 +469,8 @@ jobs:
             -of default=noprint_wrappers=1:nokey=1 \
             voice.mp3
 
-
       # ============================================================
-      # 9. Fit narration to 15 seconds
+      # 9. Fit narration - eliminate unnecessary ending silence
       # ============================================================
       - name: Fit narration
         run: |
@@ -628,56 +480,105 @@ jobs:
             -v error \
             -show_entries format=duration \
             -of default=noprint_wrappers=1:nokey=1 \
-            voice.mp3
-          )
+            voice.mp3)
 
+          echo "Original narration: $DURATION seconds"
 
-          echo "Before: $DURATION seconds"
+          python - <<PY
+          import subprocess
+          import os
 
-
-          if awk "BEGIN {exit !($DURATION > 14.2)}"; then
-
-            SPEED=$(python - <<PY
           d = float("$DURATION")
 
-          speed = d / 14.2
+          # 15秒以内で、できるだけ15秒に近づける
+          target = 14.8
 
-          if speed < 1:
-              speed = 1
+          print("Original:", d)
+          print("Target:", target)
 
-          if speed > 1.95:
-              speed = 1.95
+          if d > target:
 
-          print(f"{speed:.6f}")
+              speed = d / target
+
+              if speed > 1.95:
+                  speed = 1.95
+
+              print(
+                  f"Speeding up: {speed:.6f}"
+              )
+
+              subprocess.run(
+                  [
+                      "ffmpeg",
+                      "-y",
+                      "-i",
+                      "voice.mp3",
+                      "-filter:a",
+                      f"atempo={speed:.6f}",
+                      "-vn",
+                      "voice_fit.mp3"
+                  ],
+                  check=True
+              )
+
+              os.replace(
+                  "voice_fit.mp3",
+                  "voice.mp3"
+              )
+
+          elif d < 14.0:
+
+              speed = d / target
+
+              if speed < 0.75:
+                  speed = 0.75
+
+              print(
+                  f"Slowing down: {speed:.6f}"
+              )
+
+              subprocess.run(
+                  [
+                      "ffmpeg",
+                      "-y",
+                      "-i",
+                      "voice.mp3",
+                      "-filter:a",
+                      f"atempo={speed:.6f}",
+                      "-vn",
+                      "voice_fit.mp3"
+                  ],
+                  check=True
+              )
+
+              os.replace(
+                  "voice_fit.mp3",
+                  "voice.mp3"
+              )
+
+          else:
+
+              print(
+                  "Narration already fits."
+              )
+
           PY
-            )
-
-
-            echo "Speed: $SPEED"
-
-
-            ffmpeg \
-              -y \
-              -i voice.mp3 \
-              -filter:a "atempo=$SPEED" \
-              voice2.mp3
-
-
-            mv voice2.mp3 voice.mp3
-
-          fi
-
 
           FINAL_DURATION=$(ffprobe \
             -v error \
             -show_entries format=duration \
             -of default=noprint_wrappers=1:nokey=1 \
-            voice.mp3
-          )
+            voice.mp3)
 
+          echo "Final narration: $FINAL_DURATION seconds"
 
-          echo "After: $FINAL_DURATION seconds"
+          if awk "BEGIN {exit !($FINAL_DURATION > 15.0)}"; then
 
+            echo "ERROR: Narration is longer than 15 seconds."
+
+            exit 1
+
+          fi
 
       # ============================================================
       # 10. Create ASS subtitles
@@ -690,11 +591,6 @@ jobs:
           import subprocess
           import re
 
-
-          # ========================================================
-          # Read script
-          # ========================================================
-
           with open(
               "script.txt",
               encoding="utf-8"
@@ -705,11 +601,6 @@ jobs:
                   for x in f.read().splitlines()
                   if x.strip()
               ]
-
-
-          # ========================================================
-          # Audio duration
-          # ========================================================
 
           result = subprocess.run(
               [
@@ -727,21 +618,14 @@ jobs:
               check=True
           )
 
-
           duration = float(
               result.stdout.strip()
           )
-
 
           duration = min(
               duration,
               15.0
           )
-
-
-          # ========================================================
-          # Split Japanese text
-          # ========================================================
 
           def split_text(text):
 
@@ -751,12 +635,10 @@ jobs:
                   text
               )
 
-
               parts = re.split(
                   r"(?<=[。！？!?])",
                   text
               )
-
 
               parts = [
                   p.strip()
@@ -764,9 +646,7 @@ jobs:
                   if p.strip()
               ]
 
-
               final = []
-
 
               for part in parts:
 
@@ -774,59 +654,40 @@ jobs:
 
                       cut = 18
 
+                      for i in range(12, 19):
 
-                      for i in range(
-                          12,
-                          19
-                      ):
+                          if (
+                              i < len(part)
+                              and part[i] in "、，"
+                          ):
 
-                          if i < len(part):
-
-                              if part[i] in "、，":
-
-                                  cut = i + 1
-                                  break
-
+                              cut = i + 1
+                              break
 
                       final.append(
                           part[:cut]
                       )
 
-
                       part = part[cut:]
 
-
                   if part:
-
                       final.append(part)
-
 
               return final
 
-
           chunks = []
 
-
           for line in raw_lines:
-
               chunks.extend(
                   split_text(line)
               )
 
-
           if not chunks:
-
               raise RuntimeError(
                   "No subtitle chunks."
               )
 
-
-          # ========================================================
-          # Weight
-          # ========================================================
-
           weights = []
-
 
           for chunk in chunks:
 
@@ -836,27 +697,18 @@ jobs:
                   chunk
               )
 
-
               weights.append(
-                  max(
-                      len(clean),
-                      1
-                  )
+                  max(len(clean), 1)
               )
 
-
-          total_weight = sum(weights)
-
-
-          # ========================================================
-          # ASS timestamp
-          # ========================================================
+          total_weight = sum(
+              weights
+          )
 
           def ass_time(seconds):
 
               if seconds < 0:
                   seconds = 0
-
 
               hours = int(
                   seconds // 3600
@@ -872,29 +724,27 @@ jobs:
 
               centis = int(
                   round(
-                      (seconds - int(seconds))
-                      * 100
+                      (
+                          seconds
+                          - int(seconds)
+                      ) * 100
                   )
               )
-
 
               if centis >= 100:
 
                   centis -= 100
                   secs += 1
 
-
               if secs >= 60:
 
                   secs -= 60
                   minutes += 1
 
-
               if minutes >= 60:
 
                   minutes -= 60
                   hours += 1
-
 
               return (
                   f"{hours}:"
@@ -902,11 +752,6 @@ jobs:
                   f"{secs:02d}."
                   f"{centis:02d}"
               )
-
-
-          # ========================================================
-          # ASS Header
-          # ========================================================
 
           header = """[Script Info]
           ScriptType: v4.00+
@@ -923,13 +768,7 @@ jobs:
           Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
           """
 
-
-          # ========================================================
-          # Write ASS
-          # ========================================================
-
           current = 0.0
-
 
           with open(
               "captions.ass",
@@ -939,40 +778,47 @@ jobs:
 
               f.write(header)
 
-
-              for index, chunk in enumerate(chunks):
+              for index, chunk in enumerate(
+                  chunks
+              ):
 
                   ratio = (
                       weights[index]
                       / total_weight
                   )
 
-
                   segment = (
                       duration
                       * ratio
                   )
 
-
                   start = current
 
-                  end = current + segment
+                  end = (
+                      current
+                      + segment
+                  )
 
-
-                  if index == len(chunks) - 1:
+                  if (
+                      index
+                      == len(chunks) - 1
+                  ):
 
                       end = duration
 
-
                   if len(chunk) > 10:
 
-                      midpoint = len(chunk) // 2
+                      midpoint = (
+                          len(chunk) // 2
+                      )
 
                       candidates = []
 
-
                       for i in range(
-                          max(5, midpoint - 5),
+                          max(
+                              5,
+                              midpoint - 5
+                          ),
                           min(
                               len(chunk) - 1,
                               midpoint + 6
@@ -985,19 +831,19 @@ jobs:
                                   i + 1
                               )
 
-
                       if candidates:
 
                           split_at = min(
                               candidates,
                               key=lambda x:
-                              abs(x - midpoint)
+                              abs(
+                                  x - midpoint
+                              )
                           )
 
                       else:
 
                           split_at = midpoint
-
 
                       text = (
                           chunk[:split_at]
@@ -1009,7 +855,6 @@ jobs:
 
                       text = chunk
 
-
                   f.write(
                       "Dialogue: 0,"
                       + ass_time(start)
@@ -1020,36 +865,40 @@ jobs:
                       + "\n"
                   )
 
-
                   current = end
-
 
           print("==========================================")
           print("ASS subtitle created")
-          print("Duration:", duration)
+          print("Audio duration:", duration)
           print("Chunks:", len(chunks))
           print("==========================================")
 
-
       # ============================================================
-      # 11. Render 15 second Short
+      # 11. Render Short - video ends with narration
       # ============================================================
-      - name: Render 15 second Short
+      - name: Render Short
         run: |
           set -e
 
           echo "=========================================="
-          echo "Rendering 15 second encouragement Short"
+          echo "Rendering Short"
+          echo "NO EXTRA SILENCE"
           echo "Category: $CATEGORY"
           echo "=========================================="
 
+          AUDIO_DURATION=$(ffprobe \
+            -v error \
+            -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 \
+            voice.mp3)
+
+          echo "Audio duration: $AUDIO_DURATION"
 
           ffmpeg \
             -y \
             -stream_loop -1 \
             -i source.mp4 \
             -i voice.mp3 \
-            -t 15 \
             -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,ass=captions.ass" \
             -map 0:v:0 \
             -map 1:a:0 \
@@ -1061,16 +910,17 @@ jobs:
             -c:a aac \
             -b:a 128k \
             -ar 44100 \
-            -af "apad=pad_dur=15,atrim=0:15" \
-            -t 15 \
+            -t "$AUDIO_DURATION" \
             -movflags +faststart \
             short.mp4
 
-
           test -s short.mp4
 
+          echo "=========================================="
           echo "Render completed."
-
+          echo "Video ends exactly with narration."
+          echo "No extra silence."
+          echo "=========================================="
 
       # ============================================================
       # 12. Check video
@@ -1083,7 +933,6 @@ jobs:
           echo "VIDEO INFORMATION"
           echo "=========================================="
 
-
           ffprobe \
             -v error \
             -show_entries \
@@ -1093,32 +942,26 @@ jobs:
             -of default=noprint_wrappers=1 \
             short.mp4
 
-
           DURATION=$(ffprobe \
             -v error \
             -show_entries format=duration \
             -of default=noprint_wrappers=1:nokey=1 \
-            short.mp4
-          )
-
+            short.mp4)
 
           echo ""
           echo "Final duration: $DURATION"
 
-
           if ! awk \
-            "BEGIN {exit !($DURATION >= 14.5 && $DURATION <= 15.5)}"
+            "BEGIN {exit !($DURATION >= 13.0 && $DURATION <= 15.0)}"
           then
 
-            echo "ERROR: Video is not approximately 15 seconds."
+            echo "ERROR: Video duration is outside 13-15 seconds."
 
             exit 1
 
           fi
 
-
           echo "Video check OK."
-
 
       # ============================================================
       # 13. Create YouTube upload script
@@ -1128,7 +971,6 @@ jobs:
           set -e
 
           cat > upload.py <<'PY'
-
           import os
 
           from google.oauth2.credentials import Credentials
@@ -1265,7 +1107,9 @@ jobs:
                   )
 
 
-          print("==========================================")
+          print(
+              "=========================================="
+          )
 
           print(
               "YouTube upload completed!"
@@ -1286,11 +1130,10 @@ jobs:
               + response["id"]
           )
 
-          print("==========================================")
-
-
+          print(
+              "=========================================="
+          )
           PY
-
 
       # ============================================================
       # 14. Upload to YouTube
@@ -1308,12 +1151,8 @@ jobs:
 
           python upload.py
 
-
       # ============================================================
       # 15. Save Pexels history
-      #
-      # ここが重要
-      # 次回のActionsでも使用済み動画を覚える
       # ============================================================
       - name: Save Pexels history
         run: |
@@ -1323,15 +1162,13 @@ jobs:
           echo "Saving Pexels video history"
           echo "=========================================="
 
-
-          git config user.name "github-actions[bot]"
+          git config user.name \
+            "github-actions[bot]"
 
           git config user.email \
             "41898282+github-actions[bot]@users.noreply.github.com"
 
-
           git add used_pexels.txt
-
 
           if git diff --cached --quiet; then
 
@@ -1346,7 +1183,6 @@ jobs:
 
           fi
 
-
       # ============================================================
       # 16. Upload artifact
       # ============================================================
@@ -1354,6 +1190,7 @@ jobs:
         uses: actions/upload-artifact@v4
 
         with:
+
           name: youtube-short-${{ github.run_number }}
 
           path: |
