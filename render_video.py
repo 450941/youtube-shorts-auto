@@ -1,7 +1,14 @@
 # ============================================================
 # LONG VIDEO GENERATOR
 # 5-MINUTE / 15 TOPICS / FAST PACING
-# 10,000+ TRIVIA DATABASE READY
+# HISTORY SYSTEM
+#
+# ・雑学の重複防止
+# ・サムネ画像の重複防止
+# ・サムネレイアウト変更
+# ・概要欄15パターン
+# ・タイトル重複防止
+# ・GitHub Actionsで履歴を保存
 # ============================================================
 
 import os
@@ -11,12 +18,15 @@ import time
 import random
 import hashlib
 import subprocess
-import requests
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
+import requests
+from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+
 # ============================================================
-# SETTINGS
+# BASE
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -24,31 +34,37 @@ BASE_DIR = Path(__file__).resolve().parent
 TRIVIA_FILE = BASE_DIR / "trivia.json"
 
 MEDIA_DIR = BASE_DIR / "media"
+IMAGE_DIR = MEDIA_DIR / "images"
 VOICE_DIR = MEDIA_DIR / "voice"
 CUTS_DIR = MEDIA_DIR / "cuts"
 SUBTITLE_DIR = MEDIA_DIR / "subtitles"
-IMAGE_DIR = MEDIA_DIR / "images"
 
 OUTPUT_DIR = BASE_DIR / "output"
 
-PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "").strip()
+HISTORY_DIR = BASE_DIR / "history"
+
+USED_TRIVIA_FILE = HISTORY_DIR / "used_trivia.json"
+USED_THUMBNAILS_FILE = HISTORY_DIR / "used_thumbnails.json"
+DESCRIPTION_HISTORY_FILE = HISTORY_DIR / "description_history.json"
+TITLE_HISTORY_FILE = HISTORY_DIR / "title_history.json"
+THUMBNAIL_STYLE_HISTORY_FILE = HISTORY_DIR / "thumbnail_style_history.json"
+
+
+# ============================================================
+# SETTINGS
+# ============================================================
 
 TOPICS_PER_VIDEO = 15
-
 TARGET_DURATION = 300
-
-# 少し速め
-VOICE = "ja-JP-NanamiNeural"
-VOICE_RATE = "+2%"
-
-# 映像切り替え間隔
-MIN_CLIP_DURATION = 3.0
-MAX_CLIP_DURATION = 4.2
 
 VIDEO_WIDTH = 1920
 VIDEO_HEIGHT = 1080
-
 FPS = 30
+
+VOICE = "ja-JP-NanamiNeural"
+VOICE_RATE = "+2%"
+
+PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "").strip()
 
 JST = timezone(timedelta(hours=9))
 
@@ -59,11 +75,12 @@ JST = timezone(timedelta(hours=9))
 
 for directory in [
     MEDIA_DIR,
+    IMAGE_DIR,
     VOICE_DIR,
     CUTS_DIR,
     SUBTITLE_DIR,
-    IMAGE_DIR,
-    OUTPUT_DIR
+    OUTPUT_DIR,
+    HISTORY_DIR,
 ]:
     directory.mkdir(parents=True, exist_ok=True)
 
@@ -73,7 +90,7 @@ for directory in [
 # ============================================================
 
 def log(message):
-    print(f"[LUMI-LONG] {message}", flush=True)
+    print(f"[LONG VIDEO] {message}", flush=True)
 
 
 # ============================================================
@@ -81,20 +98,21 @@ def log(message):
 # ============================================================
 
 def run_command(command, check=True):
-    log("CMD: " + " ".join(str(x) for x in command))
+    log("COMMAND:")
+    log(" ".join(str(x) for x in command))
 
     result = subprocess.run(
         command,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True
+        text=True,
     )
 
     print(result.stdout, flush=True)
 
     if check and result.returncode != 0:
         raise RuntimeError(
-            f"Command failed: {' '.join(map(str, command))}"
+            f"Command failed with exit code {result.returncode}"
         )
 
     return result
@@ -104,7 +122,8 @@ def run_command(command, check=True):
 # JSON
 # ============================================================
 
-def load_json(path, default=None):
+def load_json(path, default):
+    path = Path(path)
 
     if not path.exists():
         return default
@@ -113,51 +132,108 @@ def load_json(path, default=None):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        log(f"JSON read error: {e}")
+        log(f"WARNING: JSON読み込み失敗: {path}")
+        log(str(e))
         return default
 
 
 def save_json(path, data):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(path, "w", encoding="utf-8") as f:
+    temp = path.with_suffix(path.suffix + ".tmp")
+
+    with open(temp, "w", encoding="utf-8") as f:
         json.dump(
             data,
             f,
             ensure_ascii=False,
-            indent=2
+            indent=2,
         )
+
+    temp.replace(path)
+
+
+# ============================================================
+# HISTORY
+# ============================================================
+
+def load_history(path):
+    data = load_json(path, [])
+
+    if not isinstance(data, list):
+        return []
+
+    return data
+
+
+def save_history(path, data, max_items=None):
+    if max_items is not None:
+        data = data[-max_items:]
+
+    save_json(path, data)
 
 
 # ============================================================
 # TRIVIA DATABASE
 # ============================================================
 
-def load_trivia_database():
+def make_trivia_id(item, index):
+    """
+    trivia.jsonにidがなくても、
+    内容から安定したIDを作る。
+    """
 
-    if not TRIVIA_FILE.exists():
-        raise RuntimeError(
-            "trivia.json がありません"
-        )
+    if isinstance(item, dict):
+        if item.get("id") is not None:
+            return str(item["id"])
 
-    data = load_json(TRIVIA_FILE)
+        text_parts = [
+            str(item.get("title", "")),
+            str(item.get("fact", "")),
+            str(item.get("text", "")),
+            str(item.get("description", "")),
+        ]
 
-    if not isinstance(data, list):
-        raise RuntimeError(
-            "trivia.json は配列形式にしてください"
-        )
+        raw = "|".join(text_parts)
 
-    cleaned = []
+    else:
+        raw = str(item)
 
-    for index, item in enumerate(data):
+    if not raw.strip():
+        raw = f"index-{index}"
 
-        if not isinstance(item, dict):
-            continue
+    digest = hashlib.sha256(
+        raw.encode("utf-8")
+    ).hexdigest()[:20]
+
+    return f"trivia-{digest}"
+
+
+def normalize_trivia(item, index):
+    if isinstance(item, str):
+        title = item.strip()
+        fact = item.strip()
+        category = "雑学"
+        keyword = title
+
+    elif isinstance(item, dict):
 
         title = str(
             item.get("title")
             or item.get("question")
-            or item.get("keyword")
-            or f"雑学 {index + 1}"
+            or item.get("name")
+            or item.get("fact")
+            or item.get("text")
+            or "面白い雑学"
+        ).strip()
+
+        fact = str(
+            item.get("fact")
+            or item.get("text")
+            or item.get("description")
+            or item.get("answer")
+            or title
         ).strip()
 
         category = str(
@@ -166,213 +242,260 @@ def load_trivia_database():
             or "雑学"
         ).strip()
 
-        fact = str(
-            item.get("fact")
-            or item.get("text")
-            or item.get("trivia")
-            or item.get("description")
-            or ""
-        ).strip()
-
-        example = str(
-            item.get("example")
-            or item.get("explanation")
-            or ""
-        ).strip()
-
-        script = str(
-            item.get("script")
-            or ""
-        ).strip()
-
-        if not fact and not script:
-            continue
-
         keyword = str(
             item.get("keyword")
+            or item.get("search")
+            or item.get("search_keyword")
             or title
         ).strip()
 
-        cleaned.append({
-            "id": str(
-                item.get("id")
-                or hashlib.sha256(
-                    f"{index}-{title}-{fact}".encode(
-                        "utf-8"
-                    )
-                ).hexdigest()[:16]
-            ),
-            "title": title,
-            "category": category,
-            "keyword": keyword,
-            "fact": fact,
-            "example": example,
-            "script": script
-        })
+    else:
+        title = str(item)
+        fact = str(item)
+        category = "雑学"
+        keyword = title
 
-    if len(cleaned) < TOPICS_PER_VIDEO:
-        raise RuntimeError(
-            f"利用可能なネタが{len(cleaned)}件しかありません。"
-            f"{TOPICS_PER_VIDEO}件以上必要です。"
+    trivia_id = make_trivia_id(item, index)
+
+    return {
+        "id": trivia_id,
+        "title": title,
+        "fact": fact,
+        "category": category,
+        "keyword": keyword,
+    }
+
+
+def load_trivia_database():
+    log("========================================")
+    log("LOAD TRIVIA DATABASE")
+    log("========================================")
+
+    if not TRIVIA_FILE.exists():
+        raise FileNotFoundError(
+            f"trivia.json がありません: {TRIVIA_FILE}"
         )
 
-    log(
-        f"Trivia database: {len(cleaned):,} topics"
-    )
+    data = load_json(TRIVIA_FILE, [])
 
-    return cleaned
+    if not isinstance(data, list):
+        raise RuntimeError(
+            "trivia.json の形式が配列ではありません。"
+        )
+
+    database = []
+
+    for index, item in enumerate(data):
+        try:
+            normalized = normalize_trivia(item, index)
+
+            if normalized["fact"].strip():
+                database.append(normalized)
+
+        except Exception as e:
+            log(
+                f"WARNING: trivia #{index} "
+                f"を読み込めませんでした: {e}"
+            )
+
+    log(f"trivia.json 読み込み: {len(database)}件")
+
+    if len(database) < TOPICS_PER_VIDEO:
+        raise RuntimeError(
+            f"雑学が{TOPICS_PER_VIDEO}件未満です。"
+        )
+
+    return database
 
 
 # ============================================================
-# DETERMINISTIC DAILY SELECTION
+# RUN SLOT
 # ============================================================
 
 def get_run_slot():
-
     now = datetime.now(JST)
 
-    # 1日2本
-    if now.hour < 12:
-        slot = 0
+    if now.hour < 15:
+        slot = "noon"
     else:
-        slot = 1
+        slot = "evening"
 
     return now.strftime("%Y-%m-%d"), slot
 
 
+# ============================================================
+# SELECT TOPICS
+# ============================================================
+
 def select_topics(database):
+    """
+    過去に使った雑学を避けて15件選択。
+
+    1000件の場合、
+    15件 × 約66回で一巡。
+
+    最後に10件だけ残った場合は、
+    残り10件 + 過去の雑学5件で15件にする。
+    """
+
+    used_ids = set(
+        str(x)
+        for x in load_history(USED_TRIVIA_FILE)
+    )
+
+    database_by_id = {
+        item["id"]: item
+        for item in database
+    }
+
+    available = [
+        item
+        for item in database
+        if item["id"] not in used_ids
+    ]
 
     date_string, slot = get_run_slot()
 
-    seed_text = f"LUMI-LONG-{date_string}-{slot}"
+    seed_text = (
+        f"LUMI-LONG-{date_string}-"
+        f"{slot}-{len(used_ids)}"
+    )
 
     seed = int(
         hashlib.sha256(
             seed_text.encode("utf-8")
         ).hexdigest()[:16],
-        16
+        16,
     )
 
     rng = random.Random(seed)
 
-    # 全体をシャッフル
-    pool = database.copy()
+    log(f"現在の使用済み雑学: {len(used_ids)}件")
+    log(f"今回使用可能な雑学: {len(available)}件")
 
-    rng.shuffle(pool)
+    # --------------------------------------------------------
+    # 通常
+    # --------------------------------------------------------
 
-    selected = []
+    if len(available) >= TOPICS_PER_VIDEO:
 
-    used_ids = set()
+        shuffled = available[:]
+        rng.shuffle(shuffled)
 
-    # できるだけカテゴリーが偏らないようにする
-    categories = {}
+        # カテゴリーをなるべく分散
+        selected = []
+        category_counts = {}
 
-    for item in pool:
+        for item in shuffled:
 
-        cat = item["category"]
+            category = item["category"]
 
-        categories.setdefault(
-            cat,
-            []
-        ).append(item)
+            count = category_counts.get(category, 0)
 
-    category_list = list(categories.keys())
-
-    rng.shuffle(category_list)
-
-    # まずカテゴリーを散らす
-    while len(selected) < TOPICS_PER_VIDEO:
-
-        added = False
-
-        for category in category_list:
-
-            if not categories[category]:
-                continue
-
-            item = categories[category].pop()
-
-            if item["id"] in used_ids:
+            if count >= 3:
                 continue
 
             selected.append(item)
-            used_ids.add(item["id"])
-
-            added = True
+            category_counts[category] = count + 1
 
             if len(selected) >= TOPICS_PER_VIDEO:
                 break
 
-        if not added:
-            break
+        # 足りない場合
+        if len(selected) < TOPICS_PER_VIDEO:
 
-    # 足りなければ通常選択
-    if len(selected) < TOPICS_PER_VIDEO:
+            selected_ids = {
+                x["id"]
+                for x in selected
+            }
 
-        for item in pool:
+            for item in shuffled:
 
-            if item["id"] in used_ids:
-                continue
+                if item["id"] in selected_ids:
+                    continue
 
-            selected.append(item)
-            used_ids.add(item)
+                selected.append(item)
 
-            if len(selected) >= TOPICS_PER_VIDEO:
-                break
+                if len(selected) >= TOPICS_PER_VIDEO:
+                    break
+
+    # --------------------------------------------------------
+    # 一巡直前
+    # --------------------------------------------------------
+
+    else:
+
+        log(
+            "WARNING: 未使用雑学が15件未満です。"
+        )
+
+        selected = available[:]
+
+        selected_ids = {
+            x["id"]
+            for x in selected
+        }
+
+        old_items = [
+            item
+            for item in database
+            if item["id"] not in selected_ids
+        ]
+
+        rng.shuffle(old_items)
+
+        need = TOPICS_PER_VIDEO - len(selected)
+
+        selected.extend(
+            old_items[:need]
+        )
+
+        log(
+            "雑学データベースを一巡します。"
+        )
+
+    if len(selected) != TOPICS_PER_VIDEO:
+        raise RuntimeError(
+            f"雑学選択数が15件ではありません: "
+            f"{len(selected)}"
+        )
 
     rng.shuffle(selected)
 
-    log(
-        f"Selected {len(selected)} topics "
-        f"for {date_string} slot {slot}"
-    )
+    log("今回の15雑学:")
+
+    for i, item in enumerate(selected, 1):
+        log(
+            f"{i:02d}. "
+            f"[{item['category']}] "
+            f"{item['title']}"
+        )
 
     return selected
 
 
 # ============================================================
-# TEXT CLEANING
+# TEXT
 # ============================================================
 
-BAD_PHRASES = [
-    "ということがあります",
-    "ということがあるんです",
-    "かもしれません",
-    "と言われています",
-    "と言えるでしょう",
-    "ではないでしょうか",
-    "ご存じでしょうか",
-    "知っているようで知らない",
-    "これを知ると一歩進めます",
-    "少し見方が変わります",
-]
-
-
 def clean_text(text):
+    if text is None:
+        return ""
 
     text = str(text)
 
-    for phrase in BAD_PHRASES:
-        text = text.replace(
-            phrase,
-            ""
-        )
-
     replacements = {
-        "実は、": "",
-        "実は実は": "",
-        "なんと、": "なんと",
-        "驚くことに、": "驚くことに",
-        "つまり、": "つまり",
-        "です。です。": "です。",
-        "。。": "。",
-        "、、": "、",
+        "\r": "",
+        "\n": " ",
+        "　": " ",
     }
 
     for a, b in replacements.items():
         text = text.replace(a, b)
 
-    return text.strip()
+    return " ".join(
+        text.split()
+    ).strip()
 
 
 # ============================================================
@@ -380,159 +503,113 @@ def clean_text(text):
 # ============================================================
 
 HOOKS = [
-    "ここ、意外と知られていません。",
-    "これ、身近なのに理由を知ると面白いです。",
-    "知らないままでも困らない。でも知ると見え方が変わります。",
-    "これ、あなたの日常にもあります。",
-    "一見普通ですが、裏にはちゃんと理由があります。",
-    "これを知っていると、日常の見え方が少し変わります。",
-    "この話、意外なところにつながります。",
-    "思い当たる人、かなり多いはずです。",
-    "これ、実際に毎日の生活で起きています。",
-    "答えを知ると『なるほど』となる話です。",
+    "実はこれ、知っていましたか？",
+    "意外と知られていない話です。",
+    "これを知ると少し見方が変わります。",
+    "あなたはこの事実を知っていますか？",
+    "身近なのに、意外と知らない雑学です。",
+    "実は科学的にも面白いポイントがあります。",
+    "多くの人が知らない、ちょっと意外な話です。",
+    "これ、実はかなり不思議なんです。",
+    "知っているようで知らない話を紹介します。",
+    "今日誰かに話したくなる雑学です。",
 ]
 
 
-# ============================================================
-# SCRIPT
-# ============================================================
+ENDINGS = [
+    "知っていると、ちょっと得した気分になりますね。",
+    "こういう身近な雑学って面白いですよね。",
+    "知らない世界を知ると、日常が少し楽しくなります。",
+    "次にこれを見たとき、少し違って見えるかもしれません。",
+    "あなたはいくつ知っていましたか？",
+    "ぜひ誰かに教えてあげてください。",
+    "まだまだ面白い雑学はたくさんあります。",
+    "こういう小さな知識を楽しんでいきましょう。",
+]
 
-def make_script(item, number):
 
-    title = clean_text(item["title"])
-    category = clean_text(item["category"])
-    fact = clean_text(item["fact"])
-    example = clean_text(item["example"])
-    script = clean_text(item["script"])
-
-    hook = random.choice(HOOKS)
-
-    sentences = []
-
-    sentences.append(
-        f"{number}番。{hook}"
+def make_script(topic, index):
+    rng = random.Random(
+        f"{topic['id']}-{index}"
     )
 
-    sentences.append(
-        f"{title}。"
+    hook = rng.choice(HOOKS)
+    ending = rng.choice(ENDINGS)
+
+    title = clean_text(topic["title"])
+    fact = clean_text(topic["fact"])
+
+    script = (
+        f"{hook} "
+        f"{title}。 "
+        f"{fact}。 "
+        f"{ending}"
     )
 
-    if script:
-
-        sentences.append(
-            script
-        )
-
-    else:
-
-        sentences.append(
-            fact
-        )
-
-        if example:
-
-            sentences.append(
-                example
-            )
-
-    # 短い締め
-    endings = [
-        "こう考えると、身近なことでもかなり面白く見えてきます。",
-        "知らないだけで、毎日の中にはこうした現象がたくさんあります。",
-        "こういう小さな知識が、意外と記憶に残ります。",
-        "身近だからこそ、知ると面白いポイントです。",
-        "こうして見ると、普段の生活も少し面白くなります。",
-    ]
-
-    sentences.append(
-        random.choice(endings)
-    )
-
-    result = []
-
-    for sentence in sentences:
-
-        sentence = clean_text(sentence)
-
-        if not sentence:
-            continue
-
-        result.append(sentence)
-
-    return result
+    return script
 
 
 # ============================================================
-# TTS
+# AUDIO
 # ============================================================
 
 def get_audio_duration(path):
+    result = run_command(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(path),
+        ]
+    )
 
-    result = run_command([
-        "ffprobe",
-        "-v",
-        "error",
-        "-show_entries",
-        "format=duration",
-        "-of",
-        "default=noprint_wrappers=1:nokey=1",
-        str(path)
-    ])
-
-    try:
-        return float(
-            result.stdout.strip()
-        )
-    except Exception:
-        return 0.0
+    return float(
+        result.stdout.strip()
+    )
 
 
 def generate_tts(text, output_path):
+    output_path = Path(output_path)
 
-    import asyncio
-    import edge_tts
-
-    async def generate():
-
-        communicate = edge_tts.Communicate(
-            text=text,
-            voice=VOICE,
-            rate=VOICE_RATE
-        )
-
-        await communicate.save(
-            str(output_path)
-        )
-
-    asyncio.run(generate())
-
-    duration = get_audio_duration(
-        output_path
+    run_command(
+        [
+            sys.executable,
+            "-m",
+            "edge_tts",
+            "--voice",
+            VOICE,
+            "--rate",
+            VOICE_RATE,
+            "--text",
+            text,
+            "--write-media",
+            str(output_path),
+        ]
     )
 
-    if duration <= 0:
+    if not output_path.exists():
         raise RuntimeError(
-            f"TTS duration取得失敗: {output_path}"
+            f"TTSファイルが作成されませんでした: "
+            f"{output_path}"
         )
 
-    return duration
+    return output_path
 
-
-# ============================================================
-# SRT
-# ============================================================
 
 def seconds_to_srt_time(seconds):
-
     milliseconds = int(
         round(seconds * 1000)
     )
 
-    hours = milliseconds // 3600000
-    milliseconds %= 3600000
+    hours = milliseconds // 3_600_000
+    milliseconds %= 3_600_000
 
-    minutes = milliseconds // 60000
-    milliseconds %= 60000
+    minutes = milliseconds // 60_000
+    milliseconds %= 60_000
 
     secs = milliseconds // 1000
     milliseconds %= 1000
@@ -546,170 +623,162 @@ def seconds_to_srt_time(seconds):
 
 
 def write_srt(entries, path):
-
     with open(
         path,
         "w",
-        encoding="utf-8"
+        encoding="utf-8",
     ) as f:
 
-        for index, entry in enumerate(
-            entries,
-            start=1
-        ):
+        for i, entry in enumerate(entries, 1):
 
             start = entry["start"]
             end = entry["end"]
             text = entry["text"]
 
             f.write(
-                f"{index}\n"
-            )
-
-            f.write(
+                f"{i}\n"
                 f"{seconds_to_srt_time(start)} --> "
                 f"{seconds_to_srt_time(end)}\n"
-            )
-
-            f.write(
                 f"{text}\n\n"
             )
 
 
-# ============================================================
-# CREATE VOICE TRACK
-# ============================================================
-
 def create_voice_track(topics):
+    log("========================================")
+    log("CREATE VOICE")
+    log("========================================")
 
-    all_audio = []
-    subtitle_entries = []
+    voice_files = []
+    subtitles = []
 
     current_time = 0.0
 
-    audio_index = 0
-
-    for topic_number, topic in enumerate(
+    for index, topic in enumerate(
         topics,
-        start=1
+        1,
     ):
 
-        sentences = make_script(
+        script = make_script(
             topic,
-            topic_number
+            index,
         )
 
         log(
-            f"VOICE TOPIC {topic_number}: "
-            f"{topic['title']}"
+            f"VOICE {index}/{len(topics)}: "
+            f"{script[:80]}"
         )
 
-        for sentence in sentences:
+        voice_path = (
+            VOICE_DIR
+            / f"voice_{index:02d}.mp3"
+        )
 
-            audio_index += 1
+        generate_tts(
+            script,
+            voice_path,
+        )
 
-            audio_path = (
-                VOICE_DIR /
-                f"voice_{audio_index:04d}.mp3"
-            )
+        duration = get_audio_duration(
+            voice_path
+        )
 
-            duration = generate_tts(
-                sentence,
-                audio_path
-            )
+        voice_files.append(
+            voice_path
+        )
 
-            start = current_time
-            end = current_time + duration
+        subtitles.append(
+            {
+                "start": current_time,
+                "end": current_time + duration,
+                "text": script,
+            }
+        )
 
-            subtitle_entries.append({
-                "start": start,
-                "end": end,
-                "text": sentence
-            })
+        current_time += duration
 
-            all_audio.append(
-                audio_path
-            )
-
-            current_time = end
-
-    concat_file = (
-        VOICE_DIR /
-        "voice_concat.txt"
+    voice_list = (
+        VOICE_DIR
+        / "voice_list.txt"
     )
 
     with open(
-        concat_file,
+        voice_list,
         "w",
-        encoding="utf-8"
+        encoding="utf-8",
     ) as f:
 
-        for audio in all_audio:
-
+        for voice_file in voice_files:
             f.write(
-                f"file '{audio.resolve()}'\n"
+                f"file '{voice_file.resolve()}'\n"
             )
 
-    voice_output = (
-        VOICE_DIR /
-        "voice_full.mp3"
+    combined_voice = (
+        VOICE_DIR
+        / "combined_voice.mp3"
     )
 
-    run_command([
-        "ffmpeg",
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        str(concat_file),
-        "-c:a",
-        "libmp3lame",
-        "-b:a",
-        "192k",
-        str(voice_output)
-    ])
+    run_command(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(voice_list),
+            "-c:a",
+            "libmp3lame",
+            "-b:a",
+            "192k",
+            str(combined_voice),
+        ]
+    )
 
     subtitle_path = (
-        SUBTITLE_DIR /
-        "captions.srt"
+        SUBTITLE_DIR
+        / "subtitles.srt"
     )
 
     write_srt(
-        subtitle_entries,
-        subtitle_path
+        subtitles,
+        subtitle_path,
+    )
+
+    duration = get_audio_duration(
+        combined_voice
     )
 
     log(
-        f"VOICE DURATION: {current_time:.2f}s"
+        f"VOICE TOTAL: {duration:.2f} sec"
     )
 
     return (
-        voice_output,
+        combined_voice,
         subtitle_path,
-        current_time
+        duration,
     )
 
 
 # ============================================================
-# PEXELS SEARCH
+# PEXELS
 # ============================================================
 
-PEXELS_HEADERS = {}
-
-
-def pexels_video_search(query, per_page=8):
-
+def pexels_headers():
     if not PEXELS_API_KEY:
         raise RuntimeError(
-            "PEXELS_API_KEY がありません"
+            "PEXELS_API_KEY がありません。"
         )
 
-    headers = {
+    return {
         "Authorization": PEXELS_API_KEY
     }
 
+
+def pexels_video_search(
+    query,
+    per_page=8,
+):
     url = (
         "https://api.pexels.com/videos/search"
     )
@@ -717,189 +786,176 @@ def pexels_video_search(query, per_page=8):
     params = {
         "query": query,
         "per_page": per_page,
-        "orientation": "landscape"
+        "orientation": "landscape",
+        "size": "medium",
     }
 
     response = requests.get(
         url,
-        headers=headers,
+        headers=pexels_headers(),
         params=params,
-        timeout=30
+        timeout=30,
     )
 
     response.raise_for_status()
 
-    data = response.json()
-
-    return data.get(
+    return response.json().get(
         "videos",
-        []
+        [],
     )
 
 
-# ============================================================
-# PEXELS DOWNLOAD
-# ============================================================
-
-def get_best_video_file(video):
-
+def choose_video_file(video):
     files = video.get(
         "video_files",
-        []
+        [],
     )
 
     candidates = []
 
     for file in files:
 
-        width = file.get(
-            "width",
-            0
-        )
-
-        height = file.get(
-            "height",
-            0
-        )
-
-        link = file.get(
-            "link"
-        )
+        width = file.get("width") or 0
+        height = file.get("height") or 0
+        link = file.get("link")
 
         if not link:
             continue
 
-        if width < 1000:
-            continue
-
-        ratio = (
-            width / height
-            if height
-            else 0
-        )
-
-        if ratio < 1.4:
+        if width < 640 or height < 360:
             continue
 
         candidates.append(
             (
                 width * height,
-                link
+                width,
+                height,
+                link,
             )
         )
 
     if not candidates:
         return None
 
+    # 1080p付近を優先
     candidates.sort(
-        reverse=True
+        key=lambda x: (
+            abs(x[1] - 1920)
+            + abs(x[2] - 1080),
+            -x[0],
+        )
     )
 
-    return candidates[0][1]
+    return candidates[0][3]
 
 
-def download_file(url, output):
+def download_file(
+    url,
+    output_path,
+):
+    output_path = Path(output_path)
 
     response = requests.get(
         url,
+        timeout=60,
         stream=True,
-        timeout=120
     )
 
     response.raise_for_status()
 
     with open(
-        output,
-        "wb"
+        output_path,
+        "wb",
     ) as f:
 
         for chunk in response.iter_content(
             chunk_size=1024 * 1024
         ):
-
             if chunk:
                 f.write(chunk)
 
-    return output
+    if not output_path.exists():
+        raise RuntimeError(
+            f"ダウンロード失敗: {output_path}"
+        )
+
+    if output_path.stat().st_size < 10_000:
+        raise RuntimeError(
+            f"動画ファイルが小さすぎます: "
+            f"{output_path}"
+        )
+
+    return output_path
 
 
 # ============================================================
-# UNIQUE VISUAL QUERY
+# VISUAL QUERIES
 # ============================================================
 
 def build_queries(topic):
+    keyword = clean_text(
+        topic["keyword"]
+    )
 
-    title = topic["title"]
-    keyword = topic["keyword"]
-    category = topic["category"]
+    title = clean_text(
+        topic["title"]
+    )
 
-    queries = [
+    category = clean_text(
+        topic["category"]
+    )
+
+    return [
         keyword,
         title,
         f"{keyword} lifestyle",
         f"{keyword} people",
-        f"{keyword} daily life",
-        f"{category} lifestyle"
+        f"{category} lifestyle",
+        "interesting everyday life",
     ]
 
-    # 重複除去
-    result = []
 
-    for q in queries:
-
-        q = str(q).strip()
-
-        if q and q not in result:
-            result.append(q)
-
-    return result
-
-
-# ============================================================
-# CREATE VISUAL CUTS
-# ============================================================
-
-def create_visual_cuts(topics):
-
-    used_video_ids = set()
+def create_visual_cuts(
+    topics,
+):
+    log("========================================")
+    log("CREATE VISUAL CUTS")
+    log("========================================")
 
     cuts = []
 
-    global_cut_index = 0
+    global_used_video_ids = set()
 
-    for topic_number, topic in enumerate(
+    cut_index = 0
+
+    for topic_index, topic in enumerate(
         topics,
-        start=1
+        1,
     ):
 
         log(
-            f"SEARCH VISUALS "
-            f"{topic_number}/"
-            f"{len(topics)}: "
-            f"{topic['keyword']}"
+            f"VISUAL {topic_index}/{len(topics)}: "
+            f"{topic['title']}"
         )
 
         queries = build_queries(
             topic
         )
 
-        topic_videos = []
+        selected_videos = []
 
         for query in queries:
 
             try:
-
                 videos = pexels_video_search(
                     query,
-                    per_page=8
+                    per_page=8,
                 )
-
             except Exception as e:
-
                 log(
-                    f"Pexels search error: {e}"
+                    f"PEXELS検索失敗: "
+                    f"{query} / {e}"
                 )
-
                 continue
 
             for video in videos:
@@ -911,171 +967,65 @@ def create_visual_cuts(topics):
                 if not video_id:
                     continue
 
-                if video_id in used_video_ids:
+                if video_id in global_used_video_ids:
                     continue
 
-                link = get_best_video_file(
+                link = choose_video_file(
                     video
                 )
 
                 if not link:
                     continue
 
-                topic_videos.append({
-                    "id": video_id,
-                    "link": link
-                })
+                selected_videos.append(
+                    {
+                        "id": video_id,
+                        "link": link,
+                    }
+                )
 
-                used_video_ids.add(
+                global_used_video_ids.add(
                     video_id
                 )
 
-                if len(topic_videos) >= 6:
+                if len(selected_videos) >= 6:
                     break
 
-            if len(topic_videos) >= 6:
+            if len(selected_videos) >= 6:
                 break
 
-        # フォールバック
-        if not topic_videos:
+        for video in selected_videos:
 
-            fallback_queries = [
-                "lifestyle",
-                "people",
-                "nature",
-                "city",
-                "daily life"
-            ]
+            cut_index += 1
 
-            for query in fallback_queries:
-
-                try:
-
-                    videos = pexels_video_search(
-                        query,
-                        per_page=8
-                    )
-
-                except Exception:
-                    continue
-
-                for video in videos:
-
-                    video_id = str(
-                        video.get("id", "")
-                    )
-
-                    if (
-                        not video_id
-                        or video_id in used_video_ids
-                    ):
-                        continue
-
-                    link = get_best_video_file(
-                        video
-                    )
-
-                    if not link:
-                        continue
-
-                    topic_videos.append({
-                        "id": video_id,
-                        "link": link
-                    })
-
-                    used_video_ids.add(
-                        video_id
-                    )
-
-                    if len(topic_videos) >= 3:
-                        break
-
-                if topic_videos:
-                    break
-
-        if not topic_videos:
-            log(
-                "WARNING: visual not found"
-            )
-            continue
-
-        # 1テーマ複数カット
-        for video in topic_videos:
-
-            global_cut_index += 1
-
-            raw_path = (
-                CUTS_DIR /
-                f"raw_{global_cut_index:04d}.mp4"
-            )
-
-            final_path = (
-                CUTS_DIR /
-                f"cut_{global_cut_index:04d}.mp4"
+            output_path = (
+                CUTS_DIR
+                / f"cut_{cut_index:03d}.mp4"
             )
 
             try:
-
                 download_file(
                     video["link"],
-                    raw_path
+                    output_path,
                 )
-
-                duration = random.uniform(
-                    MIN_CLIP_DURATION,
-                    MAX_CLIP_DURATION
-                )
-
-                run_command([
-                    "ffmpeg",
-                    "-y",
-                    "-stream_loop",
-                    "-1",
-                    "-i",
-                    str(raw_path),
-                    "-t",
-                    f"{duration:.2f}",
-                    "-vf",
-                    (
-                        f"scale={VIDEO_WIDTH}:"
-                        f"{VIDEO_HEIGHT}:"
-                        "force_original_aspect_ratio=increase,"
-                        f"crop={VIDEO_WIDTH}:"
-                        f"{VIDEO_HEIGHT}"
-                    ),
-                    "-r",
-                    str(FPS),
-                    "-an",
-                    "-c:v",
-                    "libx264",
-                    "-preset",
-                    "veryfast",
-                    "-crf",
-                    "23",
-                    "-pix_fmt",
-                    "yuv420p",
-                    str(final_path)
-                ])
-
-                cuts.append(
-                    final_path
-                )
-
-                try:
-                    raw_path.unlink()
-                except Exception:
-                    pass
-
             except Exception as e:
-
                 log(
-                    f"Visual processing failed: {e}"
+                    f"動画DL失敗: {e}"
                 )
+                continue
+
+            cuts.append(
+                output_path
+            )
 
     if not cuts:
         raise RuntimeError(
-            "Pexels映像を1本も作成できませんでした"
+            "Pexelsから動画を取得できませんでした。"
         )
+
+    log(
+        f"VISUAL CUTS: {len(cuts)}"
+    )
 
     return cuts
 
@@ -1084,91 +1034,101 @@ def create_visual_cuts(topics):
 # CONCAT VIDEO
 # ============================================================
 
-def concat_video(cuts):
-
-    concat_file = (
-        CUTS_DIR /
-        "video_concat.txt"
+def concat_video(
+    cut_files,
+):
+    concat_list = (
+        CUTS_DIR
+        / "concat.txt"
     )
 
     with open(
-        concat_file,
+        concat_list,
         "w",
-        encoding="utf-8"
+        encoding="utf-8",
     ) as f:
 
-        for cut in cuts:
-
+        for path in cut_files:
             f.write(
-                f"file '{cut.resolve()}'\n"
+                f"file '{path.resolve()}'\n"
             )
 
-    output = (
-        CUTS_DIR /
-        "visual_track.mp4"
+    visual_track = (
+        CUTS_DIR
+        / "visual_track.mp4"
     )
 
-    run_command([
-        "ffmpeg",
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        str(concat_file),
-        "-an",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "23",
-        "-pix_fmt",
-        "yuv420p",
-        "-r",
-        str(FPS),
-        str(output)
-    ])
+    run_command(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_list),
+            "-an",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-pix_fmt",
+            "yuv420p",
+            "-r",
+            str(FPS),
+            str(visual_track),
+        ]
+    )
 
-    return output
+    return visual_track
 
 
 # ============================================================
 # BGM
 # ============================================================
 
-def prepare_bgm():
-
-    bgm = MEDIA_DIR / "bgm.ogg"
-
-    if bgm.exists() and bgm.stat().st_size > 0:
-        return bgm
-
-    log(
-        "BGM not found. Creating simple background."
+def prepare_bgm(
+    voice_duration,
+):
+    bgm_path = (
+        MEDIA_DIR
+        / "bgm.ogg"
     )
 
-    generated = (
-        MEDIA_DIR /
-        "generated_bgm.wav"
+    if not bgm_path.exists():
+        log(
+            "BGMがありません。BGMなしで続行します。"
+        )
+        return None
+
+    output = (
+        MEDIA_DIR
+        / "bgm_looped.m4a"
     )
 
-    run_command([
-        "ffmpeg",
-        "-y",
-        "-f",
-        "lavfi",
-        "-i",
-        "sine=frequency=220:sample_rate=44100",
-        "-t",
-        "10",
-        "-af",
-        "volume=0.025",
-        str(generated)
-    ])
+    run_command(
+        [
+            "ffmpeg",
+            "-y",
+            "-stream_loop",
+            "-1",
+            "-i",
+            str(bgm_path),
+            "-t",
+            str(voice_duration),
+            "-vn",
+            "-af",
+            "volume=0.035",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            str(output),
+        ]
+    )
 
-    return generated
+    return output
 
 
 # ============================================================
@@ -1178,455 +1138,906 @@ def prepare_bgm():
 def render_final_video(
     visual_track,
     voice_track,
-    subtitle_file,
-    duration
+    subtitle_path,
+    voice_duration,
 ):
-
-    bgm = prepare_bgm()
+    log("========================================")
+    log("RENDER FINAL VIDEO")
+    log("========================================")
 
     final_video = (
-        OUTPUT_DIR /
-        "final_video.mp4"
+        OUTPUT_DIR
+        / "final_video.mp4"
     )
 
-    # 字幕を大きくして読みやすく
+    bgm = prepare_bgm(
+        voice_duration
+    )
+
     subtitle_filter = (
-        "subtitles="
-        f"'{subtitle_file}':"
-        "force_style="
-        "'FontName=Noto Sans CJK JP,"
-        "FontSize=22,"
-        "Bold=1,"
-        "PrimaryColour=&H00FFFFFF,"
-        "OutlineColour=&H00000000,"
-        "BorderStyle=1,"
-        "Outline=3,"
-        "Shadow=1,"
-        "Alignment=2,"
-        "MarginV=80'"
+        f"subtitles="
+        f"'{subtitle_path.resolve()}':"
+        f"force_style="
+        f"'FontName=Noto Sans CJK JP,"
+        f"FontSize=22,"
+        f"PrimaryColour=&H00FFFFFF,"
+        f"OutlineColour=&H00000000,"
+        f"BorderStyle=1,"
+        f"Outline=2,"
+        f"Shadow=1,"
+        f"Alignment=2,"
+        f"MarginV=70'"
     )
 
-    run_command([
-        "ffmpeg",
-        "-y",
-
+    video_input = [
         "-stream_loop",
         "-1",
         "-i",
         str(visual_track),
+    ]
 
+    audio_inputs = [
         "-i",
         str(voice_track),
+    ]
 
-        "-stream_loop",
-        "-1",
-        "-i",
-        str(bgm),
+    command = [
+        "ffmpeg",
+        "-y",
+    ]
 
-        "-filter_complex",
-        (
-            f"[2:a]"
-            "volume=0.035,"
-            "aresample=44100,"
-            "aformat=sample_fmts=fltp"
-            "[bgm];"
+    command.extend(video_input)
+    command.extend(audio_inputs)
 
-            "[1:a]"
-            "volume=1.0"
-            "[voice];"
+    if bgm:
+        command.extend(
+            [
+                "-i",
+                str(bgm),
+            ]
+        )
 
-            "[voice][bgm]"
-            "amix=inputs=2:"
-            "duration=first:"
-            "dropout_transition=2"
-            "[audio];"
+    command.extend(
+        [
+            "-filter_complex",
+            (
+                f"[0:v]"
+                f"scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:"
+                f"force_original_aspect_ratio=increase,"
+                f"crop={VIDEO_WIDTH}:{VIDEO_HEIGHT},"
+                f"{subtitle_filter}"
+                f"[v]"
+            ),
+            "-map",
+            "[v]",
+            "-map",
+            "1:a",
+        ]
+    )
 
-            f"[0:v]"
-            f"trim=duration={duration:.3f},"
-            "setpts=PTS-STARTPTS,"
-            f"{subtitle_filter}"
-            "[video]"
-        ),
+    if bgm:
 
-        "-map",
-        "[video]",
+        command.extend(
+            [
+                "-map",
+                "2:a",
+                "-filter_complex",
+                (
+                    f"[0:v]"
+                    f"scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:"
+                    f"force_original_aspect_ratio=increase,"
+                    f"crop={VIDEO_WIDTH}:{VIDEO_HEIGHT},"
+                    f"{subtitle_filter}"
+                    f"[v];"
+                    f"[1:a]volume=1.0[voice];"
+                    f"[2:a]volume=0.035[bgm];"
+                    f"[voice][bgm]"
+                    f"amix=inputs=2:"
+                    f"duration=first:"
+                    f"dropout_transition=2[a]"
+                ),
+                "-map",
+                "[v]",
+                "-map",
+                "[a]",
+            ]
+        )
 
-        "-map",
-        "[audio]",
+    command.extend(
+        [
+            "-t",
+            str(voice_duration),
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "21",
+            "-r",
+            str(FPS),
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-movflags",
+            "+faststart",
+            str(final_video),
+        ]
+    )
 
-        "-t",
-        f"{duration:.3f}",
+    run_command(command)
 
-        "-c:v",
-        "libx264",
+    if not final_video.exists():
+        raise RuntimeError(
+            "final_video.mp4 が作成されませんでした。"
+        )
 
-        "-preset",
-        "veryfast",
-
-        "-crf",
-        "21",
-
-        "-c:a",
-        "aac",
-
-        "-b:a",
-        "192k",
-
-        "-pix_fmt",
-        "yuv420p",
-
-        "-movflags",
-        "+faststart",
-
-        str(final_video)
-    ])
+    log(
+        f"FINAL VIDEO: {final_video}"
+    )
 
     return final_video
 
 
 # ============================================================
-# THUMBNAIL
+# THUMBNAIL PEXELS
 # ============================================================
 
-def pexels_photo_search(query):
-
-    if not PEXELS_API_KEY:
-        return None
-
+def pexels_photo_search(
+    query,
+    per_page=20,
+):
     url = (
         "https://api.pexels.com/v1/search"
     )
 
-    headers = {
-        "Authorization": PEXELS_API_KEY
-    }
-
     params = {
         "query": query,
-        "per_page": 10,
-        "orientation": "landscape"
+        "per_page": per_page,
+        "orientation": "landscape",
     }
 
     response = requests.get(
         url,
-        headers=headers,
+        headers=pexels_headers(),
         params=params,
-        timeout=30
+        timeout=30,
     )
 
     response.raise_for_status()
 
-    photos = response.json().get(
+    return response.json().get(
         "photos",
-        []
+        [],
     )
 
-    if not photos:
-        return None
 
-    random_photo = random.choice(
-        photos
-    )
-
-    src = random_photo.get(
+def download_thumbnail_photo(
+    photo,
+    output_path,
+):
+    src = photo.get(
         "src",
         {}
     )
 
-    return (
+    url = (
         src.get("large2x")
         or src.get("large")
         or src.get("original")
     )
 
+    if not url:
+        return False
 
-def create_thumbnail(topic):
-
-    from PIL import Image, ImageDraw, ImageFont
-
-    title = clean_text(
-        topic["title"]
+    response = requests.get(
+        url,
+        timeout=60,
     )
 
-    query = (
-        topic["keyword"]
-        or topic["title"]
+    response.raise_for_status()
+
+    with open(
+        output_path,
+        "wb",
+    ) as f:
+        f.write(
+            response.content
+        )
+
+    return True
+
+
+# ============================================================
+# THUMBNAIL FONT
+# ============================================================
+
+def find_font(size):
+    candidates = [
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.otf",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ]
+
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(
+                    path,
+                    size,
+                )
+            except Exception:
+                pass
+
+    return ImageFont.load_default()
+
+
+# ============================================================
+# THUMBNAIL STYLE
+# ============================================================
+
+THUMBNAIL_STYLES = [
+    "left_title",
+    "center_box",
+    "big_number",
+    "top_title",
+    "bottom_bar",
+    "split_layout",
+]
+
+
+def create_thumbnail(
+    topic,
+):
+    log("========================================")
+    log("CREATE THUMBNAIL")
+    log("========================================")
+
+    used_ids = set(
+        str(x)
+        for x in load_history(
+            USED_THUMBNAILS_FILE
+        )
     )
 
-    photo_url = None
+    queries = [
+        clean_text(topic["keyword"]),
+        clean_text(topic["title"]),
+        f"{clean_text(topic['keyword'])} people",
+        f"{clean_text(topic['keyword'])} surprised",
+        "interesting lifestyle",
+        "curious person",
+        "science discovery",
+        "everyday life",
+    ]
 
-    try:
-        photo_url = pexels_photo_search(
-            query
-        )
-    except Exception as e:
-        log(
-            f"Thumbnail search error: {e}"
-        )
+    selected_photo = None
 
-    if not photo_url:
+    for query in queries:
 
         try:
-            photo_url = pexels_photo_search(
-                "surprised person lifestyle"
+            photos = pexels_photo_search(
+                query,
+                per_page=20,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            log(
+                f"サムネ検索失敗: "
+                f"{query} / {e}"
+            )
+            continue
 
-    if not photo_url:
-        raise RuntimeError(
-            "サムネイル画像を取得できませんでした"
+        candidates = []
+
+        for photo in photos:
+
+            photo_id = str(
+                photo.get("id", "")
+            )
+
+            if not photo_id:
+                continue
+
+            if photo_id in used_ids:
+                continue
+
+            candidates.append(
+                photo
+            )
+
+        if candidates:
+            selected_photo = random.choice(
+                candidates
+            )
+            break
+
+    # --------------------------------------------------------
+    # 全候補が使用済みだった場合
+    # --------------------------------------------------------
+
+    if selected_photo is None:
+
+        log(
+            "WARNING: 未使用サムネが見つかりません。"
         )
 
-    raw_thumbnail = (
-        IMAGE_DIR /
-        "thumbnail_raw.jpg"
+        for query in queries:
+
+            try:
+                photos = pexels_photo_search(
+                    query,
+                    per_page=20,
+                )
+            except Exception:
+                continue
+
+            if photos:
+                selected_photo = random.choice(
+                    photos
+                )
+                break
+
+    if selected_photo is None:
+        raise RuntimeError(
+            "サムネイル画像を取得できませんでした。"
+        )
+
+    photo_id = str(
+        selected_photo.get("id")
     )
 
-    download_file(
-        photo_url,
-        raw_thumbnail
+    raw_thumbnail = (
+        MEDIA_DIR
+        / "thumbnail_source.jpg"
+    )
+
+    download_thumbnail_photo(
+        selected_photo,
+        raw_thumbnail,
     )
 
     image = Image.open(
         raw_thumbnail
     ).convert("RGB")
 
-    image = image.resize(
-        (1280, 720)
+    image = ImageOps.fit(
+        image,
+        (1280, 720),
+        method=Image.Resampling.LANCZOS,
     )
 
-    draw = ImageDraw.Draw(
-        image
-    )
+    # --------------------------------------------------------
+    # STYLE
+    # --------------------------------------------------------
 
-    # フォント
-    font_candidates = [
-        "/usr/share/fonts/opentype/noto/"
-        "NotoSansCJK-Bold.ttc",
-
-        "/usr/share/fonts/opentype/noto/"
-        "NotoSansCJK-Black.ttc",
-
-        "/usr/share/fonts/truetype/"
-        "noto/NotoSansCJK-Bold.ttc"
+    style_history = [
+        int(x)
+        for x in load_history(
+            THUMBNAIL_STYLE_HISTORY_FILE
+        )
+        if str(x).isdigit()
     ]
 
-    font_path = None
+    available_styles = [
+        i
+        for i in range(
+            len(THUMBNAIL_STYLES)
+        )
+        if i not in style_history
+    ]
 
-    for path in font_candidates:
-
-        if os.path.exists(path):
-            font_path = path
-            break
-
-    if font_path:
-
-        big_font = ImageFont.truetype(
-            font_path,
-            70
+    if not available_styles:
+        available_styles = list(
+            range(
+                len(THUMBNAIL_STYLES)
+            )
         )
 
-        small_font = ImageFont.truetype(
-            font_path,
-            36
-        )
-
-        badge_font = ImageFont.truetype(
-            font_path,
-            32
-        )
-
-    else:
-
-        big_font = ImageFont.load_default()
-        small_font = ImageFont.load_default()
-        badge_font = ImageFont.load_default()
-
-    # 暗いオーバーレイ
-    overlay = Image.new(
-        "RGBA",
-        image.size,
-        (0, 0, 0, 0)
+    style_index = random.choice(
+        available_styles
     )
 
-    overlay_draw = ImageDraw.Draw(
-        overlay
-    )
+    style_name = THUMBNAIL_STYLES[
+        style_index
+    ]
 
-    overlay_draw.rectangle(
-        (0, 0, 1280, 720),
-        fill=(0, 0, 0, 85)
-    )
-
-    image = Image.alpha_composite(
-        image.convert("RGBA"),
-        overlay
-    ).convert("RGB")
+    # --------------------------------------------------------
+    # DRAW
+    # --------------------------------------------------------
 
     draw = ImageDraw.Draw(
-        image
+        image,
+        "RGBA",
     )
 
-    # 強いバッジ
-    badge = "15選"
-
-    draw.rounded_rectangle(
-        (40, 35, 190, 95),
-        radius=15,
-        fill=(0, 0, 0)
+    title = clean_text(
+        topic["title"]
     )
 
-    draw.text(
-        (65, 47),
-        badge,
-        font=badge_font,
-        fill=(255, 255, 255)
-    )
+    if len(title) > 28:
+        title = title[:28] + "…"
 
-    # タイトルを短く
-    display_title = title
+    title_font = find_font(52)
+    small_font = find_font(34)
+    number_font = find_font(110)
 
-    if len(display_title) > 22:
-        display_title = (
-            display_title[:22]
-            + "…"
+    # --------------------------------------------------------
+    # 共通暗幕
+    # --------------------------------------------------------
+
+    if style_name == "left_title":
+
+        draw.rectangle(
+            (0, 0, 620, 720),
+            fill=(0, 0, 0, 155),
         )
 
-    # 改行
-    if len(display_title) > 11:
-
-        middle = len(display_title) // 2
-
-        display_title = (
-            display_title[:middle]
-            + "\n"
-            + display_title[middle:]
+        draw.rounded_rectangle(
+            (45, 45, 260, 115),
+            radius=20,
+            fill=(255, 80, 80, 235),
         )
 
-    # メイン文字
-    draw.multiline_text(
-        (50, 175),
-        display_title,
-        font=big_font,
-        fill=(255, 255, 255),
-        stroke_width=6,
-        stroke_fill=(0, 0, 0),
-        spacing=10
-    )
+        draw.text(
+            (75, 62),
+            "15選",
+            font=small_font,
+            fill=(255, 255, 255, 255),
+        )
 
-    # 下部
-    bottom_text = (
-        "知らないとちょっと損する"
-    )
+        draw.multiline_text(
+            (55, 190),
+            title,
+            font=title_font,
+            fill=(255, 255, 255, 255),
+            spacing=12,
+            stroke_width=2,
+            stroke_fill=(0, 0, 0, 220),
+        )
 
-    draw.text(
-        (50, 620),
-        bottom_text,
-        font=small_font,
-        fill=(255, 255, 255),
-        stroke_width=3,
-        stroke_fill=(0, 0, 0)
-    )
+        draw.text(
+            (55, 620),
+            "知らないとちょっと驚く雑学",
+            font=small_font,
+            fill=(255, 255, 255, 255),
+            stroke_width=2,
+            stroke_fill=(0, 0, 0, 220),
+        )
 
-    thumbnail = (
-        OUTPUT_DIR /
-        "thumbnail.jpg"
+    elif style_name == "center_box":
+
+        draw.rectangle(
+            (0, 0, 1280, 720),
+            fill=(0, 0, 0, 70),
+        )
+
+        draw.rounded_rectangle(
+            (100, 175, 1180, 545),
+            radius=35,
+            fill=(0, 0, 0, 185),
+            outline=(255, 255, 255, 190),
+            width=4,
+        )
+
+        draw.text(
+            (470, 215),
+            "15選",
+            font=small_font,
+            fill=(255, 230, 100, 255),
+        )
+
+        bbox = draw.multiline_textbbox(
+            (0, 0),
+            title,
+            font=title_font,
+            spacing=10,
+        )
+
+        text_width = (
+            bbox[2] - bbox[0]
+        )
+
+        x = max(
+            60,
+            (1280 - text_width) // 2,
+        )
+
+        draw.multiline_text(
+            (x, 290),
+            title,
+            font=title_font,
+            fill=(255, 255, 255, 255),
+            spacing=10,
+            stroke_width=3,
+            stroke_fill=(0, 0, 0, 255),
+        )
+
+    elif style_name == "big_number":
+
+        draw.rectangle(
+            (0, 0, 440, 720),
+            fill=(0, 0, 0, 165),
+        )
+
+        draw.text(
+            (50, 80),
+            "15",
+            font=number_font,
+            fill=(255, 230, 80, 255),
+            stroke_width=3,
+            stroke_fill=(0, 0, 0, 255),
+        )
+
+        draw.text(
+            (65, 205),
+            "選",
+            font=title_font,
+            fill=(255, 255, 255, 255),
+            stroke_width=2,
+            stroke_fill=(0, 0, 0, 255),
+        )
+
+        draw.multiline_text(
+            (500, 230),
+            title,
+            font=title_font,
+            fill=(255, 255, 255, 255),
+            spacing=12,
+            stroke_width=3,
+            stroke_fill=(0, 0, 0, 230),
+        )
+
+        draw.text(
+            (500, 600),
+            "知ってる？",
+            font=small_font,
+            fill=(255, 255, 255, 255),
+            stroke_width=2,
+            stroke_fill=(0, 0, 0, 255),
+        )
+
+    elif style_name == "top_title":
+
+        draw.rectangle(
+            (0, 0, 1280, 210),
+            fill=(0, 0, 0, 185),
+        )
+
+        draw.rounded_rectangle(
+            (45, 45, 220, 120),
+            radius=18,
+            fill=(255, 90, 90, 235),
+        )
+
+        draw.text(
+            (78, 62),
+            "15選",
+            font=small_font,
+            fill=(255, 255, 255, 255),
+        )
+
+        draw.multiline_text(
+            (270, 45),
+            title,
+            font=title_font,
+            fill=(255, 255, 255, 255),
+            spacing=8,
+            stroke_width=2,
+            stroke_fill=(0, 0, 0, 255),
+        )
+
+        draw.rectangle(
+            (0, 610, 1280, 720),
+            fill=(0, 0, 0, 165),
+        )
+
+        draw.text(
+            (50, 645),
+            "今日誰かに話したくなる雑学",
+            font=small_font,
+            fill=(255, 255, 255, 255),
+        )
+
+    elif style_name == "bottom_bar":
+
+        draw.rectangle(
+            (0, 500, 1280, 720),
+            fill=(0, 0, 0, 185),
+        )
+
+        draw.text(
+            (50, 530),
+            title,
+            font=title_font,
+            fill=(255, 255, 255, 255),
+            stroke_width=3,
+            stroke_fill=(0, 0, 0, 255),
+        )
+
+        draw.rounded_rectangle(
+            (50, 620, 220, 685),
+            radius=15,
+            fill=(255, 100, 80, 240),
+        )
+
+        draw.text(
+            (82, 635),
+            "15選",
+            font=small_font,
+            fill=(255, 255, 255, 255),
+        )
+
+    elif style_name == "split_layout":
+
+        draw.rectangle(
+            (0, 0, 640, 720),
+            fill=(0, 0, 0, 150),
+        )
+
+        draw.rectangle(
+            (0, 0, 1280, 18),
+            fill=(255, 220, 80, 255),
+        )
+
+        draw.text(
+            (55, 80),
+            "15選",
+            font=small_font,
+            fill=(255, 220, 80, 255),
+            stroke_width=2,
+            stroke_fill=(0, 0, 0, 255),
+        )
+
+        draw.multiline_text(
+            (55, 170),
+            title,
+            font=title_font,
+            fill=(255, 255, 255, 255),
+            spacing=12,
+            stroke_width=3,
+            stroke_fill=(0, 0, 0, 255),
+        )
+
+        draw.rounded_rectangle(
+            (55, 580, 580, 670),
+            radius=20,
+            fill=(0, 0, 0, 180),
+        )
+
+        draw.text(
+            (85, 605),
+            "知らないと損するかも？",
+            font=small_font,
+            fill=(255, 255, 255, 255),
+        )
+
+    thumbnail_path = (
+        OUTPUT_DIR
+        / "thumbnail.jpg"
     )
 
     image.save(
-        thumbnail,
-        quality=95
+        thumbnail_path,
+        "JPEG",
+        quality=95,
     )
 
-    return thumbnail
+    log(
+        f"THUMBNAIL PHOTO ID: {photo_id}"
+    )
+
+    log(
+        f"THUMBNAIL STYLE: "
+        f"{style_index} / {style_name}"
+    )
+
+    return (
+        thumbnail_path,
+        photo_id,
+        style_index,
+    )
 
 
 # ============================================================
 # TITLE
 # ============================================================
 
-TITLE_TEMPLATES = [
-    "知らないと面白い雑学15選｜身近なことの意外な理由",
-    "知ると世界の見え方が変わる雑学15選",
-    "実は知られていない身近な雑学15選",
-    "思わず誰かに話したくなる雑学15選",
-    "知っているだけで面白い雑学・心理学15選",
-    "身近なのに知らないこと15選｜雑学・心理・哲学",
+TITLE_PATTERNS = [
+    "【雑学15選】{}を知っていますか？意外と知らない面白い話",
+    "【知らないと損】{}にまつわる驚きの雑学15選",
+    "【雑学】実は知られていない{}の秘密15選",
+    "【衝撃の事実】{}について知っておきたい雑学15選",
+    "【面白い雑学15選】{}の意外な真実",
+    "【知ってた？】{}から分かる意外な雑学15選",
+    "【今日の雑学】{}がちょっと面白くなる15の話",
+    "【驚き】身近な{}に隠された雑学15選",
 ]
 
 
 def create_title(topics):
-
-    first = topics[0]["title"]
-
-    template = random.choice(
-        TITLE_TEMPLATES
-    )
-
-    # 先頭ネタを使ったタイトルも用意
-    special_templates = [
-        f"「{first}」知ってた？｜身近な雑学15選",
-        f"{first}の理由、知ってる？｜雑学15選",
-        f"意外と知らない「{first}」｜雑学15選",
+    history = [
+        str(x)
+        for x in load_history(
+            TITLE_HISTORY_FILE
+        )
     ]
 
-    if random.random() < 0.45:
-        return random.choice(
-            special_templates
+    first_topic = topics[0]
+
+    keyword = clean_text(
+        first_topic["keyword"]
+    )
+
+    title_candidates = []
+
+    for pattern in TITLE_PATTERNS:
+        title_candidates.append(
+            pattern.format(keyword)
         )
 
-    return template
+    # さらに複数候補
+    for topic in topics[:5]:
+
+        key = clean_text(
+            topic["keyword"]
+        )
+
+        title_candidates.extend(
+            [
+                f"【雑学15選】{key}の意外な事実を紹介",
+                f"【驚き】{key}について知っておきたい話15選",
+            ]
+        )
+
+    random.shuffle(
+        title_candidates
+    )
+
+    selected = None
+
+    for candidate in title_candidates:
+
+        if candidate not in history:
+            selected = candidate
+            break
+
+    if selected is None:
+        selected = title_candidates[0]
+
+    # パターンを記録するのはmainの最後
+    return selected
 
 
 # ============================================================
-# DESCRIPTION
+# DESCRIPTION 15 PATTERNS
 # ============================================================
 
-DESCRIPTION_OPENINGS = [
-    "今回は、身近なのに意外と知られていない話を15個まとめました。",
-    "毎日の生活でふと気になることを、15個ピックアップしました。",
-    "雑学、心理、哲学、科学などから、思わず誰かに話したくなる話を集めました。",
-    "知っているだけで日常の見え方が少し変わる話を15個紹介します。",
-    "今回は、身近な疑問から意外な知識まで15個をテンポよく紹介します。",
+DESCRIPTION_TEMPLATES = [
+    (
+        "今回は、知っているようで意外と知らない雑学を15個紹介します。"
+        "身近なことから思わず誰かに話したくなる話まで、テンポよくまとめました。"
+    ),
+    (
+        "あなたはいくつ知っていますか？"
+        "今回は、日常生活で役立つかもしれない面白い雑学を15個集めました。"
+    ),
+    (
+        "ちょっとした知識が増えると、いつもの日常が少し違って見えることがあります。"
+        "今回はそんな面白い雑学を15個紹介します。"
+    ),
+    (
+        "今回の動画では、思わず『へぇ！』と言いたくなる雑学を15個紹介します。"
+        "最後まで気軽に楽しんでいってください。"
+    ),
+    (
+        "身近なのに知らなかった。"
+        "そんな発見につながる雑学を15個ピックアップしました。"
+        "知っているものがいくつあるかもチェックしてみてください。"
+    ),
+    (
+        "今日誰かに話したくなるような雑学を15個まとめました。"
+        "短時間で楽しめるので、ぜひ最後まで見てみてください。"
+    ),
+    (
+        "世の中には、意外と知られていない面白い事実がたくさんあります。"
+        "今回はその中から15個を厳選して紹介します。"
+    ),
+    (
+        "『これ本当なの？』と思ってしまうような面白い雑学を15個紹介します。"
+        "知識として楽しみながらご覧ください。"
+    ),
+    (
+        "普段何気なく見ているものにも、意外な秘密が隠れているかもしれません。"
+        "今回はそんな身近な雑学を15個紹介します。"
+    ),
+    (
+        "知っていると少し得した気分になる雑学を集めました。"
+        "今回は15個の面白い話をテンポよく紹介していきます。"
+    ),
+    (
+        "雑学が好きな人はもちろん、ちょっとした暇つぶしにもおすすめです。"
+        "今回は面白い雑学を15個まとめました。"
+    ),
+    (
+        "あなたの日常に新しい『へぇ』を。"
+        "今回は、意外と知らない面白い雑学を15個紹介します。"
+    ),
+    (
+        "知らなくても困らないけれど、知るとちょっと面白い。"
+        "そんな雑学を15個集めてみました。"
+    ),
+    (
+        "今回は、日常・科学・心理など、さまざまなジャンルから雑学を15個紹介します。"
+        "気になった話があればぜひ覚えておいてください。"
+    ),
+    (
+        "最後まで見ると、誰かに話したくなる知識が一つくらい見つかるかもしれません。"
+        "今回はそんな雑学を15個紹介します。"
+    ),
 ]
 
 
 def create_description(topics):
+    history = [
+        int(x)
+        for x in load_history(
+            DESCRIPTION_HISTORY_FILE
+        )
+        if str(x).isdigit()
+    ]
 
-    opening = random.choice(
-        DESCRIPTION_OPENINGS
+    available = [
+        i
+        for i in range(
+            len(DESCRIPTION_TEMPLATES)
+        )
+        if i not in history
+    ]
+
+    if not available:
+        available = list(
+            range(
+                len(DESCRIPTION_TEMPLATES)
+            )
+        )
+
+    template_index = random.choice(
+        available
     )
 
-    lines = [
-        opening,
-        "",
-        "今回の15選：",
-        ""
+    intro = DESCRIPTION_TEMPLATES[
+        template_index
     ]
+
+    topic_lines = []
 
     for index, topic in enumerate(
         topics,
-        start=1
+        1,
     ):
-
-        lines.append(
-            f"{index}. {clean_text(topic['title'])}"
+        topic_lines.append(
+            f"{index}. {topic['title']}"
         )
 
-    hashtags = [
-        "#雑学 #豆知識 #心理学 #哲学 #身近な話",
-        "#雑学15選 #豆知識 #心理学 #知識",
-        "#雑学 #面白い話 #心理学 #科学",
-        "#豆知識 #雑学動画 #哲学 #心理",
-    ]
+    description = (
+        f"{intro}\n\n"
+        "【今回紹介する雑学】\n"
+        + "\n".join(topic_lines)
+        + "\n\n"
+        "このチャンネルでは、"
+        "雑学・心理・日常の不思議など、"
+        "知るとちょっと面白い情報を紹介しています。\n"
+        "気に入ったらチャンネル登録・高評価をお願いします！\n\n"
+        "#雑学 #豆知識 #面白い話 #知識 #トリビア"
+    )
 
-    lines.extend([
-        "",
-        random.choice(hashtags),
-    ])
-
-    return "\n".join(lines)
+    return (
+        description,
+        template_index,
+    )
 
 
 # ============================================================
@@ -1634,45 +2045,31 @@ def create_description(topics):
 # ============================================================
 
 def create_video_info(
-    topics,
     title,
-    description
+    description,
+    topics,
+    thumbnail_style,
 ):
+    now = datetime.now(JST)
 
-    info = {
+    return {
         "title": title,
         "description": description,
         "category": "27",
         "privacyStatus": "public",
         "madeForKids": False,
+        "generatedAt": now.isoformat(),
+        "topicCount": len(topics),
         "topics": [
             {
-                "number": index,
                 "id": topic["id"],
                 "title": topic["title"],
-                "category": topic["category"]
+                "category": topic["category"],
             }
-            for index, topic in enumerate(
-                topics,
-                start=1
-            )
+            for topic in topics
         ],
-        "generatedAt": datetime.now(
-            JST
-        ).isoformat()
+        "thumbnailStyle": thumbnail_style,
     }
-
-    path = (
-        OUTPUT_DIR /
-        "video_info.json"
-    )
-
-    save_json(
-        path,
-        info
-    )
-
-    return path
 
 
 # ============================================================
@@ -1682,34 +2079,171 @@ def create_video_info(
 def create_manifest(
     topics,
     title,
-    duration,
-    cuts
+    description_template,
+    thumbnail_id,
+    thumbnail_style,
 ):
-
-    manifest = {
-        "generated_at": datetime.now(
+    return {
+        "generatedAt": datetime.now(
             JST
         ).isoformat(),
-
         "title": title,
-
-        "duration_seconds": duration,
-
-        "topic_count": len(topics),
-
-        "visual_cut_count": len(cuts),
-
-        "topics": topics
+        "descriptionTemplate": description_template,
+        "thumbnail": {
+            "pexelsPhotoId": thumbnail_id,
+            "style": thumbnail_style,
+            "styleName": THUMBNAIL_STYLES[
+                thumbnail_style
+            ],
+        },
+        "topics": [
+            {
+                "id": topic["id"],
+                "title": topic["title"],
+                "category": topic["category"],
+            }
+            for topic in topics
+        ],
     }
 
-    path = (
-        OUTPUT_DIR /
-        "generation_manifest.json"
+
+# ============================================================
+# SAVE HISTORY
+# ============================================================
+
+def save_generation_history(
+    topics,
+    title,
+    description_template,
+    thumbnail_id,
+    thumbnail_style,
+):
+    log("========================================")
+    log("SAVE GENERATION HISTORY")
+    log("========================================")
+
+    # --------------------------------------------------------
+    # Trivia
+    # --------------------------------------------------------
+
+    used_trivia = load_history(
+        USED_TRIVIA_FILE
     )
 
-    save_json(
-        path,
-        manifest
+    used_trivia_set = set(
+        str(x)
+        for x in used_trivia
+    )
+
+    for topic in topics:
+        if topic["id"] not in used_trivia_set:
+            used_trivia.append(
+                topic["id"]
+            )
+            used_trivia_set.add(
+                topic["id"]
+            )
+
+    save_history(
+        USED_TRIVIA_FILE,
+        used_trivia,
+    )
+
+    # --------------------------------------------------------
+    # Thumbnail
+    # --------------------------------------------------------
+
+    used_thumbnails = load_history(
+        USED_THUMBNAILS_FILE
+    )
+
+    if str(thumbnail_id) not in {
+        str(x)
+        for x in used_thumbnails
+    }:
+        used_thumbnails.append(
+            str(thumbnail_id)
+        )
+
+    save_history(
+        USED_THUMBNAILS_FILE,
+        used_thumbnails,
+    )
+
+    # --------------------------------------------------------
+    # Description
+    # --------------------------------------------------------
+
+    description_history = load_history(
+        DESCRIPTION_HISTORY_FILE
+    )
+
+    description_history.append(
+        int(description_template)
+    )
+
+    save_history(
+        DESCRIPTION_HISTORY_FILE,
+        description_history,
+        max_items=100,
+    )
+
+    # --------------------------------------------------------
+    # Title
+    # --------------------------------------------------------
+
+    title_history = load_history(
+        TITLE_HISTORY_FILE
+    )
+
+    title_history.append(
+        title
+    )
+
+    save_history(
+        TITLE_HISTORY_FILE,
+        title_history,
+        max_items=100,
+    )
+
+    # --------------------------------------------------------
+    # Thumbnail style
+    # --------------------------------------------------------
+
+    style_history = load_history(
+        THUMBNAIL_STYLE_HISTORY_FILE
+    )
+
+    style_history.append(
+        int(thumbnail_style)
+    )
+
+    save_history(
+        THUMBNAIL_STYLE_HISTORY_FILE,
+        style_history,
+        max_items=100,
+    )
+
+    log(
+        f"使用済み雑学履歴: "
+        f"{len(used_trivia)}件"
+    )
+
+    log(
+        f"使用済みサムネ履歴: "
+        f"{len(used_thumbnails)}件"
+    )
+
+    log(
+        f"概要欄パターン: "
+        f"{description_template + 1}/"
+        f"{len(DESCRIPTION_TEMPLATES)}"
+    )
+
+    log(
+        f"サムネスタイル: "
+        f"{thumbnail_style + 1}/"
+        f"{len(THUMBNAIL_STYLES)}"
     )
 
 
@@ -1719,224 +2253,302 @@ def create_manifest(
 
 def main():
 
-    log("=" * 60)
+    start_time = time.time()
+
+    log("========================================")
     log("LUMI LONG VIDEO GENERATOR")
-    log("5 MIN / 15 TOPICS / FAST MULTI CUT")
-    log("=" * 60)
+    log("========================================")
+    log("5分動画 / 15雑学")
+    log("重複防止システム: ON")
+    log("概要欄15パターン: ON")
+    log("サムネ履歴: ON")
+    log("タイトル履歴: ON")
+    log("========================================")
+
+    # --------------------------------------------------------
+    # API
+    # --------------------------------------------------------
 
     if not PEXELS_API_KEY:
-
         raise RuntimeError(
             "PEXELS_API_KEY がありません"
         )
 
-    # 古い生成物削除
-    for folder in [
+    # --------------------------------------------------------
+    # Clean temporary folders
+    # --------------------------------------------------------
+
+    for directory in [
+        IMAGE_DIR,
         VOICE_DIR,
         CUTS_DIR,
         SUBTITLE_DIR,
-        IMAGE_DIR
     ]:
 
-        for file in folder.iterdir():
+        directory.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        for file in directory.iterdir():
 
             if file.is_file():
-
                 try:
                     file.unlink()
                 except Exception:
                     pass
 
-    # ========================================================
-    # 1. DATABASE
-    # ========================================================
+    # --------------------------------------------------------
+    # Database
+    # --------------------------------------------------------
 
     database = load_trivia_database()
 
-    # ========================================================
-    # 2. SELECT
-    # ========================================================
+    # --------------------------------------------------------
+    # Topics
+    # --------------------------------------------------------
 
     topics = select_topics(
         database
     )
 
-    if len(topics) != TOPICS_PER_VIDEO:
+    # --------------------------------------------------------
+    # Voice
+    # --------------------------------------------------------
 
-        raise RuntimeError(
-            "15ネタを選択できませんでした"
-        )
-
-    # ========================================================
-    # 3. VOICE
-    # ========================================================
-
-    voice_track, subtitle_file, duration = (
-        create_voice_track(
-            topics
-        )
+    (
+        voice_track,
+        subtitle_path,
+        voice_duration,
+    ) = create_voice_track(
+        topics
     )
 
-    # 5分を超えた場合
-    if duration > TARGET_DURATION:
+    # --------------------------------------------------------
+    # Visual
+    # --------------------------------------------------------
 
-        log(
-            f"Voice is longer than target: "
-            f"{duration:.2f}s"
-        )
-
-    # ========================================================
-    # 4. VISUAL
-    # ========================================================
-
-    visual_cuts = create_visual_cuts(
+    cut_files = create_visual_cuts(
         topics
     )
 
     visual_track = concat_video(
-        visual_cuts
+        cut_files
     )
 
-    # ========================================================
-    # 5. FINAL VIDEO
-    # ========================================================
+    # --------------------------------------------------------
+    # Final video
+    # --------------------------------------------------------
 
     final_video = render_final_video(
         visual_track,
         voice_track,
-        subtitle_file,
-        duration
+        subtitle_path,
+        voice_duration,
     )
 
-    # ========================================================
-    # 6. TITLE
-    # ========================================================
+    # --------------------------------------------------------
+    # Title
+    # --------------------------------------------------------
 
     title = create_title(
         topics
     )
 
-    # ========================================================
-    # 7. DESCRIPTION
-    # ========================================================
+    # --------------------------------------------------------
+    # Description
+    # --------------------------------------------------------
 
-    description = create_description(
+    (
+        description,
+        description_template,
+    ) = create_description(
         topics
     )
 
-    # ========================================================
-    # 8. VIDEO INFO
-    # ========================================================
+    # --------------------------------------------------------
+    # Thumbnail
+    # --------------------------------------------------------
 
-    create_video_info(
-        topics,
-        title,
-        description
-    )
-
-    # ========================================================
-    # 9. THUMBNAIL
-    # ========================================================
-
-    create_thumbnail(
+    (
+        thumbnail_path,
+        thumbnail_id,
+        thumbnail_style,
+    ) = create_thumbnail(
         topics[0]
     )
 
-    # ========================================================
-    # 10. MANIFEST
-    # ========================================================
+    # --------------------------------------------------------
+    # Video info
+    # --------------------------------------------------------
 
-    create_manifest(
-        topics,
+    video_info = create_video_info(
         title,
-        duration,
-        visual_cuts
+        description,
+        topics,
+        thumbnail_style,
     )
 
-    # ========================================================
-    # 11. TITLE FILE
-    # ========================================================
+    video_info_path = (
+        OUTPUT_DIR
+        / "video_info.json"
+    )
+
+    save_json(
+        video_info_path,
+        video_info,
+    )
+
+    # --------------------------------------------------------
+    # Manifest
+    # --------------------------------------------------------
+
+    manifest = create_manifest(
+        topics,
+        title,
+        description_template,
+        thumbnail_id,
+        thumbnail_style,
+    )
+
+    manifest_path = (
+        OUTPUT_DIR
+        / "manifest.json"
+    )
+
+    save_json(
+        manifest_path,
+        manifest,
+    )
+
+    # --------------------------------------------------------
+    # title.txt
+    # --------------------------------------------------------
 
     with open(
         OUTPUT_DIR / "title.txt",
         "w",
-        encoding="utf-8"
+        encoding="utf-8",
     ) as f:
-
         f.write(title)
 
-    # ========================================================
-    # 12. DESCRIPTION FILE
-    # ========================================================
+    # --------------------------------------------------------
+    # description.txt
+    # --------------------------------------------------------
 
     with open(
         OUTPUT_DIR / "description.txt",
         "w",
-        encoding="utf-8"
+        encoding="utf-8",
     ) as f:
-
         f.write(description)
 
-    # ========================================================
-    # 13. FINAL CHECK
-    # ========================================================
+    # --------------------------------------------------------
+    # Final validation
+    # --------------------------------------------------------
 
-    if not final_video.exists():
+    log("========================================")
+    log("FINAL VALIDATION")
+    log("========================================")
 
-        raise RuntimeError(
-            "final_video.mp4 が生成されませんでした"
+    required_files = [
+        final_video,
+        thumbnail_path,
+        video_info_path,
+        manifest_path,
+    ]
+
+    for path in required_files:
+
+        if not Path(path).exists():
+            raise RuntimeError(
+                f"必要ファイルがありません: "
+                f"{path}"
+            )
+
+        log(
+            f"OK: {path}"
         )
 
-    if not (
-        OUTPUT_DIR /
-        "thumbnail.jpg"
-    ).exists():
+    # --------------------------------------------------------
+    # IMPORTANT:
+    # History is saved only after the entire video
+    # generation has successfully completed.
+    # --------------------------------------------------------
 
-        raise RuntimeError(
-            "thumbnail.jpg が生成されませんでした"
-        )
+    save_generation_history(
+        topics,
+        title,
+        description_template,
+        thumbnail_id,
+        thumbnail_style,
+    )
 
-    log("=" * 60)
+    # --------------------------------------------------------
+    # Summary
+    # --------------------------------------------------------
+
+    elapsed = (
+        time.time()
+        - start_time
+    )
+
+    log("========================================")
     log("GENERATION COMPLETE")
-    log("=" * 60)
+    log("========================================")
 
     log(
-        f"VIDEO: {final_video}"
+        f"Video: {final_video}"
     )
 
     log(
-        f"DURATION: {duration:.2f}s"
+        f"Thumbnail: {thumbnail_path}"
     )
 
     log(
-        f"TOPICS: {len(topics)}"
+        f"Title: {title}"
     )
 
     log(
-        f"VISUAL CUTS: {len(visual_cuts)}"
+        f"Description pattern: "
+        f"{description_template + 1}/15"
     )
 
     log(
-        f"TITLE: {title}"
+        f"Thumbnail style: "
+        f"{THUMBNAIL_STYLES[thumbnail_style]}"
     )
 
-    log("=" * 60)
+    log(
+        f"Voice duration: "
+        f"{voice_duration:.2f} sec"
+    )
 
+    log(
+        f"Elapsed: "
+        f"{elapsed:.1f} sec"
+    )
+
+    log("========================================")
+
+
+# ============================================================
+# ENTRY
+# ============================================================
 
 if __name__ == "__main__":
 
     try:
-
         main()
 
     except Exception as e:
 
+        log("========================================")
+        log("GENERATION FAILED")
+        log("========================================")
+
         log(
-            f"FATAL ERROR: {e}"
+            f"{type(e).__name__}: {e}"
         )
 
-        import traceback
-
-        traceback.print_exc()
-
-        sys.exit(1)
+        raise
